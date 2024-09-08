@@ -1,0 +1,33 @@
+{
+	"name": "Python DevContainer",
+	"dockerFile": "Dockerfile",
+	"customizations": {
+			"vscode": {
+					"settings": {
+							"editor.tabSize": 2,
+							"files.trimTrailingWhitespace": true,
+							"workbench.colorTheme": "Aura Dark",
+							"workbench.iconTheme": "material-icon-theme",
+							"files.exclude": {
+									".env": true,
+									".git": true,
+									".pytest**": true,
+									".vscode": true,
+									"**/__pycache__": true,
+									"**/.git": false,
+									"**/.vagrant": true,
+									"venv": true
+							}
+					},
+					"extensions": [
+							"ms-python.python",
+							"ms-python.vscode-pylance",
+							"DaltonMenezes.aura-theme",
+							"equinusocio.vsc-material-theme-icons",
+							"GitHub.copilot"
+					]
+			}
+	},
+	"remoteUser": "devcontainer",
+	"postCreateCommand": "bash -i -c 'pre-commit install && pip install -r requirements.txt'"
+}
