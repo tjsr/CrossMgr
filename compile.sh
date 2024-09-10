@@ -112,11 +112,11 @@ downloadAppImage() {
 
 compileCode() {
     fixDependencies
-    
+
 	PROGRAM=$1
 	getBuildDir $PROGRAM
     checkEnvActive
-    
+
 	echo "Compiling code"
 	python3 -mcompileall -l $BUILDDIR
 	if [ $? -ne 0 ]; then
@@ -147,10 +147,10 @@ buildLocale() {
 
 buildHelp() {
 	PROGRAM=$1
-	
+
 	cd "$PROGRAM"
-	
-	if [ -f "buildhelp.py" ]; then	
+
+	if [ -f "buildhelp.py" ]; then
 		if [ -d "$PROGRAM"HelpIndex ]; then
 			rm -rf "$PROGRAM"HelpIndex
 		fi
@@ -162,7 +162,7 @@ buildHelp() {
 			exit 1
 		fi
 	fi
-	
+
 	cd ..
 }
 
@@ -213,7 +213,7 @@ copyAssets() {
 	else
 		buildHelp $PROGRAM
 	fi
-	
+
 
 	# Copy help files last to wait for them to be built by now.
 	if [ -d "${BUILDDIR}/${PROGRAM}HtmlDoc" ]; then
@@ -293,7 +293,7 @@ envSetup() {
 	else
 		echo "Already using $VIRTUAL_ENV"
 	fi
-	
+
 	if   [ $OSNAME == "Linux" ]; then
         # On Linux, the wxPython module install attempts to rebuild the module from the C/C++ source.
         # Unfortunately, this always fails in an virtualenv and/or there are other missing C/C++ libraries.
@@ -302,7 +302,7 @@ envSetup() {
 
 		# Old way, but lsb_release is not always included in Linux, so this can fail.
 		# UBUNTU_RELEASE=`lsb_release -r | awk '{ print $2 }'`
-		
+
 		# New way.  Get version information from /etc/os-release.  Ignore the third version value (if present).
 		UBUNTU_RELEASE=$(awk '/^VERSION_ID\s*=/{ gsub(/[^0-9.]/,"",$0); split($0, v, "."); print v[1] "." v[2] }' /etc/os-release)
 		if [ $? -ne 0 ]; then
@@ -313,12 +313,12 @@ envSetup() {
 	else
 		pip3 install -v -r requirements.txt
 	fi
-	
+
     if [ $? -ne 0 ]; then
         echo "Pip requirements install failed. Aborting..."
         exit 1
     fi
-    
+
     if   [ $OSNAME == "Windows" ]; then
 		pip3 install pywin32
 	fi
@@ -412,7 +412,7 @@ listFiles() {
 
 fixDependencies() {
 	PROGRAM=$1
-	
+
 	if [ -f "$PROGRAM/UpdateDependencies.py" ]; then
 		echo "Fixing: $PROGRAM"
 		cd $PROGRAM
@@ -444,7 +444,7 @@ tagrepo() {
 
 dorelease() {
 	CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD -- | head -1)
-	if [ "$CURRENT_BRANCH" != "dev" ]; then
+	if [[ ! "$CURRENT_BRANCH" =~ ^dev ]]; then
 		echo "Unable to do release on $CURRENT_BRANCH branch. You must be on dev branch to cut a release".
         exit 1
 	fi
@@ -525,7 +525,7 @@ do
 	case ${option} in
 		h) doHelp
 		;;
-		a) 
+		a)
  		    PROGRAMS="StageRaceGC CallupSeedingMgr CrossMgrImpinj TagReadWrite SeriesMgr CrossMgrAlien CrossMgrVideo PointsRaceMgr SprintMgr CrossMgr"
 		;;
 		c) PROGRAMS="$PROGRAMS CrossMgr"
