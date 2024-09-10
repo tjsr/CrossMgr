@@ -444,7 +444,7 @@ tagrepo() {
 
 dorelease() {
 	CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD -- | head -1)
-	if [[ ! "$CURRENT_BRANCH" =~ ^dev ]]; then
+	if [[ ! "$CURRENT_BRANCH" =~ ^dev\/ ]]; then
 		echo "Unable to do release on $CURRENT_BRANCH branch. You must be on dev branch to cut a release".
         exit 1
 	fi
