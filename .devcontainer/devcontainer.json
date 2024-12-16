@@ -5,7 +5,9 @@
 		"source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind",
 	  "source=vscode-pip-cache,target=/home/vscode/.cache/pip"
 	],
-	"runArgs": ["--add-host=host.docker.internal:host-gateway"],
+	"runArgs": ["--add-host=host.docker.internal:host-gateway", "--device=/dev/fuse"],
+	"capAdd": ["SYS_ADMIN"],
+	"securityOpt": ["apparmor=unconfined"],
 	"customizations": {
 			"vscode": {
 					"settings": {

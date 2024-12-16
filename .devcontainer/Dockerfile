@@ -28,7 +28,9 @@ RUN --mount=type=cache,mode=0777,target=/var/cache/apt/archives/ \
 	lsb-release \
 	libsdl2-2.0-0 \
 	libgtk-3-0 \
-	libgtk-3-dev
+	libgtk-3-dev \
+	libfuse2 \
+	fuse
 
 ## Don't clean when using cache.	&& apt-get clean
 
