@@ -184,11 +184,11 @@ def env_setup( full=False ):
 	else:
 		print( f"Using existing python environment {os.path.abspath(os.path.join('.',env_dir))}.", flush=True )
 
-	print( "Updating python environment (takes a few minutes, especially on first install)... ", end='', flush=True )
+	print( "Updating python environment (may take a few minutes, especially on first install)... ", end='', flush=True )
 	os.chdir( src_dir )
 	
 	# Upgrade pip first.
-	subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', '--quiet', 'pip'] )
+	subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', 'pip'] )
 	
 	if is_linux:
 		# Install wxPython from the "extras" folder.
@@ -198,7 +198,7 @@ def env_setup( full=False ):
 					f_out.write( line )
 
 		# Install all the regular modules.
-		subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', '--quiet', '-r', 'requirements_os.txt'] )
+		subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', '-r', 'requirements_os.txt'] )
 
 		# Get the name and version of this Linux so we can download it from the wxPython extras folder.
 		os_name, os_version = None, None
@@ -214,12 +214,14 @@ def env_setup( full=False ):
 			os_name = 'ubuntu'
 		wxpython_versions = get_wxpython_versions()
 
+		'''
 		# Check if this os is supported.
-		if os_name not in wxpython_versions:
+		if os_name in wxpython_versions:
 			print( f'\n***** CrossMgr is not supported on: {os_name}-{os_version} *****' )
 			print( f'See {wxpython_extras_url} for supported Linux platforms and versions.' )
 			uninstall()
 			sys.exit( -1 )
+		'''
 
 		# Find the closest, lower version of wxPython.
 		f_os_v = float( os_version )
@@ -229,21 +231,24 @@ def env_setup( full=False ):
 		if i and f_v[i] > f_os_v:
 			i -= 1
 		
-		if os_version != os_versions[i][1]:
-			print( f'\n***** Warning: CrossMgr is not supported on: {os_name}-{os_version} *****' )
-			print( 'Using closest version: {os_name}-{os_versions[i][1]}' )
-			print( 'This may not work!' )
-
-		os_version = os_versions[i][1]
-		
-		# Get the name of the python extras url.
-		url = f'{wxpython_extras_url}/{os_name}-{os_version}'
-		
-		# Install wxPyhon from the extras url.
-		subprocess.check_output( [
-			python_exe, '-m',
-			'pip', 'install', '--upgrade', '--quiet', '-f', url, 'wxPython',
-		], stderr=subprocess.DEVNULL )		# Hide stderr so we don't scare the user with DEPRECATED warnings.
+		if os_version == os_versions[i][1]:			
+			# Get the name of the python extras url.
+			url = f'{wxpython_extras_url}/{os_name}-{os_version}'
+			
+			# Install wxPyhon from the extras url.
+			subprocess.check_output( [
+				python_exe, '-m',
+				'pip', 'install', '--upgrade', '-f', url, 'wxPython',
+			], stderr=subprocess.DEVNULL )		# Hide stderr so we don't scare the user with DEPRECATED warnings.
+		else:
+			print( f'\n***** Warning: wxPython does not have a prebuilt version for "{os_name}-{os_version}" *****' )
+			print( 'wxPython will be installed and built from source.' )
+			print( 'This could take 30 min or longer on the first install.  Be very patient.' )
+						
+			subprocess.check_output( [
+				python_exe, '-m',
+				'pip', 'install', '--upgrade', 'wxPython',
+			], stderr=subprocess.DEVNULL )		# Hide stderr so we don't scare the user with DEPRECATED warnings.
 	else:
 		# If Windows or Mac, install mostly everything from regular pypi.
 		with open('requirements.txt', encoding='utf8') as f_in, open('requirements_os.txt', 'w', encoding='utf8') as f_out:
@@ -254,10 +259,12 @@ def env_setup( full=False ):
 			for line in f_in:
 				if 'pybabel' not in line:	# Skip pybabel.  Use polib instead to convert the .po files to .mo.
 					f_out.write( line )
-		subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', '--quiet', '-r', 'requirements_os.txt'] )
+		subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', '-r', 'requirements_os.txt'] )
 
 	# Install polib and pyshortcuts for building the mo translation files and setting up the desktop shortcuts, respectively.
-	subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade', '--quiet', 'polib', 'pyshortcuts'] )
+	# If Windows, include the win32 module.
+	extra_modules = ['polib', 'pyshortcuts'] + (['pywin32'] if is_windows else [])
+	subprocess.check_output( [python_exe, '-m', 'pip', 'install', '--upgrade'] + extra_modules )
 	print( 'Done.' )
 
 	return python_exe
@@ -358,7 +365,137 @@ def make_bin( python_exe ):
 
 def get_name( pyw_file ):
 	return os.path.splitext( os.path.basename( pyw_file ) )[0]
+
+def get_ico_file( pyw_file ):
+	extension = {
+		'Windows': 	'.ico',
+		'Linux':	'.png',
+		'Darwin':	'.icns',
+	}
+	fname = os.path.basename( pyw_file )
+	basename = os.path.splitext( fname )[0]
+	dirname = os.path.dirname( pyw_file )
+	dirimages = os.path.join( dirname, basename + 'Images' )
+	return os.path.join( dirimages, basename + extension.get(platform.system(), '.png') )
 		
+def make_file_associations( python_exe='', uninstall_assoc=False ):
+	suffix_for_name = {
+		'CrossMgr':			'.cmn',
+		'SeriesMgr':		'.smn',
+		'SprintMgr':		'.smr',
+		'PointsRaceMgr':	'.tp5',
+	}
+	
+	if is_windows:
+		print( "{} file associations... ".format(['Making','Uninstalling'][uninstall_assoc]), end='', flush=True )
+
+		python_launch_exe = python_exe.replace( 'python.exe', 'pythonw.exe' )
+
+		assoc_fname = os.path.abspath( os.path.join('.', 'make_assoc_tmp.bat') )
+		with open(assoc_fname, 'w', encoding='utf8') as f:
+			for pyw in get_pyws():
+				name = get_name( pyw )
+				if name in suffix_for_name:
+					if uninstall_assoc:
+						f.write( f'assoc {suffix_for_name[name]}=\n' )
+					else:
+						f.write( f'assoc {suffix_for_name[name]}={name}\n' )
+						f.write( f'ftype {name}="{python_launch_exe}" "{pyw}" "%1"\n' )
+						f.write( fr'reg delete hkcr\{name}\DefaultIcon' + '\n' )
+						f.write( fr'reg add hkcr\{name}\DefaultIcon /ve /d "{get_ico_file(pyw)}"' + '\n' )
+
+		import ctypes
+		ret = ctypes.windll.shell32.ShellExecuteW(0, 'runas', assoc_fname,  '', os.path.dirname(assoc_fname), 1)
+		
+		#subprocess.check_output( [assoc_fname], shell=True, cwd=os.path.dirname(assoc_fname) )
+		remove_ignore( assoc_fname )
+
+		print( 'Done.' )
+	elif is_mac:
+		pass
+	elif is_linux:
+		if not uninstall_assoc:
+			return # FIXLATER
+		
+		print( "{} file associations... ".format(['Making','Uninstalling'][uninstall_assoc]), end='', flush=True )
+		mime_directory = os.path.expanduser( '~/.local/share/mime/packages' )
+		try:
+			os.makedirs( mime_directory, exist_ok=True )
+		except Exception as e:
+			print( f'{e}.  Cannot create {mime_directory}.' )
+			return
+			
+		def get_mime_name( name ):
+			return f'application/{name.lower()}'
+			
+		# Create custom mime files for each executable.
+		for name, suffix in suffix_for_name.items():
+			mime_name = get_mime_name( name )
+			fname = os.path.join( mime_directory, name + '.xml' )
+			if uninstall_assoc:
+				try:
+					os.path.remove( fname )
+				except:
+					pass
+			else:				
+				with open( fname, 'w', encoding='utf-8' ) as f:
+					f.write( f'''<?xml version="1.0"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+	<mime-type type="{mime_name}">
+		<comment>{name} type</comment>
+		<glob pattern="*{suffix}"/>
+	</mime-type>
+</mime-info>
+''' )
+
+		if not uninstall_assoc:
+			# Update the mime databse.
+			try:
+				subprocess.check_output( ['update-mime-database', os.path.expanduser('~/.local/share/mime')] )
+			except Exception as e:
+				print( f'update-mime-database failed ({e}).' )
+				return
+			
+			# Link the custom mimes to the executables.
+			for name, suffix in suffix_for_name.items():
+				# Add command line parameter and MimeType to the .desktop files.
+				fname_desktop = os.path.expanduser( f'~/Desktop/{name}.desktop' )
+				if not os.path.isfile( fname_desktop ):
+					continue
+				
+				mime_name = get_mime_name( name )
+				
+				with open( fname_desktop, 'r', encoding='utf8' ) as f:
+					text_desktop = [line.strip() for line in f]
+
+				changed_desktop_file = False
+				has_mimetype = False
+
+				text_desktop_out = []
+				for line in text_desktop:
+					if line.startswith('Exec') and not line.endswith('%F'):
+						line += ' %f'
+						changed_desktop_file = True
+					elif line.startswith( 'MimeType' ):
+						has_mimetype = True
+					text_desktop_out.append( line )
+					
+				if not has_mimetype:
+					text_desktop_out.append( f'MimeType: {mime_name}' )
+					changed_desktop_file = True
+				
+				if changed_desktop_file:
+					with open( fname_desktop, 'w', encoding='utf8' ) as f:
+						for line in text_desktop_out:
+							f.write( line + '\n' )
+				
+				try:
+					subprocess.check_output( ['xdg-mime', 'default', f'{name}.desktop', f'application/{name.lower()}'] )
+				except Exception as e:
+					print( f'xdg-mime failed ({e}).' )
+					return
+			
+
 def make_shortcuts( python_exe ):
 	print( "Making desktop shortcuts... ", end='', flush=True )
 	
@@ -367,18 +504,6 @@ def make_shortcuts( python_exe ):
 	else:
 		python_launch_exe = python_exe
 
-	def get_ico_file( pyw_file ):
-		extension = {
-			'Windows': 	'.ico',
-			'Linux':	'.png',
-			'Darwin':	'.icns',
-		}
-		fname = os.path.basename( pyw_file )
-		basename = os.path.splitext( fname )[0]
-		dirname = os.path.dirname( pyw_file )
-		dirimages = os.path.join( dirname, basename + 'Images' )
-		return os.path.join( dirimages, basename + extension.get(platform.system(), '.png') )
-		
 	pyws = sorted( get_pyws(), reverse=True )
 	
 	shortcuts_fname = os.path.abspath( os.path.join('.', 'make_shortcuts_tmp.py') )
@@ -519,6 +644,7 @@ def install( full=False ):
 	fix_dependencies( python_exe )
 	make_bin( python_exe )
 	make_shortcuts( python_exe )
+	make_file_associations( python_exe )
 
 	print( "CrossMgr updated successfully." )
 	print( "Check your desktop for shortcuts which allow you to run the CrossMgr applications." )
@@ -527,7 +653,7 @@ def install( full=False ):
 	bin_dir = os.path.abspath( os.path.join( '.', src_dir, 'bin') )
 	print( f"These can be found in {bin_dir}." )
 	print()
-	print( 'Use these scripts to configure auto-launch for CrossMgr file extensions.' )
+	print( 'Use these scripts to configure file associations, if necessary.' )
 	print()
 	print( 'Information about the CrossMgr suite of applications can be found at: https://github.com/esitarski/CrossMgr')
 	print( 'The CrossMgr users group is here: https://groups.google.com/g/crossmgrsoftware' )
@@ -547,34 +673,28 @@ def uninstall():
 	else:
 		pyws = []
 	
+	make_file_associations( uninstall_assoc=True )
+	
 	print( "Removing CrossMgr desktop shortcuts... ", end='', flush=True )
 	
-	if not is_windows:
+	if is_windows:
 		desktop_dir = os.path.join( home_dir, 'Desktop' )
+		if not os.path.isdir(desktop_dir):
+			desktop_dir = os.path.join( home_dir, 'OneDrive', 'Desktop' )
 	else:
-		# Get the desktop folder.  We have to call the python in the env to get winshell.
-		python_exe = get_python_exe( os.path.join(install_dir, env_dir) )
-		fname = os.path.join( install_dir, src_dir, 'get_desktop_tmp.py' )
-		with open(fname, 'w', encoding='utf8') as f:
-			f.write( 'import sys\n' )
-			f.write( 'import winshell\n' )
-			f.write( 'print( winshell.desktop() )\n' )
-			f.write( 'sys.exit(0)\n' )
-		try:
-			desktop_dir = subprocess.check_output( [python_exe, fname], encoding='utf8' )
-		except Exception as e:
-			desktop_dir = None
-		os.remove( fname )
-		
+		desktop_dir = os.path.join( home_dir, 'Desktop' )
+	
+	print( 'desktop_dir', desktop_dir, os.path.isdir(desktop_dir) )
 	if desktop_dir is not None and os.path.isdir(desktop_dir):
 		for pyw in pyws:
 			fname = os.path.join( desktop_dir, get_name(pyw) ) + ('.lnk' if is_windows else '.desktop')
+			print( 'Removing:', fname )
 			if os.path.isfile(fname):
 				remove_ignore( fname, True )
 		print( 'Done.' )
 	else:
 		print( '\nError removing CrossMgr desktop shortcuts.  You must remove them manually.' )
-		
+	
 	print( "Removing CrossMgr source... ", end='', flush=True )
 	try:
 		shutil.rmtree( os.path.join(install_dir, src_dir), ignore_errors=True )
