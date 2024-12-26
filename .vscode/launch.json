@@ -12,6 +12,13 @@
 			"console": "integratedTerminal"
 		},
 		{
+			"name": "CrossMgr",
+			"type": "debugpy",
+			"request": "launch",
+			"program": "CrossMgr.pyw",
+			"console": "integratedTerminal"
+		},
+		{
 			"name": "Python: Remote Attach",
 			"type": "debugpy",
 			"request": "attach",
