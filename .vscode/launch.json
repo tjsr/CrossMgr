@@ -16,7 +16,13 @@
 			"type": "debugpy",
 			"request": "launch",
 			"program": "CrossMgr.pyw",
-			"console": "integratedTerminal"
+			"console": "internalConsole",
+			"autoReload": {
+				"enable": true,
+				"pattern": [
+						"**/*.py"
+				]
+			},
 		},
 		{
 			"name": "Python: Remote Attach",
