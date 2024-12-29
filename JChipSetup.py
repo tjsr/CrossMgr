@@ -17,8 +17,6 @@ import MyLapsServer
 import HelpSearch
 from ReadSignOnSheet import GetTagNums
 
-HOST, PORT = JChip.DEFAULT_HOST, JChip.DEFAULT_PORT
-
 class ChipReaderType(Enum):
 	JChip = 0
 	RaceResult = 1
@@ -66,9 +64,15 @@ class JChipSetupDialog( wx.Dialog ):
 		self.receivedCount = 0
 		self.refTime = None
   
-		self.chipReaderPort: Dict[int, int] = {}
-		self.chipReaderAddress: Dict[int, str] = {}
-		
+		self.chipReaderPort: Dict[ChipReaderType, int] = {}
+		self.chipReaderAddress: Dict[ChipReaderType, str] = {}
+		for chipReaderType in ChipReaderType:
+			configPort = Utils.readConfig(chipReaderType.name + '.Port', None)
+			self.chipReaderPort[chipReaderType] = configPort
+			configAddress = Utils.readConfig(chipReaderType.name + '.Host', None)
+			self.chipReaderAddress[chipReaderType] = configAddress
+			print('Chip reader {} type has config for {}:{}'.format(chipReaderType.name, configAddress, configPort ))
+
 		self.enableJChipCheckBox = wx.CheckBox( self, label = _('Use RFID Reader During Race') )
 		if Model.race:
 			self.enableJChipCheckBox.SetValue( getattr(Model.race, 'enableJChipIntegration', False) )
@@ -119,11 +123,20 @@ class JChipSetupDialog( wx.Dialog ):
 		self.chipReaderType.Bind( wx.EVT_CHOICE, self.changechipReaderType )
 		gridBagSizer.Add( self.chipReaderType,
 			pos=(row, 1), border=border, flag=wx.EXPAND|wx.TOP|wx.RIGHT|wx.ALIGN_LEFT )
-		
+
+		chipReaderType = ChipReaderType(self.chipReaderType.GetSelection())
 		row += 1
-		sep = '  -' + _('or') + '-  '
-		ips = sep.join( GetAllIps() )
-		self.ipaddr = wx.TextCtrl( self, value = ips, style = wx.TE_READONLY, size=(240,-1) )
+		ips = Utils.readConfig(chipReaderType.name + '.Host', Utils.GetDefaultHost())
+		ipsReadonly = None
+
+		if ips == None:
+			sep = '  -' + _('or') + '-  '
+			ips = sep.join( GetAllIps() )
+			ipsReadonly = wx.TE_READONLY
+		else:
+			ipsReadonly = wx.TE_PROCESS_ENTER
+
+		self.ipaddr = wx.TextCtrl( self, value = ips, style = ipsReadonly, size=(240,-1) )
 		self.autoDetect = wx.Button( self, label=_('AutoDetect') )
 		self.autoDetect.Show( False )
 		self.autoDetect.Bind( wx.EVT_BUTTON, self.doAutoDetect )
@@ -137,8 +150,9 @@ class JChipSetupDialog( wx.Dialog ):
 		gridBagSizer.Add( iphs, pos=(row, 1), border=border, flag=wx.EXPAND|wx.RIGHT|wx.ALIGN_LEFT )
 		
 		row += 1
-		self.port = wx.lib.intctrl.IntCtrl( self, -1, min=1, max=65535, value=PORT,
-											limited=True, style = wx.TE_READONLY )
+		port = self.getReaderPort(chipReaderType)
+		self.port = wx.lib.intctrl.IntCtrl( self, -1, min=1, max=65535, value=port,
+											limited=True )
 		gridBagSizer.Add( wx.StaticText(self, label = _('Remote Port:')), pos=(row,0),
 						flag=wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
 		gridBagSizer.Add( self.port, pos=(row,1), border=border, flag=wx.EXPAND|wx.RIGHT|wx.ALIGN_LEFT )
@@ -180,7 +194,10 @@ class JChipSetupDialog( wx.Dialog ):
   
 		chipReaderType = ChipReaderType(race.chipReaderType)
 		Utils.writeConfig(chipReaderType.name + '.Host', race.chipReaderIpAddr)
-		Utils.writeConfig(chipReaderType.port + '.Port', race.chipReaderPort)
+		Utils.writeConfig(chipReaderType.name + '.Port', race.chipReaderPort)
+		print('Saved {} reader address:port to {}:{}'.format(
+			chipReaderType.name, race.chipReaderIpAddr, race.chipReaderPort)
+		)
 		self.setReaderAddress(chipReaderType, race.chipReaderIpAddr, race.chipReaderPort)
 
 		race.enableJChipIntegration = bool(self.enableJChipCheckBox.GetValue())
@@ -192,7 +209,7 @@ class JChipSetupDialog( wx.Dialog ):
 		self.chipReaderAddress[readerType] = ipAddr
   
 	def setReaderAddressField(self, readerType: ChipReaderType, editable: bool = True) -> None:
-		print('Setting reader address field')
+		print('Setting reader address field', readerType)
 		rfidReaderHost = self.getReaderAddress(readerType)
 		try:
 			self.ipaddr.SetValue( rfidReaderHost )
@@ -202,16 +219,20 @@ class JChipSetupDialog( wx.Dialog ):
 		self.ipaddr.SetEditable( editable )
 
 	def setReaderPortField(self, readerType: ChipReaderType, editable: bool = True) -> None:
-		print('Setting reader port field')
+		print('Setting reader port field', readerType)
 		rfidReaderPort: int|None = self.getReaderPort(readerType)
 		self.port.SetValue( rfidReaderPort )
 		self.port.SetEditable( editable )
 
 	def getReaderAddress(self, readerType: ChipReaderType) -> str:
 		currentAddress: str|None = self.chipReaderAddress.get(readerType)
-		print('Current address: ', str(currentAddress))
+		defaultAddress = Utils.GetDefaultHost()
 		if not currentAddress:
-			currentAddress = Utils.readConfig(readerType.name + '.Host')
+			currentAddress = Utils.readConfig(readerType.name + '.Host', defaultAddress)
+		print('Current address for reader: ', readerType, str(currentAddress), defaultAddress)
+
+		if not currentAddress:
+			return defaultAddress
 
 		return currentAddress
 
@@ -230,47 +251,51 @@ class JChipSetupDialog( wx.Dialog ):
 		return None
 
 	def getReaderPort(self, readerType: ChipReaderType) -> int:
-		print('Getting reader port of type: ', readerType)
 		currentPort = self.chipReaderPort.get(readerType)
-  
+
+		defaultPort = self.getDefaultPort(readerType)
 		if not currentPort:
-			currentPort = Utils.readConfig(readerType.port + '.Port')
+			currentPort = Utils.readConfig(readerType.name + '.Port', defaultPort)
+		print('Getting reader port of type: ', readerType, currentPort, defaultPort)
 
 		if not currentPort:
-			currentPort = self.getDefaultPort(readerType)
-
+			return defaultPort
 		return currentPort
 
 	def update( self ) -> None:
-		print('Updating chip reader setup dialog')
 		race = Model.race
 		if not race:
+			print('No race to updated chip reader setup dialog')
 			return
+
+		print('Updating chip reader setup dialog', race.chipReaderType, race.chipReaderIpAddr, race.chipReaderPort)
+
 		self.enableJChipCheckBox.SetValue( race.enableJChipIntegration )
 		self.chipReaderType.SetSelection( max(0, race.chipReaderType) )
 		self.setReaderAddress(self.chipReaderType, race.chipReaderIpAddr, race.chipReaderPort)
-		# self.changechipReaderType()
+		self.changechipReaderType()
 
 	def changechipReaderType( self, event=None ):
 		selection = self.chipReaderType.GetSelection()
 		print('Chip reader type selection: ', selection)
+		chipReaderType = ChipReaderType(selection)
+
 		showJChipHelpText: bool = selection == ChipReaderType.JChip.value
 		addresssEditable: bool = True
 		portEditable: bool = True
 		enableAutodetect: bool = True
 		
-		if selection == ChipReaderType.JChip.value:	# JChip/CrossMgrImpinj/CrossMgrAlien
+		if chipReaderType == ChipReaderType.JChip:	# JChip/CrossMgrImpinj/CrossMgrAlien
 			enableAutodetect = False
-		elif selection == ChipReaderType.RaceResult.value:	# RaceResult
+		elif chipReaderType == ChipReaderType.RaceResult:	# RaceResult
 			None
-		elif selection == ChipReaderType.Ultra.value:	# Ultra
+		elif chipReaderType == ChipReaderType.Ultra:	# Ultra
 			None
-		elif selection == ChipReaderType.WebReader.value:	# WebReader
+		elif chipReaderType == ChipReaderType.WebReader:	# WebReader
 			portEditable = False
 			addresssEditable = False
 			enableAutodetect = False
-		
-		elif selection == ChipReaderType.MyLaps.value:	# MyLaps
+		elif chipReaderType == ChipReaderType.MyLaps:	# MyLaps
 			portEditable = False
 			addresssEditable = False
 			enableAutodetect = False
