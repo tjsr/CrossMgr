@@ -662,9 +662,9 @@ class MainWin( wx.Frame ):
 			| flatnotebook.FNB_NODRAG
 			| flatnotebook.FNB_DROPDOWN_TABS_LIST
 			| flatnotebook.FNB_NO_NAV_BUTTONS
+			| flatnotebook.FNB_FF2
 		)
 		self.notebook = flatnotebook.FlatNotebook( self.splitter, 1000, agwStyle=bookStyle )
-		self.notebook.SetBackgroundColour( wx.WHITE )
 		self.notebook.Bind( wx.EVT_NOTEBOOK_PAGE_CHANGED, self.onPageChanging )
 		
 		self.fileDrop = FileDrop()	# Create a file drop target for all the main pages.
@@ -1536,6 +1536,7 @@ class MainWin( wx.Frame ):
 	
 	def menuPageSetup( self, event ):
 		psdd = wx.PageSetupDialogData(self.printData)
+		# TODO: Fix bug where below line may cause an exception when opening page setup.
 		with wx.PageSetupDialog(self, psdd) as dlg:
 			dlg.ShowModal()
 
