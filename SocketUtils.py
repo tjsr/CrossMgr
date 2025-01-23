@@ -28,6 +28,6 @@ def socketReadDelimited( s: socket.socket, delimiters: List[bytes]=[EOL, LF]) ->
 		else:
 			break
 
-	if buffer == None:
+	if buffer is None:
 		return None
 	return buffer.decode(ISO_ENCODING)

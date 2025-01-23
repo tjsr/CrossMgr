@@ -9,14 +9,16 @@ import math
 import socket
 import random
 import datetime
+
 now = datetime.datetime.now
 import threading
-from Queue import Queue, Empty
+from queue import Queue, Empty
 from openpyxl.workbook import Workbook
 
 #------------------------------------------------------------------------------	
 # CrossMgr's port and socket.
-from Ultra import DEFAULT_PORT
+# from Ultra import DEFAULT_PORT
+DEFAULT_PORT = 23
 DEFAULT_HOST = '127.0.0.1'
 
 #------------------------------------------------------------------------------	
