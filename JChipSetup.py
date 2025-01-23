@@ -16,6 +16,9 @@ import Ultra
 import MyLapsServer
 import HelpSearch
 from ReadSignOnSheet import GetTagNums
+from TimingDevices import UltraAutodetect
+from TimingDevices.UltraTimingDevice import UltraDecoder
+
 
 class ChipReaderType(Enum):
 	JChip = 0
@@ -242,7 +245,7 @@ class JChipSetupDialog( wx.Dialog ):
 		elif readerType == ChipReaderType.RaceResult:
 			return RaceResult.DEFAULT_PORT
 		elif readerType == ChipReaderType.Ultra:
-			return Ultra.DEFAULT_PORT
+			return UltraDecoder.DEFAULT_PORT
 		elif readerType == ChipReaderType.WebReader:
 			return 8765
 		elif readerType == ChipReaderType.MyLaps:
@@ -310,7 +313,7 @@ class JChipSetupDialog( wx.Dialog ):
 	
 	def doAutoDetect( self, event ):
 		selection = self.chipReaderType.GetSelection()
-		autoDetect = [RaceResult.AutoDetect, Ultra.AutoDetect][selection-1]
+		autoDetect = [RaceResult.AutoDetect, UltraAutodetect.AutoDetect][selection-1]
 		
 		def getHost():
 			with wx.BusyCursor():
