@@ -292,7 +292,7 @@ class UltraConnectConfirmationMessage(UltraDecoderMessage):
 			try:
 				Connected, UltraID, CommandCode = message.split(',', 3)
 				return UltraConnectConfirmationMessage(int(UltraID))
-			except ValueError as e:
+			except ValueError:
 				return None
 		return None
 
@@ -319,11 +319,11 @@ class UltraVoltageMessage(UltraDecoderMessage):
 
 	def __init__(self, ultraId: int, voltage: float):
 		super().__init__(ultraId)
-		Voltage = voltage
+		self._Voltage = voltage
 
 	@property
 	def Voltage(self) -> float:
-		return self.Voltage
+		return self._Voltage
 
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
 class UltraChipReadMessage(UltraDecoderMessage):
@@ -354,9 +354,8 @@ class UltraChipReadMessage(UltraDecoderMessage):
 		return int(chipStr)
 
 	@staticmethod
-	def parse(message: str):
+	def parse(message: str) -> 'UltraChipReadMessage | None':
 		output: UltraChipReadMessage
-		Extra: str|None = None
 		try:
 			Zero, ChipCode, Seconds, Milliseconds, Extra = message.split(',', 4)
 
