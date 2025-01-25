@@ -1,6 +1,6 @@
 wheel
 numpy
-setuptools
+setuptools==58.2.0
 requests
 waitress
 xlsxwriter
@@ -27,4 +27,3 @@ virustotal-api
 metaphone
 pyllrp
 wxPython
-setuptools==58.2.0
