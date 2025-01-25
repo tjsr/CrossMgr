@@ -1,3 +1,6 @@
+from abc import abstractmethod
+from datetime import datetime
+
 import JChip
 import RaceResult
 import Ultra
@@ -10,6 +13,11 @@ class ChipReader:
 	
 	def __init__( self ):
 		self.chipReaderType = None
+		self.StartListener = None
+		self.GetData = None
+		self.StopListener = None
+		self.CleanupListener = None
+		self.IsListening = None
 		self.reset()
 		
 	def reset( self, chipReaderType=None ):
@@ -56,6 +64,18 @@ class ChipReader:
 			self.StopListener = JChip.StopListener
 			self.CleanupListener = JChip.CleanupListener
 			self.IsListening = JChip.IsListening
+
+	@abstractmethod
+	def StartListener( self, time: datetime, host: str, port: int, test: bool | None = None ) -> None:
+		pass
+
+	@abstractmethod
+	def GetData( self ) -> list[str]:
+		pass
+
+	@abstractmethod
+	def StopListener( self ) -> None:
+		pass
 			
 chipReaderCur = ChipReader()
 
