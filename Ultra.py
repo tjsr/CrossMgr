@@ -109,16 +109,17 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 			ultraDecoder.begin_reading()
 		except ValueError:
 			continue
- 
-		log.q('connection', '{}'.format(_('Reading data from decoder...')))
+		except Exception as e:
+			log.exception( 'ultra.keepGoing', e )
+
+		log.q('ultra.keepGoing', '{}'.format(_('Reading data from decoder...')))
 		
 		while keepGoing():
 			try:
 				ultraDecoder.get_messages()
 				ultraDecoder.process_messages()
 			except Exception as e:
-				Utils.logException( e, sys.exc_info() )
-				log.q('connection.keepGoing', '{}: "{}"'.format(_('Connection failed'), e))
+				log.exception('ultra.keepGoing', e)
 				break
 	
 	# Final cleanup.
@@ -159,15 +160,6 @@ def StopListener():
 def IsListening():
 	return listener is not None
 
-class UltraDecoder2:
-	target = Server
-	_host: str
-	_port: int | None
-
-	def __init__( self, HOST=None, PORT=None ):
-		self._host = HOST
-		self._port = PORT
-
 
 def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):
 	global q
@@ -199,7 +191,7 @@ def CleanupListener():
 if __name__ == '__main__':
 	def doTest():
 		try:
-			StartListener( HOST='127.0.0.1', PORT=DEFAULT_PORT )
+			StartListener( HOST=UltraDecoder.DEFAULT_HOST, PORT=UltraDecoder.DEFAULT_PORT )
 			count = 0
 			while 1:
 				time.sleep( 1 )

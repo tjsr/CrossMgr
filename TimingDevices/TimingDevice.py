@@ -1,9 +1,11 @@
+import datetime
 from abc import abstractmethod
 from types import TracebackType
-from typing import List, Type
+from typing import List, Type, Callable
 
 from LogQueue import LogQueue
 
+CrossingListenerCallableType = Callable[[(str, datetime.datetime)], None]
 
 class DecoderMessage:
 	def __init__(self):
