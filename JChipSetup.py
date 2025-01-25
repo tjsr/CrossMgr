@@ -408,6 +408,8 @@ class JChipSetupDialog( wx.Dialog ):
 		for d in data:
 			if d[0] == 'data':
 				self.receivedCount += 1
+				assert isinstance(d[1], str)
+
 				ts = d[2].isoformat(' ')
 				if len(ts) == 8:
 					ts += '.00'
@@ -416,8 +418,10 @@ class JChipSetupDialog( wx.Dialog ):
 				try:
 					num = '{}'.format(Model.race.tagNums[d[1]])
 				except (AttributeError, ValueError, KeyError):
-					num = 'not found'
+					totalTags = len(Model.race.tagNums)
+					num = 'not found from {} tags'.format(totalTags)
 				lastTag = d[1]
+
 				self.appendMsg( '{}: tag={}, time={}, Bib={}'.format(self.receivedCount, d[1], ts, num) )
 			elif d[0] == 'connected':
 				self.appendMsg( '*******************************************' )

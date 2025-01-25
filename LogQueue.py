@@ -29,7 +29,7 @@ class LogQueue:
 	def exception(self,
 	              category: str,
 	              e: Exception,
-	              exc_info: tuple[Type[BaseException], BaseException, TracebackType] | tuple[None, None, None] | None
+	              exc_info: tuple[Type[BaseException], BaseException, TracebackType] | tuple[None, None, None] | None = None
 	) -> list[str]:
 		ex: list[str]
 		if exc_info is None:
