@@ -325,6 +325,10 @@ class UltraVoltageMessage(UltraDecoderMessage):
 	def Voltage(self) -> float:
 		return self._Voltage
 
+	@property
+	def Voltage(self) -> float:
+		return self.Voltage
+
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
 class UltraChipReadMessage(UltraDecoderMessage):
 	# Retain this field order
