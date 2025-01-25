@@ -45,7 +45,7 @@ shutdownQ = None
 listener = None
 
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
-tSmall = datetime.timedelta( seconds = 0.00001 )
+tSmall: datetime.timedelta = datetime.timedelta( seconds = 0.00001 )
 
 def parseTime( tStr, dStr=None ):
 	global dateToday
