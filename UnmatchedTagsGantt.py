@@ -1,3 +1,5 @@
+import sys
+
 import wx
 import os
 import xlwt
@@ -86,10 +88,17 @@ class UnmatchedTagsGantt( wx.Panel ):
 
 	def getResults( self ):
 		race = Model.race
-		return sorted(
-			((tag, times) for tag, times in race.unmatchedTags.items()),
-			key = lambda tt: (-len(tt[1]), tt[1][-1]),
-		) if race and race.unmatchedTags else []
+		try:
+			outputSorted = sorted(
+				((tag, times) for tag, times in race.unmatchedTags.items()),
+				key = lambda tt: (-len(tt[1]), tt[1][-1] if tt[1] else None) if tt[1] is not None else (0, 0),
+			) if race and race.unmatchedTags else []
+		except Exception as e:
+			outputSorted = []
+			print('Failed while sorting tag times.')
+			Utils.logException( e, sys.exc_info() )
+
+		return outputSorted
 
 	def refresh( self ):
 		results = self.getResults()

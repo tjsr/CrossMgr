@@ -458,7 +458,8 @@ class Actions( wx.Panel ):
 		self.chipTimingOptions.SetSelection( 0 )
 		self.chipTimingOptions.Enable( False )
 		
-		with Model.LockRace() as race:
+		with Model.LockRace() as modelRace:
+			race: Model.Race = modelRace # To get our type checking
 			if race:
 				self.ShowChecklist()
 
