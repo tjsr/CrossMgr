@@ -26,3 +26,4 @@ virustotal-api
 metaphone
 pyllrp
 wxPython
+setuptools==58.2.0
