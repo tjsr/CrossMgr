@@ -1,17 +1,15 @@
 import datetime
 import socket
 import time
-from typing import List, Optional, Callable
+from typing import List, Optional
 
 from LogQueue import LogQueue
 from SocketUtils import socketReadDelimited, socketSendMessage
 from TimingDevices.TimingDevice import TimingDeviceCommand, UnrecognisedCommandException, TimingDevice, DecoderMessage, \
-	UnrecognisedDecoderMessage
+	UnrecognisedDecoderMessage, CrossingListenerCallableType
 import re
 
 from TimingDevices.UltraAutodetect import AutoDetect
-
-CrossingListenerCallableType = Callable[[(int, datetime.datetime)], None]
 
 now = datetime.datetime.now
 EPOCH_TIME = datetime.datetime(1980, 1, 1)
@@ -25,9 +23,9 @@ class UltraDecoder(TimingDevice):
 		'stop': TimingDeviceCommand('S', False)
 	}
 
-	DEFAULT_PORT = 23
+	DEFAULT_PORT: int = 23
 	# DEFAULT_PORT = 8642
-	DEFAULT_HOST = '127.0.0.1'  # Port to connect to the Ultra receiver.
+	DEFAULT_HOST: str = '127.0.0.1'  # Port to connect to the Ultra receiver.
 
 	_host: str = DEFAULT_HOST
 	_port: int = DEFAULT_PORT
@@ -148,7 +146,9 @@ class UltraDecoder(TimingDevice):
 				if not chipRead.hasValidTag():
 					self.log('process_messages', '{}: "{}"'.format(_('Invalid tag in chip read message'), chipRead))
 					continue
-				tag = chipRead.getTag()
+				chip = chipRead.ChipCode
+				tag = '{:d}'.format(chip)
+
 				crossingTime = chipRead.getTagTime() + self.computerTimeDiff
 
 				while crossingTime in times:
@@ -182,7 +182,7 @@ class UltraDecoder(TimingDevice):
 
 		return True
 
-	def process_crossings(self, tagTimes: [(int, datetime.datetime)]) -> None:
+	def process_crossings(self, tagTimes: [(str, datetime.datetime)]) -> None:
 		self._crossing_listener(tagTimes)
 
 	def process_message_buffer(self, buffer: str) -> int:
@@ -321,11 +321,15 @@ class UltraVoltageMessage(UltraDecoderMessage):
 		super().__init__(ultraId)
 		Voltage = voltage
 
+	@property
+	def Voltage(self) -> float:
+		return self.Voltage
+
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
 class UltraChipReadMessage(UltraDecoderMessage):
 	# Retain this field order
 	Zero: int  # Zero (unused at present)
-	ChipCode: int  # Could be the chip code decimal or hexadecimal value, depending on current setting in Ultra (see section 3.8)
+	_ChipCode: int  # Could be the chip code decimal or hexadecimal value, depending on current setting in Ultra (see section 3.8)
 	Seconds: int  # Integer value representing the number of seconds after 01/01/1980
 	Milliseconds: int  # Integer value representing the millisecond portion of the time.
 	RSSI: int  # Negative integer value. This is the signal strength for the chip
@@ -381,13 +385,14 @@ class UltraChipReadMessage(UltraDecoderMessage):
 
 	def __init__(self, ultraId: int, chipCode: int):
 		super().__init__(ultraId)
-		self.ChipCode = chipCode
+		self._ChipCode = chipCode
 
 	def getTagTime(self) -> datetime.datetime:
 		return EPOCH_TIME + datetime.timedelta(seconds=self.Seconds, milliseconds=self.Milliseconds)
 
-	def getTag(self) -> int:
-		return self.ChipCode
+	@property
+	def ChipCode(self) -> int:
+		return self._ChipCode
 
 	def hasValidTag(self) -> bool:
-		return self.ChipCode != 0
+		return self._ChipCode != 0
