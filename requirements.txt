@@ -18,6 +18,7 @@ paramiko
 markdown
 bs4
 trueskill
+pybabel
 opencv-python
 pyinstaller
 piexif
@@ -26,4 +27,3 @@ virustotal-api
 metaphone
 pyllrp
 wxPython
-babel
