@@ -136,7 +136,7 @@ buildLocale() {
 	do
 		pofile="${locale}/LC_MESSAGES/messages.po"
 		echo "Building Locale: $locale"
-		lVal = $(basename $locale)
+		lVal=$(basename $locale)
 		echo "pybabel compile -f -d $localepath -l $lVal -i $pofile"
 		pybabel compile -f -d $localepath -l $lVal -i $pofile
 		if [ $? -ne 0 ]; then
