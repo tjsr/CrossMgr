@@ -26,4 +26,3 @@ virustotal-api
 metaphone
 pyllrp
 wxPython
-babel
