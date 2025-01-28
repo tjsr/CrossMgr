@@ -478,6 +478,23 @@ function EnvSetup($program)
 	
 }
 
+function IsDevelopmentBranch($branchName) {
+    if ( $branchName -eq '' -or $branchName -eq $null ) {
+        return $false
+    }
+    if ( $branchName -eq 'dev' ) {
+        return $true
+    }
+    if ( $branchName.StartsWith('develop/') ) {
+        return $true
+    }
+    if ( $branchName.StartsWith('fix/') ) {
+        return $true
+    }
+
+    return $false
+}
+
 function updateVersion($programs)
 {
 	if ($programs.Length -eq 0)
@@ -495,7 +512,7 @@ function updateVersion($programs)
 			$githubref = $env:GITHUB_REF.Split('/')
 			$version = $version.Split('-')[0]
 			$shortsha=$env:GITHUB_SHA.SubString(0,7)
-			if ($githubref[1] -eq 'heads' -and $githubref[2] -eq 'dev')
+			if ($githubref[1] -eq 'heads' -and {IsDevelopmentBranch($githubref[2])} -eq $true )
 			{
 				$appvername = "AppVerName=`"$program $version-beta-$shortsha`""
 				$version="${version}-beta-${shortsha}"
