@@ -1,4 +1,7 @@
+import sys
+
 import wx
+import wx.adv
 import re
 import os
 import wx.lib.intctrl as intctrl
@@ -8,6 +11,10 @@ import webbrowser
 import threading
 import subprocess
 import platform
+
+from wx import CommandEvent
+
+from DatePicker import SafeDatePickerCtrl
 from RaceInputState import RaceInputState
 import Utils
 import Model
@@ -74,7 +81,7 @@ class GeneralInfoProperties( wx.Panel ):
 		
 		self.dateLabel = wx.StaticText( self, label = _('Date') )
 		dt = Utils.GetDateTimeToday()
-		self.date = wx.adv.DatePickerCtrl(
+		self.date = SafeDatePickerCtrl(
 			self,
 			dt = dt,
 			style = wx.adv.DP_DROPDOWN,
