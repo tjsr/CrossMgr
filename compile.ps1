@@ -142,8 +142,8 @@ function GetVersionFilePath($program)
 		Write-Host "No program specified in GetVersionFile. Aborting..."
 		exit 1
 	}
-	local $builddir = GetBuildDir($program)
-	local $VersionFilePath = "$builddir/Version.py"
+	$builddir = GetBuildDir($program)
+	$VersionFilePath = "$builddir/Version.py"
 	return $VersionFilePath
 }
 
@@ -154,8 +154,7 @@ function GetVersionFileContents($program)
 		Write-Host "No program specified in GetVersionFileContents. Aborting..."
 		exit 1
 	}
-	local $builddir = GetBuildDir($program)
-	local $VersionFile = GetVersionFilePath($program)
+	$VersionFile = GetVersionFilePath($program)
 	if (!(Test-Path -Path $VersionFile))
 	{
 		Get-PSCallStack
@@ -180,7 +179,7 @@ function GetVersion($program)
 		Write-Host "No program specified in GetVersion. Aborting..."
 		exit 1
 	}
-	local $versionItem = GetVersionFileContents($program)
+	$versionItem = GetVersionFileContents($program)
 	Write-Host $program, "VersionItem for program", $program, "is", $versionItem
 	$version = $versionItem.Split(' ')[1].Replace("`"", "")
 	Write-Host $program, "Version is", $version
