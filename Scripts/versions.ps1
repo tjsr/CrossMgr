@@ -40,6 +40,7 @@ function GetVersion($program)
 
 function WriteVersionFile($program, $appVersionString)
 {
+	Write-Host $appVersionString
 	if ([string]::IsNullOrEmpty($appVersionString))
 	{
 		Write-Host "No version string for program", $program, ". Aborting..."
@@ -75,7 +76,7 @@ function updateProgramVersion($program) {
 		$appVersionString = $version
 	}
 	Write-Host "Debug: ${appVersionString}", $appVersionString
-	WriteVersionFile($program, $appVersionString)
+	WriteVersionFile $program $appVersionString
 }
 
 function updateVersion($programs)
@@ -95,6 +96,6 @@ function updateVersion($programs)
 	foreach ($program in $programs)
 	{
 		Write-Host "Updating version for", $program
-		updateProgramVersion($program)
+		updateProgramVersion $program
 	}
 }
