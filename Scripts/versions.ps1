@@ -33,8 +33,62 @@ function GetVersion($program)
 {
 	RequireProgram($program)
 	$versionItem = GetVersionFileContents($program)
-	Write-Host $program, "VersionItem for program", $program, "is", $versionItem
 	$version = $versionItem.Split(' ')[1].Replace("`"", "")
-	Write-Host $program, "Version is", $version
+	Write-Host "Version for", $program, "is", $version
 	return $version
+}
+
+function WriteVersionFile($program, $appVersionString)
+{
+	if ([string]::IsNullOrEmpty($appVersionString))
+	{
+		Write-Host "No version string. Aborting..."
+		Get-PSCallStack
+		exit 1
+	}
+	$VersionFile = GetVersionFilePath($program)
+
+	$appvername = "AppVerName=`"$program $appVersionString`""
+	Write-Host "Writing", $appvername," to version file", $VersionFile
+
+	Set-Content -Path $VersionFile -Value $appvername
+}
+
+function updateProgramVersion($program) {
+	RequireProgram($program)
+	$version = GetVersion($program)
+	if (IsDevelopmentBranch) {
+		$shortsha=$env:GITHUB_SHA.SubString(0,7)
+		$appVersionString="${version}-beta-${shortsha}"
+		Write-Output "Updating version of ", $program, "from development branch. Version is", $appVersionString
+	} elseif (IsTag) {
+		$refdate = ValidateTag
+		$appVersionString="${version}-${refdate}"
+		Write-Output "Updating version of ", $program, "from tag. Version is", $version
+	} else {
+		Write-Ouput "Not a development branch or tag. Using version", $version
+		$appVersionString = $version
+	}
+	WriteVersionFile($program, $appVersionString)
+}
+
+function updateVersion($programs)
+{
+	if ($programs.Length -eq 0)
+	{
+		Write-Host "No programs selected"
+		exit 1
+	}
+	if ([string]::IsNullOrEmpty($env:GITHUB_REF))
+	{
+		Write-Host "No GITHUB_REF. Aborting..."
+		exit 1
+	}
+
+	Write-Host "GITHUB_REF=$env:GITHUB_REF"
+	foreach ($program in $programs)
+	{
+		Write-Host "Updating version for", $program
+		updateProgramVersion($program)
+	}
 }
