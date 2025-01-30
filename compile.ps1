@@ -535,9 +535,9 @@ function IsDevelopmentBranch($branchName) {
 function WriteVersionFile($program, $appVersionString)
 {
 	$VersionFile = GetVersionFilePath($program)
-	Write-Host "Writing version file to", $VersionFile
 
 	$appvername = "AppVerName=`"$program $appVersionString`""
+	Write-Host "Writing", $appvername," to version file", $VersionFile
 
 	Set-Content -Path $VersionFile -Value $appvername
 }
