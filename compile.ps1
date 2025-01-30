@@ -532,6 +532,16 @@ function IsDevelopmentBranch($branchName) {
     return $false
 }
 
+function WriteVersionFile($program, $appVersionString)
+{
+	$VersionFile = GetVersionFilePath($program)
+	Write-Host "Writing version file to", $VersionFile
+
+	$appvername = "AppVerName=`"$program $appVersionString`""
+
+	Set-Content -Path $VersionFile -Value $appvername
+}
+
 function updateVersion($programs)
 {
 	if ($programs.Length -eq 0)
@@ -552,8 +562,8 @@ function updateVersion($programs)
 			$shortsha=$env:GITHUB_SHA.SubString(0,7)
 			if ($githubref[1] -eq 'heads' -and {IsDevelopmentBranch($githubref[2])} -eq $true )
 			{
-				$appvername = "AppVerName=`"$program $version-beta-$shortsha`""
 				$version="${version}-beta-${shortsha}"
+				$appVersionString = $version
 			}
 			if ($githubref[1] -eq 'tags')
 			{
@@ -567,11 +577,10 @@ function updateVersion($programs)
 					Write-Host "Invalid Tag format. Must be v3.0.3-20200101010101. Refusing to build!"
 					exit 1
 				}
-				$appvername = "AppVerName=`"$program $version-$refdate`""
+				$appVersionString="$version-$refdate"
 				$version = $githubref[2]
 			}
-			Write-Host "$program version is now $version"
-			Set-Content -Path "$builddir\Version.py" -Value "$appvername"
+			WriteVersionFile($program, $appVersionString)
 		}
 	}
 	
@@ -625,7 +634,6 @@ function Virustotal
 		Write-Host "Uploading $file to VirusTotal..."
 		Start-Process -Wait -NoNewWindow -FilePath "python.exe" -ArgumentList "VirusTotalSubmit.py -v $file"
 	}
-		
 }
 
 function DoRelease
