@@ -25,6 +25,8 @@ function IsDevelopmentBranch() {
         Write-Debug "On fix/* branch"
         return $true
     }
+    Write-Debug $githubref
+    Write-Debug $branchName
     Write-Debug "Branch name was not recognized", $branchName
 
     return $false
