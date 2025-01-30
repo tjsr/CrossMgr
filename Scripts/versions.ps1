@@ -34,7 +34,6 @@ function GetVersion($program)
 	RequireProgram($program)
 	$versionItem = GetVersionFileContents($program)
 	$version = $versionItem.Split(' ')[1].Replace("`"", "")
-	Write-Host "Version for", $program, "is", $version
 	return $version
 }
 
@@ -50,7 +49,7 @@ function WriteVersionFile($program, $appVersionString)
 	$VersionFile = GetVersionFilePath($program)
 
 	$appvername = "AppVerName=`"$program $appVersionString`""
-	Write-Host "Writing", $appvername," to version file", $VersionFile
+	Write-Host "Writing", $appvername,"to version file", $VersionFile
 
 	Set-Content -Path $VersionFile -Value $appvername
 }
@@ -75,7 +74,6 @@ function updateProgramVersion($program) {
 		Write-Host "Not a development branch or tag. Using version", $version
 		$appVersionString = $version
 	}
-	Write-Host "Debug: ${appVersionString}", $appVersionString
 	WriteVersionFile $program $appVersionString
 }
 
@@ -88,14 +86,13 @@ function updateVersion($programs)
 	}
 	if ([string]::IsNullOrEmpty($env:GITHUB_REF))
 	{
-		Write-Host "No GITHUB_REF. Aborting..."
-		exit 1
+		Write-Host "No GITHUB_REF - not updating versions."
+		return 0
 	}
 
 	Write-Host "GITHUB_REF=$env:GITHUB_REF"
 	foreach ($program in $programs)
 	{
-		Write-Host "Updating version for", $program
 		updateProgramVersion $program
 	}
 }
