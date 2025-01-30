@@ -10,24 +10,16 @@ function IsDevelopmentBranch() {
 	$branchName = $githubref[2]
 
     if ( [string]::IsNullOrEmpty($branchName)) {
-        Write-Debug "Branch name is empty"
         return $false
     }
-    if ( $branchName -eq 'dev' ) {
-        Write-Debug "On dev branch"
+    $allowed = @(
+        'dev',
+        'develop',
+        'fix'
+    )
+    if ( $allowed -contains $branchName.ToLower() ) {
         return $true
     }
-    if ( $branchName.StartsWith('develop/') ) {
-        Write-Debug "On develop/* branch"
-        return $true
-    }
-    if ( $branchName.StartsWith('fix/') ) {
-        Write-Debug "On fix/* branch"
-        return $true
-    }
-    Write-Host $githubref
-    Write-Host $branchName
-    Write-Host "Branch name was not recognized", $branchName
 
     return $false
 }
