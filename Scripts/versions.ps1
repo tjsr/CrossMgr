@@ -39,7 +39,6 @@ function GetVersion($program)
 
 function WriteVersionFile($program, $appVersionString)
 {
-	Write-Host $appVersionString
 	if ([string]::IsNullOrEmpty($appVersionString))
 	{
 		Write-Host "No version string for program", $program, ". Aborting..."
@@ -65,11 +64,11 @@ function updateProgramVersion($program) {
 	if (IsDevelopmentBranch) {
 		$shortsha=$env:GITHUB_SHA.SubString(0,7)
 		$appVersionString="${version}-beta-${shortsha}"
-		Write-Host "Updating version of", $program, "from development branch. Version is", $appVersionString
+		Write-Host "Updating version of", $program, "from development branch to", $appVersionString
 	} elseif (IsTag) {
 		$refdate = ValidateTag
 		$appVersionString="${version}-${refdate}"
-		Write-Host "Updating version of", $program, "from tag. Version is", $version
+		Write-Host "Updating version of", $program, "from tag to", $version
 	} else {
 		Write-Host "Not a development branch or tag. Using version", $version
 		$appVersionString = $version
