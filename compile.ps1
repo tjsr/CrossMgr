@@ -137,6 +137,11 @@ function doPyInstaller($program)
 
 function GetVersion($program)
 {
+	if ([string]::IsNullOrEmpty($program)) {
+		Get-PSCallStack
+		Write-Host "No program specified in GetVersion. Aborting..."
+		exit 1
+	}
 	$builddir = GetBuildDir($program)
 	if (!(Test-Path -Path "$builddir/Version.py"))
 	{
