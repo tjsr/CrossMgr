@@ -50,6 +50,16 @@ param (
 $environ = "env"
 $script:pythongood = $false
 
+
+function RequireProgram($program)
+{
+	if ( [string]::IsNullOrEmpty($program) ) {
+		Get-PSCallStack
+		Write-Host "No program specified. Aborting..."
+		exit 1
+	}
+}
+
 # Check the python version. Current only 3.10.x.
 function CheckPythonVersion
 {
@@ -78,6 +88,7 @@ function CheckPythonVersion
 }
 function GetBuildDir($program)
 {
+	RequireProgram($program)
 	$builddir = '.'
 	if ($program -ne 'CrossMgr')
 	{
@@ -137,11 +148,7 @@ function doPyInstaller($program)
 
 function GetVersionFilePath($program)
 {
-	if ( [string]::IsNullOrEmpty($program) ) {
-		Get-PSCallStack
-		Write-Host "No program specified in GetVersionFile. Aborting..."
-		exit 1
-	}
+	RequireProgram($program)
 	$builddir = GetBuildDir($program)
 	$VersionFilePath = "$builddir/Version.py"
 	return $VersionFilePath
@@ -149,11 +156,7 @@ function GetVersionFilePath($program)
 
 function GetVersionFileContents($program)
 {
-	if ( [string]::IsNullOrEmpty($program) ) {
-		Get-PSCallStack
-		Write-Host "No program specified in GetVersionFileContents. Aborting..."
-		exit 1
-	}
+	RequireProgram($program)
 	$VersionFile = GetVersionFilePath($program)
 	if (!(Test-Path -Path $VersionFile))
 	{
@@ -174,11 +177,7 @@ function GetVersionFileContents($program)
 
 function GetVersion($program)
 {
-	if ( [string]::IsNullOrEmpty($program) ) {
-		Get-PSCallStack
-		Write-Host "No program specified in GetVersion. Aborting..."
-		exit 1
-	}
+	RequireProgram($program)
 	$versionItem = GetVersionFileContents($program)
 	Write-Host $program, "VersionItem for program", $program, "is", $versionItem
 	$version = $versionItem.Split(' ')[1].Replace("`"", "")
@@ -560,6 +559,7 @@ function updateVersion($programs)
 			$githubref = $env:GITHUB_REF.Split('/')
 			$version = $version.Split('-')[0]
 			$shortsha=$env:GITHUB_SHA.SubString(0,7)
+			$appVersionString = $version
 			if ($githubref[1] -eq 'heads' -and {IsDevelopmentBranch($githubref[2])} -eq $true )
 			{
 				$version="${version}-beta-${shortsha}"
