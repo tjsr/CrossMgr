@@ -135,6 +135,44 @@ function doPyInstaller($program)
 	}
 }
 
+function GetVersionFilePath($program)
+{
+	if ( [string]::IsNullOrEmpty($program) ) {
+		Get-PSCallStack
+		Write-Host "No program specified in GetVersionFile. Aborting..."
+		exit 1
+	}
+	local $builddir = GetBuildDir($program)
+	local $VersionFilePath = "$builddir/Version.py"
+	return $VersionFilePath
+}
+
+function GetVersionFileContents($program)
+{
+	if ( [string]::IsNullOrEmpty($program) ) {
+		Get-PSCallStack
+		Write-Host "No program specified in GetVersionFileContents. Aborting..."
+		exit 1
+	}
+	local $builddir = GetBuildDir($program)
+	local $VersionFile = GetVersionFilePath($program)
+	if (!(Test-Path -Path $VersionFile))
+	{
+		Get-PSCallStack
+		Write-Host "No version file at ", $VersionFile,". Aborting..."
+		exit 1
+	}
+
+	$versionItem = Get-Content $VersionFile
+	if ([string]::IsNullOrEmpty($versionItem))
+	{
+		Get-PSCallStack
+		Write-Host "Version file at", $VersionFile, "is empty. Aborting..."
+		exit 1
+	}
+	return $versionItem
+}
+
 function GetVersion($program)
 {
 	if ( [string]::IsNullOrEmpty($program) ) {
@@ -142,14 +180,8 @@ function GetVersion($program)
 		Write-Host "No program specified in GetVersion. Aborting..."
 		exit 1
 	}
-	$builddir = GetBuildDir($program)
-	if (!(Test-Path -Path "$builddir/Version.py"))
-	{
-		Write-Host "No version file in ", $builddir, "/Version.py. Aborting..."
-		exit 1
-	}
-	$versionItem = Get-Content "$builddir/Version.py"
-	Write-Host $program, "VersionItem for program ", $program, " is ", $versionItem
+	local $versionItem = GetVersionFileContents($program)
+	Write-Host $program, "VersionItem for program", $program, "is", $versionItem
 	$version = $versionItem.Split(' ')[1].Replace("`"", "")
 	Write-Host $program, "Version is", $version
 	return $version
