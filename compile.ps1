@@ -137,7 +137,7 @@ function doPyInstaller($program)
 
 function GetVersion($program)
 {
-	if (![string]::IsNullOrEmpty($program)) {
+	if ( -not [string]::IsNullOrEmpty($program) ) {
 		Get-PSCallStack
 		Write-Host "No program specified in GetVersion. Aborting..."
 		exit 1
@@ -485,7 +485,7 @@ function EnvSetup($program)
 }
 
 function IsDevelopmentBranch($branchName) {
-    if ( $branchName -eq '' -or $branchName -eq $null ) {
+    if ( [string]::IsNullOrEmpty($branchName)) {
         return $false
     }
     if ( $branchName -eq 'dev' ) {
@@ -513,6 +513,7 @@ function updateVersion($programs)
 		Write-Host "GITHUB_REF=$env:GITHUB_REF"
 		foreach ($program in $programs)
 		{
+			Write-Host "Updating version for", $program
 			$builddir = GetBuildDir($program)
 			$version = GetVersion($program)
 			$githubref = $env:GITHUB_REF.Split('/')
