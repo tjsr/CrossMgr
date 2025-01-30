@@ -42,7 +42,7 @@ function WriteVersionFile($program, $appVersionString)
 {
 	if ([string]::IsNullOrEmpty($appVersionString))
 	{
-		Write-Host "No version string. Aborting..."
+		Write-Host "No version string for program", $program, ". Aborting..."
 		Get-PSCallStack
 		exit 1
 	}
@@ -57,14 +57,19 @@ function WriteVersionFile($program, $appVersionString)
 function updateProgramVersion($program) {
 	RequireProgram($program)
 	$version = GetVersion($program)
+	if ([string]::IsNullOrEmpty($version))
+	{
+		Write-Host "Failed getting version for", $program,". Aborting..."
+		exit 1
+	}
 	if (IsDevelopmentBranch) {
 		$shortsha=$env:GITHUB_SHA.SubString(0,7)
 		$appVersionString="${version}-beta-${shortsha}"
-		Write-Host "Updating version of ", $program, "from development branch. Version is", $appVersionString
+		Write-Host "Updating version of", $program, "from development branch. Version is", $appVersionString
 	} elseif (IsTag) {
 		$refdate = ValidateTag
 		$appVersionString="${version}-${refdate}"
-		Write-Host "Updating version of ", $program, "from tag. Version is", $version
+		Write-Host "Updating version of", $program, "from tag. Version is", $version
 	} else {
 		Write-Host "Not a development branch or tag. Using version", $version
 		$appVersionString = $version
