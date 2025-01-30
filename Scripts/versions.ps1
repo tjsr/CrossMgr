@@ -74,6 +74,7 @@ function updateProgramVersion($program) {
 		Write-Host "Not a development branch or tag. Using version", $version
 		$appVersionString = $version
 	}
+	Write-Host "Debug: ${appVersionString}", $appVersionString
 	WriteVersionFile($program, $appVersionString)
 }
 
