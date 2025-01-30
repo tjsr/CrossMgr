@@ -13,6 +13,7 @@ name: DevelopmentBuild
 
 jobs:
     buildmac:
+        if: false
         name: MacOSX
         # env:
         #    ACTIONS_ALLOW_UNSECURE_COMMANDS: true
@@ -52,7 +53,6 @@ jobs:
                  files: release/*
     buildwindows:
         name: Windows
-        needs: buildmac
         runs-on: windows-latest
         timeout-minutes: 120
         steps:
