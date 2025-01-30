@@ -144,6 +144,7 @@ function GetVersion($program)
 		exit 1
 	}
 	$versionItem = Get-Content "$builddir/Version.py"
+	Write-Host $program, "VersionItem for program ", $program, " is ", $versionItem
 	$version = $versionItem.Split(' ')[1].Replace("`"", "")
 	Write-Host $program, "Version is", $version
 	return $version
@@ -535,7 +536,6 @@ function updateVersion($programs)
 			Write-Host "$program version is now $version"
 			Set-Content -Path "$builddir\Version.py" -Value "$appvername"
 		}
-		
 	}
 	
 }
