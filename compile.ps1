@@ -50,15 +50,9 @@ param (
 $environ = "env"
 $script:pythongood = $false
 
-
-function RequireProgram($program)
-{
-	if ( [string]::IsNullOrEmpty($program) ) {
-		Get-PSCallStack
-		Write-Host "No program specified. Aborting..."
-		exit 1
-	}
-}
+. .\Scripts\utils.ps1
+. .\Scripts\gitutils.ps1
+. .\Scripts\versions.ps1
 
 # Check the python version. Current only 3.10.x.
 function CheckPythonVersion
@@ -85,16 +79,6 @@ function CheckPythonVersion
 		$script:pythongood = $true
 	}
 	
-}
-function GetBuildDir($program)
-{
-	RequireProgram($program)
-	$builddir = '.'
-	if ($program -ne 'CrossMgr')
-	{
-		$builddir = $program
-	}
-	return $builddir
 }
 
 function CheckEnvActive
@@ -144,45 +128,6 @@ function doPyInstaller($program)
 		Write-Host "Build failed. Aborting..."
 		exit 1
 	}
-}
-
-function GetVersionFilePath($program)
-{
-	RequireProgram($program)
-	$builddir = GetBuildDir($program)
-	$VersionFilePath = "$builddir/Version.py"
-	return $VersionFilePath
-}
-
-function GetVersionFileContents($program)
-{
-	RequireProgram($program)
-	$VersionFile = GetVersionFilePath($program)
-	if (!(Test-Path -Path $VersionFile))
-	{
-		Get-PSCallStack
-		Write-Host "No version file at ", $VersionFile,". Aborting..."
-		exit 1
-	}
-
-	$versionItem = Get-Content $VersionFile
-	if ([string]::IsNullOrEmpty($versionItem))
-	{
-		Get-PSCallStack
-		Write-Host "Version file at", $VersionFile, "is empty. Aborting..."
-		exit 1
-	}
-	return $versionItem
-}
-
-function GetVersion($program)
-{
-	RequireProgram($program)
-	$versionItem = GetVersionFileContents($program)
-	Write-Host $program, "VersionItem for program", $program, "is", $versionItem
-	$version = $versionItem.Split(' ')[1].Replace("`"", "")
-	Write-Host $program, "Version is", $version
-	return $version
 }
 
 function Cleanup($program)
@@ -514,31 +459,52 @@ function EnvSetup($program)
 	
 }
 
-function IsDevelopmentBranch($branchName) {
-    if ( [string]::IsNullOrEmpty($branchName)) {
-        return $false
-    }
-    if ( $branchName -eq 'dev' ) {
-        return $true
-    }
-    if ( $branchName.StartsWith('develop/') ) {
-        return $true
-    }
-    if ( $branchName.StartsWith('fix/') ) {
-        return $true
-    }
-
-    return $false
-}
-
 function WriteVersionFile($program, $appVersionString)
 {
+	if ([string]::IsNullOrEmpty($appVersionString))
+	{
+		Write-Host "No version string. Aborting..."
+		Get-PSCallStack
+		exit 1
+	}
 	$VersionFile = GetVersionFilePath($program)
 
 	$appvername = "AppVerName=`"$program $appVersionString`""
 	Write-Host "Writing", $appvername," to version file", $VersionFile
 
 	Set-Content -Path $VersionFile -Value $appvername
+}
+
+function ValidateTag() {
+	$githubref = $env:GITHUB_REF.Split('/')
+	$verno = $githubref[2].Split('-')[0]
+	$refdate = $githubref[2].Split('-')[1]
+	$major = $verno.Split('.')[0]
+	$minor = $verno.Split('.')[1]
+	$release = $verno.Split('.')[2]
+	if ($major -ne 'v3' -or [string]::IsNullOrEmpty($minor) -or [string]::IsNullOrEmpty($release) -or [string]::IsNullOrEmpty($refdate))
+	{
+		Write-Host "Invalid Tag format. Must be v3.0.3-20200101010101. Refusing to build!"
+		exit 1
+	}
+	return $refdate
+}
+
+function updateProgramVersion($program) {
+	RequireProgram($program)
+	$version = GetVersion($program)
+	if (IsDevelopmentBranch) {
+		$shortsha=$env:GITHUB_SHA.SubString(0,7)
+		$appVersionString="${version}-beta-${shortsha}"
+		Write-Output "Updating version of ", $program, "from development branch. Version is", $appVersionString
+	} elseif (IsTag) {
+		$refdate = ValidateTag
+		$appVersionString="${version}-${refdate}"
+		Write-Output "Updating version of ", $program, "from tag. Version is", $version
+	} else {
+		$appVersionString = $version
+	}
+	WriteVersionFile($program, $appVersionString)
 }
 
 function updateVersion($programs)
@@ -548,43 +514,20 @@ function updateVersion($programs)
 		Write-Host "No programs selected"
 		exit 1
 	}
-	if (-not [string]::IsNullOrEmpty($env:GITHUB_REF))
+	if ([string]::IsNullOrEmpty($env:GITHUB_REF))
 	{
-		Write-Host "GITHUB_REF=$env:GITHUB_REF"
-		foreach ($program in $programs)
-		{
-			Write-Host "Updating version for", $program
-			$builddir = GetBuildDir($program)
-			$version = GetVersion($program)
-			$githubref = $env:GITHUB_REF.Split('/')
-			$version = $version.Split('-')[0]
-			$shortsha=$env:GITHUB_SHA.SubString(0,7)
-			$appVersionString = $version
-			if ($githubref[1] -eq 'heads' -and {IsDevelopmentBranch($githubref[2])} -eq $true )
-			{
-				$version="${version}-beta-${shortsha}"
-				$appVersionString = $version
-			}
-			if ($githubref[1] -eq 'tags')
-			{
-				$verno = $githubref[2].Split('-')[0]
-				$refdate = $githubref[2].Split('-')[1]
-				$major = $verno.Split('.')[0]
-				$minor = $verno.Split('.')[1]
-				$release = $verno.Split('.')[2]
-				if ($major -ne 'v3' -or [string]::IsNullOrEmpty($minor) -or [string]::IsNullOrEmpty($release) -or [string]::IsNullOrEmpty($refdate))
-				{
-					Write-Host "Invalid Tag format. Must be v3.0.3-20200101010101. Refusing to build!"
-					exit 1
-				}
-				$appVersionString="$version-$refdate"
-				$version = $githubref[2]
-			}
-			WriteVersionFile($program, $appVersionString)
-		}
+		Write-Host "No GITHUB_REF. Aborting..."
+		exit 1
 	}
-	
+
+	Write-Host "GITHUB_REF=$env:GITHUB_REF"
+	foreach ($program in $programs)
+	{
+		Write-Host "Updating version for", $program
+		updateProgramVersion($program)
+	}
 }
+
 function BuildAll($programs)
 {
 	CheckPythonVersion
@@ -918,6 +861,7 @@ if ($everything -eq $false)
 	{
 		updateVersion($programs)
 	}
+	$virus = $false
 }
 else
 {
