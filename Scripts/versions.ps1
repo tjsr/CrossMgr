@@ -60,13 +60,13 @@ function updateProgramVersion($program) {
 	if (IsDevelopmentBranch) {
 		$shortsha=$env:GITHUB_SHA.SubString(0,7)
 		$appVersionString="${version}-beta-${shortsha}"
-		Write-Output "Updating version of ", $program, "from development branch. Version is", $appVersionString
+		Write-Host "Updating version of ", $program, "from development branch. Version is", $appVersionString
 	} elseif (IsTag) {
 		$refdate = ValidateTag
 		$appVersionString="${version}-${refdate}"
-		Write-Output "Updating version of ", $program, "from tag. Version is", $version
+		Write-Host "Updating version of ", $program, "from tag. Version is", $version
 	} else {
-		Write-Ouput "Not a development branch or tag. Using version", $version
+		Write-Host "Not a development branch or tag. Using version", $version
 		$appVersionString = $version
 	}
 	WriteVersionFile($program, $appVersionString)
