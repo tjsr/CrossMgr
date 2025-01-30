@@ -13,6 +13,7 @@ name: DevelopmentBuild
 
 jobs:
     buildmac:
+        if: false
         name: MacOSX
         # env:
         #    ACTIONS_ALLOW_UNSECURE_COMMANDS: true
