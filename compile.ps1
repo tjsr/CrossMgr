@@ -137,7 +137,7 @@ function doPyInstaller($program)
 
 function GetVersion($program)
 {
-	if ( -not [string]::IsNullOrEmpty($program) ) {
+	if ( [string]::IsNullOrEmpty($program) ) {
 		Get-PSCallStack
 		Write-Host "No program specified in GetVersion. Aborting..."
 		exit 1
