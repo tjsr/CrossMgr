@@ -45,6 +45,7 @@ jobs:
                 cd $GITHUB_WORKSPACE
                 bash compile.sh -a -A
             - name: Dev Release
+              if: github.ref == 'refs/heads/dev'
               uses: "marvinpinto/action-automatic-releases@latest"
               with:
                  repo_token: "${{ secrets.GITHUB_TOKEN }}"
@@ -82,6 +83,7 @@ jobs:
                 cd $env:GITHUB_WORKSPACE
                 .\compile.ps1 -all -everything
             - name: Dev Release
+              if: github.ref == 'refs/heads/dev'
               uses: svenstaro/upload-release-action@v2
               with:
                 repo_token: ${{ secrets.GITHUB_TOKEN }}
