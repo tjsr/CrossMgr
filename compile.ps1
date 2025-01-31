@@ -343,6 +343,11 @@ OutputDir=$releasepath
 		$innolocaton = 'D:\Program Files\Inno Setup 6\'
 		Write-Host "InnoSetup 6 installed $innolocaton (directory)"
 	}
+	elseif (Test-Path -Path "$env:LOCALAPPDATA\Programs\Inno Setup 6")
+	{
+		$innolocaton = "$env:LOCALAPPDATA\Programs\Inno Setup 6\"
+		Write-Host "InnoSetup 6 installed $innolocaton (AppData\Local)"
+	}
 	else
 	{
 		Write-Host "Cant find Inno Setup 6.x! Is it installed? Aborting...."

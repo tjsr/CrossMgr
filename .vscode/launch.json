@@ -6,10 +6,38 @@
 	"configurations": [
 		{
 			"name": "Python: Current File",
-			"type": "python",
+			"type": "debugpy",
 			"request": "launch",
 			"program": "${file}",
 			"console": "integratedTerminal"
-		}
+		},
+		{
+			"name": "CrossMgr",
+			"type": "debugpy",
+			"request": "launch",
+			"program": "CrossMgr.pyw",
+			"console": "internalConsole",
+			"autoReload": {
+				"enable": true,
+				"pattern": [
+						"**/*.py"
+				]
+			},
+		},
+		{
+			"name": "Python: Remote Attach",
+			"type": "debugpy",
+			"request": "attach",
+			"connect": {
+					"host": "localhost",
+					"port": 5678
+			},
+			"pathMappings": [
+					{
+							"localRoot": "${workspaceFolder}",
+							"remoteRoot": "/workspaces/CrossMgr"
+					}
+			]
+	}
 	]
 }

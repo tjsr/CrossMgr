@@ -56,3 +56,12 @@ compile.TempPoint.ps1
 .requirements.txt.un~
 requirements.txt~
 site/
+.venv/
+CallupSeedingMgr/htmlindex/
+CrossMgrVideo/helptxt/CrossMgrVideoDocHtml.zip
+SeriesMgr/helptxt/SeriesMgrDocHtml.zip
+StageRaceGC/StageRaceGCHtmlDoc/
+StageRaceGC/helptxt/StageRaceGCDocHtml.zip
+helptxt/CrossMgrDocHtml.zip
+Lib
+Scripts

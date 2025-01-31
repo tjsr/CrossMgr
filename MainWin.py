@@ -664,9 +664,9 @@ class MainWin( wx.Frame ):
 			| flatnotebook.FNB_NODRAG
 			| flatnotebook.FNB_DROPDOWN_TABS_LIST
 			| flatnotebook.FNB_NO_NAV_BUTTONS
+			| flatnotebook.FNB_FF2
 		)
 		self.notebook = flatnotebook.FlatNotebook( self.splitter, 1000, agwStyle=bookStyle )
-		self.notebook.SetBackgroundColour( wx.WHITE )
 		self.notebook.Bind( wx.EVT_NOTEBOOK_PAGE_CHANGED, self.onPageChanging )
 		
 		self.fileDrop = FileDrop()	# Create a file drop target for all the main pages.
@@ -723,6 +723,13 @@ class MainWin( wx.Frame ):
 		item = AppendMenuItemBitmap( self.chipMenu, wx.ID_ANY, _("Chip Reader &Setup..."), _("Configure and Test the Chip Reader"), Utils.GetPngBitmap('rfid-signal.png') )
 		self.Bind(wx.EVT_MENU, self.menuJChip, item )
 		
+		self.chipMenu.AppendSeparator()
+
+		item = self.chipMenu.Append( wx.ID_ANY, _("Send 'start' command..."), _("For electronic timing decoders only") )
+		self.Bind(wx.EVT_MENU, self.menuStartDecoder, item )
+		item = self.chipMenu.Append( wx.ID_ANY, _("Send 'stop' command..."), _("For electronic timing only") )
+		self.Bind(wx.EVT_MENU, self.menuStopDecoder, item )
+
 		self.chipMenu.AppendSeparator()
 		
 		item = self.chipMenu.Append( wx.ID_ANY, _("Import JChip File..."), _("JChip Formatted File") )
@@ -1268,6 +1275,23 @@ class MainWin( wx.Frame ):
 			return
 		with JChipSetup.JChipSetupDialog(self) as dlg:
 			dlg.ShowModal()
+
+	def menuStartDecoder( self, event ):
+		if self.chipReader is not None:
+			self.chipReader.StartListener()
+
+	def menuStopDecoder( self, event ):
+		if self.chipReader is not None:
+			self.chipReader.StopListener()
+
+	def sendUltraCommand( self, command ):
+		if not self.chipReader:
+			Utils.MessageOK( self, _('No Chip Reader'), _('No Chip Reader'), iconMask=wx.ICON_ERROR )
+			return
+		if not self.chipReader.isUltra():
+			Utils.MessageOK( self, _('Ultra Decoder Only'), _('Ultra Decoder Only'), iconMask=wx.ICON_ERROR )
+			return
+		self.chipReader.sendUltraCommand( command )
 
 	def menuJChipImport( self, event ):
 		correct, reason = JChipSetup.CheckExcelLink()
