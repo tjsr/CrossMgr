@@ -1,7 +1,16 @@
+import enum
 import socket
 import sys
 import time
 import datetime
+from abc import abstractmethod
+from typing import List, Union
+
+from ByteUtils import ISO_ENCODING, EOL
+from LogQueue import LogQueue
+
+from TimingDevices.UltraTimingDevice import UltraDecoder
+
 now = datetime.datetime.now
 import atexit
 import threading
@@ -21,104 +30,50 @@ def sendReaderEvent( tagTimes ):
 	if tagTimes and readerEventWindow:
 		wx.PostEvent( readerEventWindow, ChipReaderEvent(tagTimes = tagTimes) )
 
-EOL = '\r'		# Ultra delimiter
 len_EOL = len(EOL)
 
-def parseTagTime( s ):
-	_, ChipCode, Seconds, Milliseconds, _ = s.split(',', 4)
-	t = datetime.datetime(1980, 1, 1) + datetime.timedelta( seconds=int(Seconds), milliseconds=int(Milliseconds) )
-	return ChipCode, t
+q: Queue|None = None
+shutdownQ: Queue|None = None
+listener: Process|None = None
 
-DEFAULT_PORT = 23
-#DEFAULT_PORT = 8642
-DEFAULT_HOST = '127.0.0.1'		# Port to connect to the Ultra receiver.
-
-q = None
-shutdownQ = None
-listener = None
-
-def socketSend( s, message ):
-	sLen = 0
-	while sLen < len(message):
-		sLen += s.send( message[sLen:] )
-		
-def socketReadDelimited( s, delimiter=EOL ):
-	buffer = s.recv( 4096 )
-	while not buffer.endswith( delimiter ):
-		more = s.recv( 4096 )
-		if more:
-			buffer += more
-		else:
-			break
-	return buffer
-	
-def iterAdjacentIPs():
-	''' Return ip addresses adjacent to the computer in an attempt to find the reader. '''
-	ip = [int(i) for i in Utils.GetDefaultHost().split('.')]
-	ipPrefix = '.'.join( '{}'.format(v) for v in ip[:-1] )
-	ipLast = ip[-1]
-	
-	count = 0
-	j = 0
-	while 1:
-		j = -j if j > 0 else -j + 1
-		
-		ipTest = ipLast + j
-		if 0 <= ipTest < 256:
-			yield '{}.{}'.format(ipPrefix, ipTest)
-			count += 1
-			if count >= 8:
-				break
-		
-def AutoDetect( ultraPort=DEFAULT_PORT, callback=None ):
-	for ultraHost in iterAdjacentIPs():
-		if callback:
-			if not callback( '{}:{}'.format(ultraHost,ultraPort) ):
-				return None
-		
-		try:
-			s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-			s.settimeout( 0.5 )
-			s.connect( (ultraHost, ultraPort) )
-		except Exception:
-			continue
-
-		try:
-			buffer = socketReadDelimited( s )
-		except Exception:
-			continue
-			
-		try:
-			s.close()
-		except Exception:
-			pass
-		
-		if buffer.startswith('Connected'):
-			return ultraHost
-			
-	return None
-	
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
 tSmall = datetime.timedelta( seconds = 0.000001 )
 
 reNonDigit = re.compile( '[^0-9]+' )
-def Server( q, shutdownQ, HOST, PORT, startTime ):
+def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 	global readerEventWindow
-	
+	log: LogQueue = LogQueue(q, 'ultra')
+	ultraDecoder = UltraDecoder(log, HOST, PORT)
+
+	def on_chip_read( tagTimes: List[Union[str, datetime.datetime]] ) -> None:
+		sendReaderEvent(tagTimes)
+		for tag, tagTime in tagTimes:
+			q.put(('data', tag, tagTime))
+
+	ultraDecoder.crossingListener = on_chip_read
+
 	if not readerEventWindow:
 		readerEventWindow = Utils.mainWin
 	
-	timeoutSecs = 5
 	delaySecs = 3
 	
 	readerComputerTimeDiff = None
-	
-	s = None
-	
-	def qLog( category, message ):
-		q.put( (category, message) )
-		Utils.writeLog( 'Ultra: {}: {}'.format(category, message) )
-	
+
+	# def log.q( category: str, message: str ):
+	# 	q.put( (category, message) )
+	# 	Utils.writeLog( 'Ultra: {}: {}'.format(category, message) )
+	# 
+	# def log.error( category: str, message: str ):
+	# 	q.put( (category, message) )
+	# 	Utils.writeLog( 'ERROR (Ultra): {}: {}'.format(category, message) )
+  # 
+	# def log.exception(( category, e, exc_info ):
+	# 	# eType, eValue, eTraceback = exc_info
+	# 	ex = traceback.format_exception( e )
+	# 	for d in ex:
+	# 		for line in d.split( '\n' ):
+	# 			q.put( ( category, line ) )
+
 	def keepGoing():
 		try:
 			shutdownQ.get_nowait()
@@ -127,123 +82,48 @@ def Server( q, shutdownQ, HOST, PORT, startTime ):
 		return False
 	
 	def autoDetectCallback( m ):
-		qLog( 'autodetect', '{} {}'.format(_('Checking'), m) )
+		log.q( 'autodetect', '{} {}'.format(_('Checking'), m) )
 		return keepGoing()
-		
-	def makeCall( s, message, getReply=True, comment='' ):
-		cmd = message.split(';', 1)[0]
-		buffer = None
-		qLog( 'command', 'sending: {}{}'.format(message, ' ({})'.format(comment) if comment else '') )
-		try:
-			#socketSend( s, bytes('{}{}'.format(message,EOL)) )
-			socketSend( s, bytes(message) )
-			if getReply:
-				buffer = socketReadDelimited( s )
-		except Exception as e:
-			qLog( 'connection', '{}: {}: "{}"'.format(cmd, _('Connection failed'), e) )
-			raise ValueError
-		
-		return buffer
-	
+
 	while keepGoing():
-		if s:
-			try:
-				s.shutdown( socket.SHUT_RDWR )
-				s.close()
-			except Exception:
-				pass
+		if ultraDecoder.disconnect():
 			time.sleep( delaySecs )
+
+		if not ultraDecoder.connect():
+			continue
 		
 		#-----------------------------------------------------------------------------------------------------
-		qLog( 'connection', '{} {}:{}'.format(_('Attempting to connect to Ultra reader at'), HOST, PORT) )
 		try:
-			s = socket.socket( socket.AF_INET, socket.SOCK_STREAM )
-			s.settimeout( timeoutSecs )
-			s.connect( (HOST, PORT) )
-		except Exception as e:
-			qLog( 'connection', '{}: {}'.format(_('Connection to Ultra reader failed'), e) )
-			s = None
-			
-			qLog( 'connection', '{}'.format(_('Attempting AutoDetect...')) )
-			HOST_AUTO = AutoDetect( callback = autoDetectCallback )
-			if HOST_AUTO:
-				qLog( 'connection', '{}: {}'.format(_('AutoDetect Ultra at'), HOST_AUTO) )
-				HOST = HOST_AUTO
-			else:
-				time.sleep( delaySecs )
+			ultraDecoder.stop_reading()
+		except ValueError:
 			continue
 
-		qLog( 'connection', '{} {}:{}'.format(_('connect to Ultra reader SUCCEEDS on'), HOST, PORT) )
-		
+		if not ultraDecoder.setTime():
+			continue
+
+		ultraDecoder.computerTimeDiff = datetime.timedelta( seconds=0 )
+
 		#-----------------------------------------------------------------------------------------------------
 		try:
-			makeCall( s, 'S', False, comment='stop reading' )
+			time.sleep(delaySecs)
+			ultraDecoder.begin_reading()
 		except ValueError:
 			continue
+		except Exception as e:
+			log.exception( 'ultra.keepGoing', e )
+
+		log.q('ultra.keepGoing', '{}'.format(_('Reading data from decoder...')))
 		
-		#-----------------------------------------------------------------------------------------------------
-		# Set the reader's time.
-		# Wait for the boundary of a second.  This is the best synchronization we are going to get.
-		time.sleep( (1000000 - now().microsecond) / 1000000.0 )
-		try:
-			buffer = makeCall( s, 't {}'.format( now().strftime('%H:%M:%S %d-%m-%Y') ), True, comment='set reader time' )
-		except ValueError:
-			continue
-		readerComputerTimeDiff = datetime.timedelta( seconds=0 )
-		
-		#-----------------------------------------------------------------------------------------------------
-		try:
-			makeCall( s, 'R', False, comment='start reading' )
-		except ValueError:
-			continue
-		
-		lastVoltage = now()
 		while keepGoing():
 			try:
-				buffer = socketReadDelimited( s )
-			except socket.timeout:
-				if (now() - lastVoltage).total_seconds() > 15:
-					qLog( 'connection', _('Lost heartbeat.') )
-				continue
+				ultraDecoder.get_messages()
+				ultraDecoder.process_messages()
 			except Exception as e:
-				qLog( 'connection', '{}: "{}"'.format(_('Connection failed'), e) )
+				log.exception('ultra.keepGoing', e)
 				break
-
-			tagTimes = []
-			times = set()
-			for message in buffer.split( EOL ):
-				if not message:
-					continue
-				
-				# Check for a heartbeat.
-				if message.startswith( 'V=' ):
-					lastVoltage = now()	# If so, reset the last heartbeat time.
-					continue
-				
-				# Otherwise, assume this is a chip read.
-				tag, t = parseTagTime( message )
-				
-				if tag is None or t is None:
-					qLog( 'command', '{}: "{}"'.format(_('Unexpected reader message'), message) )
-					continue
-				
-				t += readerComputerTimeDiff
-				while t in times:	# Ensure no equal times.
-					t += tSmall
-				
-				times.add( t )
-				tagTimes.append( (tag, t) )
-		
-			sendReaderEvent( tagTimes )
-			for tag, t in tagTimes:
-				q.put( ('data', tag, t) )
 	
 	# Final cleanup.
-	try:
-		s.shutdown( socket.SHUT_RDWR )
-		s.close()
-	except Exception:
-		pass
+	ultraDecoder.disconnect()
 		
 def GetData():
 	data = []
@@ -280,17 +160,18 @@ def StopListener():
 def IsListening():
 	return listener is not None
 
+
 def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):
 	global q
 	global shutdownQ
 	global listener
 	
 	StopListener()
-	
+
 	if Model.race:
 		HOST = (HOST or Model.race.chipReaderIpAddr)
 		PORT = (PORT or Model.race.chipReaderPort)
-	
+
 	q = Queue()
 	shutdownQ = Queue()
 	listener = Process( target = Server, args=(q, shutdownQ, HOST, PORT, startTime) )
@@ -310,7 +191,7 @@ def CleanupListener():
 if __name__ == '__main__':
 	def doTest():
 		try:
-			StartListener( HOST='127.0.0.1', PORT=DEFAULT_PORT )
+			StartListener( HOST=UltraDecoder.DEFAULT_HOST, PORT=UltraDecoder.DEFAULT_PORT )
 			count = 0
 			while 1:
 				time.sleep( 1 )

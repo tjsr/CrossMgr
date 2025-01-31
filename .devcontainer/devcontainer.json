@@ -1,8 +1,13 @@
 {
 	"name": "CrossMgr Python DevContainer",
 	"dockerFile": "Dockerfile",
-	"mounts": ["source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind"],
-	"runArgs": ["--add-host=host.docker.internal:host-gateway"],
+	"mounts": [
+		"source=/var/run/docker.sock,target=/var/run/docker-host.sock,type=bind",
+	  "source=vscode-pip-cache,target=/home/vscode/.cache/pip"
+	],
+	"runArgs": ["--add-host=host.docker.internal:host-gateway", "--device=/dev/fuse"],
+	"capAdd": ["SYS_ADMIN"],
+	"securityOpt": ["apparmor=unconfined"],
 	"customizations": {
 			"vscode": {
 					"settings": {
@@ -32,6 +37,6 @@
 					]
 			}
 	},
-	"remoteUser": "devcontainer",
-	"postCreateCommand": "bash -i -c './linuxdeps.sh -y && pre-commit install && pip install -r requirements.txt'"
+	// "remoteUser": "devcontainer",
+	"postCreateCommand": "bash -i -c 'pre-commit install --allow-missing-config && pip install -r requirements.txt'"
 }
