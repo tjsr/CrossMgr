@@ -209,7 +209,7 @@ class Actions( wx.Panel ):
 
 	def __init__( self, parent, id = wx.ID_ANY ):
 		super().__init__(parent, id)
-		
+
 		self.normalFont = wx.Font(wx.FONTSIZE_SMALL, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 		self.largeFont = wx.Font(20, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
 		self.mediumFont = wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -446,7 +446,7 @@ class Actions( wx.Panel ):
 
 	def ShowChecklist( self ) -> None:
 		self.checklist.Show()
-	
+
 	def refresh( self ):
 		self.clock.Start()
 		self.button.Enable( False )
@@ -499,7 +499,7 @@ class Actions( wx.Panel ):
 				if getattr(race, 'isTimeTrial', False):
 					self.chipTimingOptions.Enable( False )
 					self.chipTimingOptions.Show( False )
-					
+
 			else:
 				# Display an info message if no no race is active.
 				self.HideChecklist()
