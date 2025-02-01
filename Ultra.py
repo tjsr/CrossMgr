@@ -59,21 +59,6 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 	
 	readerComputerTimeDiff = None
 
-	# def log.q( category: str, message: str ):
-	# 	q.put( (category, message) )
-	# 	Utils.writeLog( 'Ultra: {}: {}'.format(category, message) )
-	# 
-	# def log.error( category: str, message: str ):
-	# 	q.put( (category, message) )
-	# 	Utils.writeLog( 'ERROR (Ultra): {}: {}'.format(category, message) )
-  # 
-	# def log.exception(( category, e, exc_info ):
-	# 	# eType, eValue, eTraceback = exc_info
-	# 	ex = traceback.format_exception( e )
-	# 	for d in ex:
-	# 		for line in d.split( '\n' ):
-	# 			q.put( ( category, line ) )
-
 	def keepGoing():
 		try:
 			shutdownQ.get_nowait()
