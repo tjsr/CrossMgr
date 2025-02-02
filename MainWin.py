@@ -21,8 +21,13 @@ import wx.lib.agw.flatnotebook as flatnotebook
 from html import escape
 from urllib.parse import quote
 from collections import defaultdict
+from DebugUtils import dump_all_threads, dump_open_files
+from Log import getLogger, CrossMgrLogger
 
 import locale
+
+import HelpSearch
+
 try:
 	localDateFormat = locale.nl_langinfo( locale.D_FMT )
 	localTimeFormat = locale.nl_langinfo( locale.T_FMT )
@@ -2687,8 +2692,10 @@ class MainWin( wx.Frame ):
 	
 	@logCall
 	def onCloseWindow( self, event ):
-		self.doCleanup()
-		wx.Exit()
+			self.doCleanup()
+			WebServer.ShutdownWebServer()
+			HelpSearch.ShutdownHelpServer()
+			return wx.Exit()
 
 	#@logCall
 	def writeRace( self, doCommit = True ):
@@ -4287,7 +4294,12 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 dataDir = ''
 redirectFileName = ''
 
-def MainLoop():
+def WaitForServerThreads() -> None:
+	HelpSearch.WaitForHelpSearchServerShutdown()
+	WebServer.WaitForWebServerShutdown()
+
+def MainLoop() -> int:
+	log: CrossMgrLogger = getLogger()
 	global dataDir
 	global redirectFileName
 	
@@ -4395,7 +4407,19 @@ def MainLoop():
 		wx.CallAfter( mainWin.showPageName, args.page )
 	
 	# Start processing events.
-	app.MainLoop()
+	mainLoopResult = app.MainLoop()
+
+	try:
+		WaitForServerThreads()
+
+		log.exitApp()
+		dump_all_threads(True, False)
+		# dump_open_files()
+	except Exception as e:
+		log.exception( e )
+		pass
+	return mainLoopResult
 
 if __name__ == '__main__':
-	MainLoop()
+	result = MainLoop()
+	sys.exit(result)

@@ -1,8 +1,9 @@
+from queue import Queue
+
 import wx
 import os
 import sys
 import time
-import threading
 import traceback
 import webbrowser
 from io import StringIO
@@ -16,6 +17,11 @@ import wx.lib.wxpTag
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import Utils
+from Application import setExitSignal, gotExitSignal
+from Log import getLogger
+from ThreadUtils import startDaemon, JoinAndCheckThreads
+
+log = getLogger()
 
 PORT_NUMBER = 8761
 
@@ -68,6 +74,8 @@ def showHelp( url ):
 		pass
 	
 class HelpSearch( wx.Panel ):
+	_f: StringIO
+
 	def __init__( self, parent, id = wx.ID_ANY, style = 0, size=(-1-1) ):
 		super().__init__( parent, id, style=style, size=size )
 
@@ -101,14 +109,14 @@ class HelpSearch( wx.Panel ):
 		with wx.BusyCursor():
 			text = self.search.GetValue()
 			
-			f = StringIO()
+			self._f = StringIO()
 			try:
 				ix = open_dir( Utils.getHelpIndexFolder(), readonly=True )
 			except Exception as e:
 				Utils.logException( e, sys.exc_info() )
 				ix = None
 				
-			f.write( '<html>\n' )
+			self._f.write('<html>\n')
 			
 			if ix is not None:
 				with ix.searcher() as searcher:
@@ -120,7 +128,7 @@ class HelpSearch( wx.Panel ):
 					# Show more context before and after
 					results.formatter.surround = 50
 					
-					f.write( '<table>\n' )
+					self._f.write('<table>\n')
 					for i, hit in enumerate(results):
 						file = os.path.splitext(hit['path'].split('#')[0])[0]
 						url = getHelpURL( os.path.basename(hit['path']) )
@@ -128,20 +136,20 @@ class HelpSearch( wx.Panel ):
 							section = '{}: {}'.format(file, hit['section'])
 						else:
 							section = 'Menu: {}'.format( hit['section'] )
-						f.write( '''<tr>
+						self._f.write('''<tr>
 								<td valign="top">
 									<font size=+1><a href="{url}">{section}</a></font><br></br>
 									{content}
 									<font size=+1><br></br></font>
 								</td>
-							</tr>\n'''.format(url=url, section=section, content=hit.highlights('content') ) )
-					f.write( '</table>\n' )
+							</tr>\n'''.format(url=url, section=section, content=hit.highlights('content') ))
+					self._f.write('</table>\n')
 				ix.close()
 			
-			f.write( '</html>\n' )
+			self._f.write( '</html>\n' )
 		
-		self.html.SetPage( f.getvalue() )
-	
+		self.html.SetPage( self._f.getvalue() )
+
 class HelpSearchDialog( wx.Dialog ):
 	def __init__(
 			self, parent, ID = wx.ID_ANY, title='Help Search', size=wx.DefaultSize, pos=wx.DefaultPosition, 
@@ -157,20 +165,65 @@ class HelpSearchDialog( wx.Dialog ):
 		self.SetSizer(sizer)
 		sizer.Fit(self)
 
-server = None
+def HelpServerEnabled() -> bool:
+	return True
+
+helpServer: HTTPServer | None = None
+
+def MessageQueueHandler ( q, serverQueue ):
+	global helpServer
+	keepGoing = True
+	while keepGoing:
+		message = q.get()
+		cmd = message.get('cmd', None)
+		if cmd == 'exit':
+			log.info('MessageQueueHandler got exit signal.')
+			keepGoing = False
+		q.task_done()
+
+	assert helpServer is not None
+	if serverQueue:
+		log.info('Shutting down generic HelpServer on port {}'.format(HELP_SERVER_PORT_NUMBER))
+		serverQueue.shutdown()
+		log.info('Generic server shut down')
+	elif helpServer:
+		log.info('Shutting down HelpServer on port {}'.format(HELP_SERVER_PORT_NUMBER))
+		helpServer.shutdown()
+		log.info('HelpServer shut down')
+		helpServer = None
+
+
+HELP_SERVER_PORT_NUMBER = PORT_NUMBER
 def HelpServer():
-	global server
-	while 1:
+	global helpServer
+	while not gotExitSignal():
 		try:
-			server = HTTPServer(('localhost', PORT_NUMBER), HelpHandler)
-			server.serve_forever( poll_interval = 2 )
+			log.info('Starting HelpServer on port {}'.format(HELP_SERVER_PORT_NUMBER) )
+			helpServer = HTTPServer(('localhost', HELP_SERVER_PORT_NUMBER), HelpHandler)
+			helpServer.serve_forever(poll_interval = 2)
+
 		except Exception as e:
-			server = None
+			helpServer = None
 			time.sleep( 5 )
-		
-webThread = threading.Thread( target=HelpServer, name='HelpServer' )
-webThread.daemon = True
-webThread.start()
+
+	log.exiting('HelpServer thread complete.')
+
+helpMessageQueue = Queue()
+webThreadQ = startDaemon(target=MessageQueueHandler, name='HelpServerQ', args=(helpMessageQueue,helpServer,))
+webThread = startDaemon( target=HelpServer, name='HelpServer' )
+
+
+def ShutdownHelpServer():
+	setExitSignal()
+	assert helpMessageQueue is not None
+	if helpMessageQueue:
+		helpMessageQueue.put( {'cmd':'exit'} )
+
+
+def WaitForHelpSearchServerShutdown() -> None:
+	threadList = [webThread]
+	JoinAndCheckThreads(threadList, 5, 'HelpServer')
+
 
 if __name__ == '__main__':
 	app = wx.App(False)

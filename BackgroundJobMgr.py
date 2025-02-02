@@ -5,6 +5,10 @@ from queue import Queue
 import wx
 import wx.lib.mixins.listctrl as listmix
 
+from Application import gotExitSignal
+import gettext
+_ = gettext.gettext
+
 class AutoWidthListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
 	def __init__(self, parent, id = wx.ID_ANY, pos=wx.DefaultPosition,
 				 size=wx.DefaultSize, style=0):
@@ -107,7 +111,7 @@ class BackgroundJobMgr( wx.Dialog ):
 		return super().ShowModal( *args, **kwargs )
 	
 	def processQ( self ):
-		while True:
+		while not gotExitSignal():
 			msg = self.q.get()
 			cmd, id = msg.get('cmd', None), msg.get('id', None)
 			

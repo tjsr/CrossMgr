@@ -1,3 +1,5 @@
+import logging
+
 import wx
 import os
 import io
@@ -20,6 +22,9 @@ from queue import Queue
 
 from qrcode import QRCode
 from tornado.template import Template
+
+from Application import setExitSignal, gotExitSignal
+from Log import getLogger
 from ParseHtmlPayload import ParseHtmlPayload
 from http.server import BaseHTTPRequestHandler, HTTPServer, HTTPStatus
 from io import StringIO
@@ -31,6 +36,9 @@ from GetResults import GetResultsRAM, GetResultsBaseline, GetRaceName
 from PhotoFinish		import okTakePhoto
 from Synchronizer import syncfunc
 from SendPhotoRequests import SendPhotoRequests
+from ThreadUtils import startDaemon, JoinAndCheckThreads
+
+log = getLogger()
 
 # import LockLog
 # Lock, RLock = LockLog.Lock, LockLog.RLock
@@ -555,6 +563,7 @@ class CrossMgrHandler( BaseHTTPRequestHandler ):
 def GetCrossMgrHomePage( ip=None ):
 	if ip is None:
 		ip = not sys.platform.lower().startswith('win')
+		# TODO: Uh what?
 		ip = True
 	
 	if ip:
@@ -567,20 +576,24 @@ def GetCrossMgrHomePage( ip=None ):
 			hostname = DEFAULT_HOST
 	return 'http://{}:{}'.format(hostname, PORT_NUMBER)
 
-server = None
+webServer = None
+WEBSERVER_PORT_NUMBER = PORT_NUMBER
 def WebServer():
-	global server
-	while True:
+	global webServer
+	while not gotExitSignal():
+		log.info('Starting Web Server on port {}'.format(WEBSERVER_PORT_NUMBER))
 		try:
-			server = CrossMgrServer(('', PORT_NUMBER), CrossMgrHandler)
-			server.init_thread_pool()
-			server.serve_forever( poll_interval = 2 )
+			webServer = CrossMgrServer(('', WEBSERVER_PORT_NUMBER), CrossMgrHandler)
+			webServer.init_thread_pool()
+			webServer.serve_forever( poll_interval = 2 )
 		except Exception:
-			server = None
+			webServer = None
 			time.sleep( 5 )
 
+	log.info('WebServer thread complete.')
+
 def queueListener( q ):
-	global DEFAULT_HOST, server
+	global DEFAULT_HOST, webServer
 	
 	DEFAULT_HOST = Utils.GetDefaultHost()
 	keepGoing = True
@@ -591,21 +604,19 @@ def queueListener( q ):
 			DEFAULT_HOST = Utils.GetDefaultHost()
 			contentBuffer.setFNameRace( message['fileName'] )
 		elif cmd == 'exit':
+			log.info('WebServer got exit signal.')
 			keepGoing = False
 		q.task_done()
 	
-	if server:
-		server.shutdown()
-		server = None
+	if webServer:
+		log.info('Shutting down WebServer on port {}.'.format(WEBSERVER_PORT_NUMBER))
+		webServer.shutdown()
+		log.info('WebServer shut down.')
+		webServer = None
 
 q = Queue()
-qThread = threading.Thread( target=queueListener, name='queueListener', args=(q,) )
-qThread.daemon = True
-qThread.start()
-
-webThread = threading.Thread( target=WebServer, name='WebServer' )
-webThread.daemon = True
-webThread.start()
+qThread = startDaemon(target=queueListener, name='queueListener', args=(q,) )
+webThread = startDaemon(target=WebServer, name='WebServer')
 
 from websocket_server import WebsocketServer
 #-------------------------------------------------------------------
@@ -615,17 +626,22 @@ def message_received(client, server, message):
 	if msg['cmd'] == 'send_baseline' and (msg['raceName'] == 'CurrentResults' or msg['raceName'] == GetRaceName()):
 		server.send_message( client, json.dumps(GetResultsBaseline()) )
 
-wsServer = None
+WEBSOCKET_SERVER_PORT = PORT_NUMBER + 1
+
+wsServer: WebsocketServer |None = None
 def WsServerLaunch():
 	global wsServer
-	while True:
+	while not gotExitSignal():
 		try:
-			wsServer = WebsocketServer( port=PORT_NUMBER + 1, host='' )
+			log.info( 'Starting Websocket Server on port {}'.format(WEBSOCKET_SERVER_PORT) )
+			wsServer = WebsocketServer( port=WEBSOCKET_SERVER_PORT, host='' )
 			wsServer.set_fn_message_received( message_received )
 			wsServer.run_forever()
 		except Exception:
 			wsServer = None
 			time.sleep( 5 )
+
+	log.info('WebSocket Server thread complete.')
 
 def WsQueueListener( q ):
 	global wsServer
@@ -634,27 +650,27 @@ def WsQueueListener( q ):
 	while keepGoing:
 		message = q.get()
 		if message.get('cmd', None) == 'exit':
+			log.info('WebSocket Server got exit signal.')
 			keepGoing = False
 		elif wsServer and wsServer.hasClients():
 			wsServer.send_message_to_all( Utils.ToJson(message).encode() )
 		q.task_done()
-	
-	wsServer = None	
+
+	if wsServer:
+		log.info('Shutting down WebSocket Server on port {}.'.format(WEBSOCKET_SERVER_PORT))
+		wsServer.shutdown()
+		log.info('WebSocket Server shut down.')
+	wsServer = None
 
 wsQ = Queue()
-wsQThread = threading.Thread( target=WsQueueListener, name='WsQueueListener', args=(wsQ,) )
-wsQThread.daemon = True
-wsQThread.start()
-
-wsThread = threading.Thread( target=WsServerLaunch, name='WsServer' )
-wsThread.daemon = True
-wsThread.start()
+wsQThread = startDaemon( target=WsQueueListener, name='WsQueueListener', args=(wsQ,) )
+wsThread = startDaemon( target=WsServerLaunch, name='WsServer' )
 
 wsTimer = tTimerStart = None
 def WsPost():
 	global wsServer, wsTimer, tTimerStart
 	if wsServer and wsServer.hasClients():
-		while True:
+		while not gotExitSignal():
 			try:
 				ram = GetResultsRAM()
 				break
@@ -706,17 +722,26 @@ def GetLapCounterRefresh():
 def lap_counter_new_client(client, server):
 	server.send_message( client, json.dumps(GetLapCounterRefresh()) )
 
+apiServerCount = 0
 wsLapCounterServer = None
+
+LAP_COUNTER_SERVER_PORT = PORT_NUMBER + 2
 def WsLapCounterServerLaunch():
+	global apiServerCount
 	global wsLapCounterServer
-	while True:
+	while not gotExitSignal():
+		apiServerCount = 1
 		try:
-			wsLapCounterServer = WebsocketServer( port=PORT_NUMBER + 2, host='' )
+			log.info( 'Starting LapCounter Websocket Server on port {}'.format(LAP_COUNTER_SERVER_PORT) )
+			wsLapCounterServer = WebsocketServer( port=LAP_COUNTER_SERVER_PORT, host='' )
+			apiServerCount += 1
 			wsLapCounterServer.set_fn_new_client( lap_counter_new_client )
 			wsLapCounterServer.run_forever()
 		except Exception:
 			wsLapCounterServer = None
 			time.sleep( 5 )
+
+	log.info('LapCounter WebSocket Server thread complete.')
 
 def WsLapCounterQueueListener( q ):
 	global wsLapCounterServer
@@ -732,19 +757,19 @@ def WsLapCounterQueueListener( q ):
 				message['curRaceTime'] = race.curRaceTime() if race and race.startTime else 0.0
 				wsLapCounterServer.send_message_to_all( Utils.ToJson(message).encode() )
 		elif cmd == 'exit':
+			log.info('LapCounter WebSocket Server got exit signal.')
 			keepGoing = False
 		q.task_done()
-	
-	wsLapCounterServer = None	
+
+	if wsLapCounterServer:
+		log.info('Shutting down LapCounter WebSocket Server on port.'.format(LAP_COUNTER_SERVER_PORT))
+		wsLapCounterServer.shutdown()
+		log.info('LapCounter WebSocket Server shut down.')
+	wsLapCounterServer = None
 
 wsLapCounterQ = Queue()
-wsLapCounterQThread = threading.Thread( target=WsLapCounterQueueListener, name='WsLapCounterQueueListener', args=(wsLapCounterQ,) )
-wsLapCounterQThread.daemon = True
-wsLapCounterQThread.start()
-
-wsLapCounterThread = threading.Thread( target=WsLapCounterServerLaunch, name='WsLapCounterServer' )
-wsLapCounterThread.daemon = True
-wsLapCounterThread.start()
+wsLapCounterQThread = startDaemon( target=WsLapCounterQueueListener, name='WsLapCounterQueueListener', args=(wsLapCounterQ,) )
+wsLapCounterThread = startDaemon( target=WsLapCounterServerLaunch, name='WsLapCounterServer' )
 
 lastRaceName, lastMessage = None, None
 def WsLapCounterRefresh():
@@ -758,6 +783,19 @@ def WsLapCounterRefresh():
 	if lastMessage != message or lastRaceName != raceName:
 		wsLapCounterQ.put( message )
 		lastMessage, lastRaceName = message, raceName
+
+def ShutdownWebServer():
+	setExitSignal()
+	log.info('Sending exit signal to WebServer queues....')
+	q.put( {'cmd':'exit'} )
+	wsQ.put( {'cmd':'exit'} )
+	wsLapCounterQ.put( {'cmd':'exit'} )
+
+
+def WaitForWebServerShutdown() -> None:
+	threadList = [qThread, webThread, wsThread, wsQThread, wsLapCounterThread, wsLapCounterQThread]
+	JoinAndCheckThreads(threadList, 5, 'WebServer')
+
 			
 if __name__ == '__main__':
 	SetFileName( os.path.join('Gemma', '2015-11-10-A Men-r4-.html') )
