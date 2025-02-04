@@ -1,12 +1,15 @@
 import datetime
 import socket
 import time
+from logging import Logger
 from typing import List, Optional
+
+from openpyxl.pivot.fields import Boolean
 
 from LogQueue import LogQueue
 from SocketUtils import socketReadDelimited, socketSendMessage
 from TimingDevices.TimingDevice import TimingDeviceCommand, UnrecognisedCommandException, TimingDevice, DecoderMessage, \
-	UnrecognisedDecoderMessage, CrossingListenerCallableType
+	UnrecognisedDecoderMessage, CrossingListenerCallableType, TCPTimingDevice
 import re
 
 from TimingDevices.UltraAutodetect import AutoDetect
@@ -17,30 +20,26 @@ EPOCH_TIME = datetime.datetime(1980, 1, 1)
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
 tSmall = datetime.timedelta( seconds = 0.000001 )
 
-class UltraDecoder(TimingDevice):
+class UltraDecoder(TimingDevice, TCPTimingDevice):
 	commands = {
 		'start': TimingDeviceCommand('R', False),
-		'stop': TimingDeviceCommand('S', False)
+		'stop': TimingDeviceCommand('S', False),
+		'status': TimingDeviceCommand('?', True)
 	}
 
 	DEFAULT_PORT: int = 23
 	# DEFAULT_PORT = 8642
 	DEFAULT_HOST: str = '127.0.0.1'  # Port to connect to the Ultra receiver.
 
-	_host: str = DEFAULT_HOST
-	_port: int = DEFAULT_PORT
-	_s: socket.socket | None = None
 	_delaySecs: int = 3
-	_timeoutSecs: int = 5
 	_lastVoltage: datetime.datetime | None = None
 	_computerTimeDiff: datetime.timedelta | None = None
 	_crossing_listener: CrossingListenerCallableType | None = None
 
 	def __init__( self, log: LogQueue, host: str, port: int ):
 		super().__init__()
+		TCPTimingDevice.__init__(self, host, port)
 		self.logger = log
-		self._host = host
-		self._port = port
 
 	@property
 	def crossingListener(self) -> CrossingListenerCallableType:
@@ -69,32 +68,6 @@ class UltraDecoder(TimingDevice):
 			self.makeCall('S', comment='stop reading')
 		except ValueError:
 			pass
-
-	def disconnect(self) -> bool:
-		if self._s is not None:
-			try:
-				self._s.shutdown(socket.SHUT_RDWR)
-				self._s.close()
-				return True
-			except Exception:
-				pass
-		return False
-
-	def connect(self) -> bool:
-		# -----------------------------------------------------------------------------------------------------
-		self.log('connection', '{} {}:{}'.format(_('Attempting to connect to Ultra reader at'), self._host, self._port))
-		try:
-			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self._s.settimeout(self._timeoutSecs)
-			self._s.connect((self._host, self._port))
-		except Exception as e:
-			self.log('connection', '{}: {}'.format(_('Connection to Ultra reader failed'), e))
-			self._s = None
-			return False
-
-		self.log('connection', '{} {}:{}'.format(_('connect to Ultra reader SUCCEEDS on'), self._host, self._port))
-		return True
-
 
 	def autoconnect(self, autoDetectCallback) -> bool:
 		self.log('autoconnect', '{}'.format(_('Attempting AutoDetect...')))
@@ -276,11 +249,19 @@ class UltraDecoder(TimingDevice):
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
 
 class UltraDecoderMessage(DecoderMessage):
-	UltraId: int  # Integer value. See section 3.1
+	_UltraId: int | None # Integer value. See section 3.1
 
-	def __init__(self, ultraId: int):
+	def __init__(self, ultraId: int | None):
 		super().__init__()
-		self.UltraId = ultraId
+		self._UltraId = ultraId
+
+	@property
+	def UltraId(self) -> int | None:
+		return self._UltraId
+
+	@UltraId.setter
+	def UltraId(self, value: int):
+		self._UltraId = value
 
 class UltraConnectConfirmationMessage(UltraDecoderMessage):
 	def __init__(self, ultraId: int):
@@ -325,9 +306,36 @@ class UltraVoltageMessage(UltraDecoderMessage):
 	def Voltage(self) -> float:
 		return self._Voltage
 
+class DecoderStatusMessage(UltraDecoderMessage):
+	_readStatus: bool
+	_sendStatus: bool
+
 	@property
-	def Voltage(self) -> float:
-		return self.Voltage
+	def readStatus(self) -> bool:
+		return self._readStatus
+
+	@property
+	def sendStatus(self) -> bool:
+		return self._sendStatus
+
+	@staticmethod
+	def parse(message: str) -> Optional['DecoderStatusMessage']:
+		if message is not None and message.startswith('S'):
+			try:
+				_, Payload = message.split('=', 1)
+				if len(Payload) == 2:
+					statusInt = int(Payload)
+					readStatus = statusInt // 10
+					sendStatus = statusInt % 10
+					return DecoderStatusMessage(readStatus == 1, sendStatus == 1)
+
+			except ValueError:
+				return None
+		return
+	def __init__(self, readStatus: bool, sendStatus: bool):
+		super().__init__(None)
+		self._readStatus = readStatus
+		self._sendStatus = sendStatus
 
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
 class UltraChipReadMessage(UltraDecoderMessage):
