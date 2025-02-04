@@ -54,7 +54,7 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 
 	if not readerEventWindow:
 		readerEventWindow = Utils.mainWin
-	
+
 	delaySecs = 3
 	
 	readerComputerTimeDiff = None
@@ -98,7 +98,7 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 			log.exception( 'ultra.keepGoing', e )
 
 		log.q('ultra.keepGoing', '{}'.format(_('Reading data from decoder...')))
-		
+
 		while keepGoing():
 			try:
 				ultraDecoder.get_messages()
