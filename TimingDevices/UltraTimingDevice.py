@@ -9,7 +9,8 @@ from openpyxl.pivot.fields import Boolean
 from LogQueue import LogQueue
 from SocketUtils import socketReadDelimited, socketSendMessage
 from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, DecoderMessage, \
-	UnrecognisedDecoderMessage, CrossingListenerCallableType, TCCPTimingDevice
+	UnrecognisedDecoderMessage, CrossingListenerCallableType
+from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 import re
 
@@ -159,12 +160,6 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	def process_crossings(self, tagTimes: [(str, datetime.datetime)]) -> None:
 		self._crossing_listener(tagTimes)
 
-	def process_message_buffer(self, buffer: str) -> int:
-		maxBufSize = -1
-		for bufMessage in buffer.splitlines(False):
-			nextMessage = self.parse(bufMessage)
-			maxBufSize = self.add_message(nextMessage)
-		return maxBufSize
 		# if msg := UltraConnectInfoMessage.parse( bufMessage ):
 		# 	self.log('get_messages', '{}: "{}"'.format(_('Last data sent'), bufMessage))
 		# 	messages.append(msg)
@@ -176,16 +171,12 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		# 	self._lastVoltage = now()	# If so, reset the last heartbeat time.
 		# 	continue
 
-	def get_messages(self) -> List[DecoderMessage]:
-		buffer: str
-		try:
-			buffer: str = socketReadDelimited(self._s)
+	def on_socket_timeout(self, ex: socket.timeout) -> None:
+		if (now() - self._lastVoltage).total_seconds() > 15:
+			self.log('get_messages', _('Lost heartbeat.'))
 
-		# log.q( 'reader.keepGoing', '{}: "{}"'.format(_('Parsing messages'), str(buffer, ISO_ENCODING)) )
-		except socket.timeout:
-			if (now() - self._lastVoltage).total_seconds() > 15:
-				self.log('get_messages', _('Lost heartbeat.'))
-			return []
+	def get_messages(self) -> List[DecoderMessage]:
+		buffer: str = TCPTimingDevice.get_message_buffer(self)
 
 		if buffer is not None:
 			self.process_message_buffer(buffer)
@@ -198,6 +189,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			return getattr(UltraDecoder, command_type)
 
 		raise UnrecognisedCommandException(command_type)
+
+	def parse_message(self, message: str) -> DecoderMessage:
+		return UltraDecoder.parse(message)
 
 	@staticmethod
 	def parse(message: str) -> DecoderMessage|None:
@@ -226,9 +220,6 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		# 	continue
 
 		return None
-
-	def connected(self) -> bool:
-		return self._s is not None
 
 	def makeSyncCall(self, message, comment: str = '') -> str:
 		self.makeCall(message, comment)

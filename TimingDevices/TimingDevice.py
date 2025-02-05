@@ -1,5 +1,4 @@
 import datetime
-import socket
 from abc import abstractmethod
 from logging import Logger, getLogger
 from types import TracebackType
@@ -28,63 +27,15 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 		super().__init__()
 		self._message = message
 
-class TCPTimingDevice:
-	DEFAULT_PORT: int = 23
-	DEFAULT_HOST: str = '127.0.0.1'
-
-	_host: str = DEFAULT_HOST
-	_port: int = DEFAULT_PORT
-	_s: socket.socket | None = None
-	_timeoutSecs: int = 5
-
-	def __init__(self, host: str, port: int ):
-		self._host = host
-		self._port = port
-
-	@abstractmethod
-	def getLog(self) -> Logger:
-		pass
-
-	@abstractmethod
-	def getDeviceType(self) -> str:
-		pass
-
-	def connect(self) -> bool:
-		log = self.getLog()
-		device = self.getDeviceType()
-		# TODO: wrap with _ for internationalisation
-		description = f'{device} decoder at {self._host}:{self._port}'
-
-		# -----------------------------------------------------------------------------------------------------
-		log.info(_('Attempting to connect to {}').format(description))
-		try:
-			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self._s.settimeout(self._timeoutSecs)
-			self._s.connect((self._host, self._port))
-		except Exception as e:
-			log.exception('{}: {}'.format(_('Connection failed to {}'), description, e))
-			self._s = None
-			return False
-
-		log.info(_('Successfully connected to {}').format(description))
-		return True
-
-	def disconnect(self) -> bool:
-		if self._s is not None:
-			try:
-				self._s.shutdown(socket.SHUT_RDWR)
-				self._s.close()
-				return True
-			except Exception:
-				pass
-		return False
-
 
 class TimingDevice:
 	_readonly = False
 	_logger: LogQueue | None = None
 	_log: Logger | None = None
 	_messageBuffer: List[DecoderMessage] = []
+
+	def __init__(self):
+		pass
 
 	def getLog(self) -> Logger:
 		if self._log is None:
@@ -100,6 +51,17 @@ class TimingDevice:
 
 	def get_messages(self) -> List[DecoderMessage]:
 		return self._messageBuffer
+
+	def process_message_buffer(self, buffer: str) -> int:
+		maxBufSize = -1
+		for bufMessage in buffer.splitlines(False):
+			nextMessage = self.parse_message(bufMessage)
+			maxBufSize = self.add_message(nextMessage)
+		return maxBufSize
+
+	@abstractmethod
+	def parse_message(self, message: str) -> DecoderMessage:
+		pass
 
 	def get_last_message(self) -> DecoderMessage | None:
 		if len(self._messageBuffer) == 0:
@@ -179,6 +141,9 @@ class TimingDevice:
 
 	@abstractmethod
 	def get_command(self, command_type: str) -> TimingDeviceCommand:
+		pass
+
+	def push_command(self, command: TimingDeviceCommand, comment: str = None):
 		pass
 
 	@abstractmethod
