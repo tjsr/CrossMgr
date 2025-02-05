@@ -3,9 +3,10 @@ import socket
 from abc import abstractmethod
 from logging import Logger, getLogger
 from types import TracebackType
-from typing import List, Type, Callable, Any, Generic, TypeVar
+from typing import List, Type, Callable
 
 from LogQueue import LogQueue
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 
 CrossingListenerCallableType = Callable[[(str, datetime.datetime)], None]
 
@@ -26,28 +27,6 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 	def __init__(self, message: str):
 		super().__init__()
 		self._message = message
-
-CommandResponse = TypeVar('CommandResponse')
-
-class TimingDeviceCommand(Generic[CommandResponse]):
-	_command_str: str
-	_sync: bool = False
-	_response: Any
-
-	def __init__( self, _command_str: str, sync: bool = False ):
-		self._command_str = _command_str
-		self._sync = sync
-
-	def is_sync_command(self) -> bool:
-		return self._sync
-
-	def get_command_string(self) -> str:
-		return self._command_str
-
-	@property
-	def response(self) -> CommandResponse:
-		return self._response
-
 
 class TCPTimingDevice:
 	DEFAULT_PORT: int = 23

@@ -8,8 +8,9 @@ from openpyxl.pivot.fields import Boolean
 
 from LogQueue import LogQueue
 from SocketUtils import socketReadDelimited, socketSendMessage
-from TimingDevices.TimingDevice import TimingDeviceCommand, UnrecognisedCommandException, TimingDevice, DecoderMessage, \
-	UnrecognisedDecoderMessage, CrossingListenerCallableType, TCPTimingDevice
+from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, DecoderMessage, \
+	UnrecognisedDecoderMessage, CrossingListenerCallableType, TCCPTimingDevice
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 import re
 
 from TimingDevices.UltraAutodetect import AutoDetect
@@ -193,10 +194,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		return msgQueue
 
 	def get_command(self, command_type: str) -> TimingDeviceCommand:
-		if command_type == 'start':
-			return UltraDecoder.commands['start']
-		elif command_type == 'stop':
-			return UltraDecoder.commands['stop']
+		if hasattr(UltraDecoder, command_type):
+			return getattr(UltraDecoder, command_type)
 
 		raise UnrecognisedCommandException(command_type)
 
