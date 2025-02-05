@@ -40,6 +40,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		TCPTimingDevice.__init__(self, host, port)
 		self.logger = log
 
+	def getDeviceType(self) -> str:
+		return 'Ultra'
+
 	@property
 	def crossingListener(self) -> CrossingListenerCallableType:
 		return self._crossing_listener
