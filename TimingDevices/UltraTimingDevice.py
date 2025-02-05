@@ -1,10 +1,7 @@
 import datetime
 import socket
 import time
-from logging import Logger
 from typing import List, Optional
-
-from openpyxl.pivot.fields import Boolean
 
 from LogQueue import LogQueue
 from SocketUtils import socketReadDelimited, socketSendMessage
