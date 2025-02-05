@@ -2,7 +2,7 @@ import datetime
 from abc import abstractmethod
 from logging import Logger, getLogger
 from types import TracebackType
-from typing import List, Type, Callable
+from typing import List, Type, Callable, Any
 
 from LogQueue import LogQueue
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
@@ -126,14 +126,19 @@ class TimingDevice:
 		# TODO: Implement this
 		return True
 
+	# TODO: Remove 'comment'.
 	def sync_send_command(self, command: str, comment: str = None):
 		pass
 
+	# TODO: Remove 'comment'.
 	def async_send_command(self, command: str, expect_response: bool = False, comment: str = None):
 		pass
 
-	def send_command(self, command: str, comment: str = None):
+	def send_command(self, command: str, params: Any = None, comment: str = None):
 		cmd = self.get_command(command)
+		cmd.params = params
+		cmd.comment = comment
+		self.push_command(cmd, comment)
 		if cmd.is_sync_command():
 			self.sync_send_command(cmd.get_command_string(), comment)
 		else:

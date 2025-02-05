@@ -36,7 +36,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	_crossing_listener: CrossingListenerCallableType | None = None
 
 	def __init__( self, log: LogQueue, host: str, port: int ):
-		super().__init__()
+		TimingDevice.__init__(self)
 		TCPTimingDevice.__init__(self, host, port)
 		self.logger = log
 
