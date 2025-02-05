@@ -59,6 +59,16 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	def computerTimeDiff(self, offset: datetime.timedelta):
 		self._computerTimeDiff = offset
 
+	def on_connect(self) -> bool:
+		result = False
+		try:
+			result = self.setTime() or result
+			result = self.get_status() or result
+		except Exception as e:
+			self.getLog().exception('Failed while getting decoder status', e)
+
+		return result
+
 	def begin_reading( self ) -> None:
 		try:
 			self.makeCall('R', comment='start reading')
@@ -92,6 +102,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			buffer = self.makeSyncCall( decoderMessage, comment='set reader time' )
 			bufSize:int = self.process_message_buffer(buffer)
 			self.log('setTime', '{}: {} ({} on queue)'.format(_('Response to set time on decoder'), buffer, bufSize))
+
+			# We wait for the second boundary above and then set the offset to the response here so we know the round-trip offset.
+			self.computerTimeDiff = datetime.timedelta(seconds=0)
 		except ValueError as ve:
 			self.logEx('setTime',
 			           _('Invalid value when setting time on decoder'),

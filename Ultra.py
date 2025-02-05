@@ -76,17 +76,6 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 
 		if not ultraDecoder.connect():
 			continue
-		
-		#-----------------------------------------------------------------------------------------------------
-		try:
-			ultraDecoder.stop_reading()
-		except ValueError:
-			continue
-
-		if not ultraDecoder.setTime():
-			continue
-
-		ultraDecoder.computerTimeDiff = datetime.timedelta( seconds=0 )
 
 		#-----------------------------------------------------------------------------------------------------
 		try:
