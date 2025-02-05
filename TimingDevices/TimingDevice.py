@@ -98,15 +98,15 @@ class TimingDevice:
 		pass
 
 	def get_status( self ):
-		self.send_command('status')
+		self.send_command(TimingDeviceCommand.COMMAND_STATUS)
 		pass
 
 	def get_time( self ):
-		self.send_command('get_time')
+		self.send_command(TimingDeviceCommand.COMMAND_GET_TIME)
 		pass
 
 	def send_records_from_last(self):
-		self.send_command('send_records')
+		self.send_command(TimingDeviceCommand.COMMAND_SEND_RECORDS)
 		pass
 
 	def send_records_from_time(self, time: datetime.datetime):
