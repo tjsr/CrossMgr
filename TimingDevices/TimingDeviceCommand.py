@@ -1,8 +1,7 @@
 import datetime
-from typing import Generic, Any, TypeVar
+from typing import Generic, Any, TypeVar, Optional
 
 CommandResponse = TypeVar('CommandResponse')
-
 
 class TimingDeviceCommand(Generic[CommandResponse]):
 	COMMAND_SEND_RECORDS = 'send_records'
@@ -42,3 +41,9 @@ class TimingDeviceCommand(Generic[CommandResponse]):
 	@property
 	def response(self) -> CommandResponse:
 		return self._response
+
+	def match_response(self, message: str) -> Optional[CommandResponse]:
+		return None
+
+
+
