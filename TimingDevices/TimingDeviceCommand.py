@@ -6,6 +6,7 @@ CommandResponse = TypeVar('CommandResponse')
 class TimingDeviceCommand(Generic[CommandResponse]):
 	COMMAND_SEND_RECORDS = 'send_records'
 	COMMAND_GET_TIME = 'get_time'
+	COMMAND_SET_TIME = 'set_time'
 	COMMAND_STATUS = 'status'
 	COMMAND_START = 'start'
 	COMMAND_STOP = 'stop'
