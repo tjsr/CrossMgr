@@ -198,8 +198,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		return msgQueue
 
 	def get_command(self, command_type: str) -> TimingDeviceCommand:
-		if hasattr(UltraDecoder, command_type):
-			return getattr(UltraDecoder, command_type)
+		if command_type in UltraDecoder.commands:
+			return UltraDecoder.commands[command_type]
 
 		raise UnrecognisedCommandException(command_type)
 
