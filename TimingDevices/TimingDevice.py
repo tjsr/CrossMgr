@@ -78,7 +78,8 @@ class TimingDevice:
 
 	def get_messages(self, searchType: Type[DecoderMessage]|None = None ) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
-		log = self.getLog(name='TimingDevice.process_commands')
+		log = self.getLog(name='TimingDevice.get_messages')
+		log.debug('Getting messages from buffer...')
 
 		if buffer is not None:
 			_msgCount = self.process_message_buffer(buffer)

@@ -214,6 +214,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		raise UnrecognisedCommandException(command_type)
 
 	def parse_message(self, message: str) -> DecoderMessage:
+		self.getLog().debug('parse_message')
 		return UltraDecoder.parse(message)
 
 	@staticmethod
@@ -230,6 +231,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		elif (msg := UltraDecoderStatusMessage.parse(message)) is not None:
 			return msg
 		elif (msg := UltraChipReadMessage.parse(message)) is not None:
+			log.debug('Parsed chip read message: {}'.format(msg))
 			return msg
 		elif len(message.strip()) > 0:
 			return UnrecognisedDecoderMessage(message)
