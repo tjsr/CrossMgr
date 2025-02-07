@@ -2,7 +2,7 @@ import socket
 from abc import abstractmethod
 from logging import Logger
 
-from SocketUtils import socketReadDelimited
+from SocketUtils import socketReadDelimited, socketSendMessage
 
 
 class TCPTimingDevice:
@@ -19,7 +19,7 @@ class TCPTimingDevice:
 		self._port = port
 
 	@abstractmethod
-	def getLog(self) -> Logger:
+	def getLog(self, name:str|None = None, *args, **kwargs) -> Logger:
 		pass
 
 	@abstractmethod
@@ -40,8 +40,13 @@ class TCPTimingDevice:
 			self._s.connect((self._host, self._port))
 
 			self.on_connect()
+		except TimeoutError as e:
+			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
+			log.error(errDesc)
+			self._s = None
+			return False
 		except Exception as e:
-			log.exception('{}: {}'.format(_('Connection failed to {}'), description, e))
+			log.exception('{}: {}'.format(_('Unknown error connecting to {}'), description, e))
 			self._s = None
 			return False
 
@@ -79,4 +84,14 @@ class TCPTimingDevice:
 	@abstractmethod
 	def on_socket_timeout(self, ex: socket.timeout):
 		pass
+
+	def send_data(self, payload: str) -> None:
+		# cmd = payload.split(';', 1)[0]
+		log = self.getLog(name='TCPTimingDevice.send_data')
+		log.debug(f'>> {payload}')
+		try:
+			socketSendMessage(self._s, payload)
+		except Exception as e:
+			log.exception(msg='{}: {}'.format(payload, _('Failed sending data')), exc_info=e)
+			raise e
 

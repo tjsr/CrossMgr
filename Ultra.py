@@ -1,12 +1,9 @@
-import enum
-import socket
 import sys
 import time
 import datetime
-from abc import abstractmethod
 from typing import List, Union
 
-from ByteUtils import ISO_ENCODING, EOL
+from ByteUtils import EOL
 from LogQueue import LogQueue
 
 from TimingDevices.UltraTimingDevice import UltraDecoder
@@ -40,7 +37,7 @@ listener: Process|None = None
 tSmall = datetime.timedelta( seconds = 0.000001 )
 
 reNonDigit = re.compile( '[^0-9]+' )
-def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
+def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 	global readerEventWindow
 	log: LogQueue = LogQueue(q, 'ultra')
 	ultraDecoder = UltraDecoder(log, HOST, PORT)
@@ -56,8 +53,6 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 		readerEventWindow = Utils.mainWin
 	
 	delaySecs = 3
-	
-	readerComputerTimeDiff = None
 
 	def keepGoing():
 		try:
@@ -90,6 +85,7 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, startTime ):
 		
 		while keepGoing():
 			try:
+				ultraDecoder.process_commands()
 				ultraDecoder.get_messages()
 				ultraDecoder.process_messages()
 			except Exception as e:
@@ -164,15 +160,20 @@ def CleanupListener():
 	
 if __name__ == '__main__':
 	def doTest():
+		ultraTestHost = '192.168.1.148' # UltraDecoder.DEFAULT_HOST
 		try:
-			StartListener( HOST=UltraDecoder.DEFAULT_HOST, PORT=UltraDecoder.DEFAULT_PORT )
+			StartListener( HOST=ultraTestHost, PORT=UltraDecoder.DEFAULT_PORT )
 			count = 0
+			cols = 1
 			while 1:
 				time.sleep( 1 )
 				sys.stdout.write( '.' )
 				messages = GetData()
-				if messages:
+				if messages or cols % 80 == 0:
 					sys.stdout.write( '\n' )
+					cols = 1
+				else:
+					cols += 1
 				for m in messages:
 					if m[0] == 'data':
 						count += 1

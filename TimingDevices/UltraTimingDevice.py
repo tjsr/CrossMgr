@@ -1,17 +1,19 @@
 import datetime
 import socket
 import time
-from typing import List, Optional
+from typing import cast
 
+from Log import getLogger
 from LogQueue import LogQueue
-from SocketUtils import socketReadDelimited, socketSendMessage
 from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, DecoderMessage, \
 	UnrecognisedDecoderMessage, CrossingListenerCallableType
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
-import re
 
 from TimingDevices.UltraAutodetect import AutoDetect
+from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
+from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, UltraConnectInfoMessage, \
+	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage
 
 now = datetime.datetime.now
 EPOCH_TIME = datetime.datetime(1980, 1, 1)
@@ -19,11 +21,13 @@ EPOCH_TIME = datetime.datetime(1980, 1, 1)
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
 tSmall = datetime.timedelta( seconds = 0.000001 )
 
+
 class UltraDecoder(TimingDevice, TCPTimingDevice):
 	commands = {
-		'start': TimingDeviceCommand('R', False),
-		'stop': TimingDeviceCommand('S', False),
-		'status': TimingDeviceCommand('?', True)
+		TimingDeviceCommand.COMMAND_START: TimingDeviceCommand('R', response_type=None, sync=False),
+		TimingDeviceCommand.COMMAND_STOP: TimingDeviceCommand('S', response_type=None, sync=False),
+		TimingDeviceCommand.COMMAND_STATUS: TimingDeviceCommand('?', response_type=UltraDecoderStatusMessage, sync=True),
+		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand()
 	}
 
 	DEFAULT_PORT: int = 23
@@ -34,6 +38,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	_lastVoltage: datetime.datetime | None = None
 	_computerTimeDiff: datetime.timedelta | None = None
 	_crossing_listener: CrossingListenerCallableType | None = None
+	__on_connect_action_set_time: bool = True
+	__on_connect_action_start_if_stopped: bool = True
 
 	def __init__( self, log: LogQueue, host: str, port: int ):
 		TimingDevice.__init__(self)
@@ -60,26 +66,27 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		self._computerTimeDiff = offset
 
 	def on_connect(self) -> bool:
-		result = False
+		connectMessage = self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage)
+		if connectMessage is not None:
+			return self.on_connect_confirmed()
+		else:
+			self.getLog().warning('Connected to decode but didn\'t get confirmation after waiting.')
+			return False
+
+	def on_connect_confirmed(self) -> bool:
+		result = True
 		try:
-			result = self.setTime() or result
-			result = self.get_status() or result
+			if self.__on_connect_action_set_time:
+				setTimeCommand = self.set_time()
+
+			if self.__on_connect_action_start_if_stopped:
+				getStatusCommand = self.get_status()
+
 		except Exception as e:
 			self.getLog().exception('Failed while getting decoder status', e)
 
 		return result
 
-	def begin_reading( self ) -> None:
-		try:
-			self.makeCall('R', comment='start reading')
-		except ValueError:
-			pass
-
-	def stop_reading(self) -> None:
-		try:
-			self.makeCall('S', comment='stop reading')
-		except ValueError:
-			pass
 
 	def autoconnect(self, autoDetectCallback) -> bool:
 		self.log('autoconnect', '{}'.format(_('Attempting AutoDetect...')))
@@ -98,10 +105,17 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		time.sleep( (1000000 - now().microsecond) / 1000000.0 )
 		decoderMessage: str
 		try:
-			decoderMessage = 't {}'.format( now().strftime('%H:%M:%S %d-%m-%Y') )
-			buffer = self.makeSyncCall( decoderMessage, comment='set reader time' )
-			bufSize:int = self.process_message_buffer(buffer)
-			self.log('setTime', '{}: {} ({} on queue)'.format(_('Response to set time on decoder'), buffer, bufSize))
+			set_time_command: UltraSetTimeCommand = cast(UltraSetTimeCommand, self.get_command(TimingDeviceCommand.COMMAND_SET_TIME))
+			self.send_command(set_time_command)
+			response = set_time_command.response
+			self.log('setTime', '{}: {}'.format(_('Response to set time on decoder'), response))
+
+			# decoderMessage = set_time_command.get_command_string()
+			# self.makeCommandCall(set_time_command)
+			# buffer = self.makeSyncCall( decoderMessage, comment='set reader time' )
+			# bufSize:int = self.process_message_buffer(buffer)
+			# self.log('setTime', '{}: {} ({} on queue)'.format(_('Response to set time on decoder'), buffer, bufSize))
+			# self.wait_for_response(timeout=5, command=set_time_command)
 
 			# We wait for the second boundary above and then set the offset to the response here so we know the round-trip offset.
 			self.computerTimeDiff = datetime.timedelta(seconds=0)
@@ -135,9 +149,11 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 					self.log('process_messages', '{}: "{}"'.format(_('Invalid tag in chip read message'), chipRead))
 					continue
 				chip = chipRead.ChipCode
-				tag = '{:d}'.format(chip)
+				tag = f'{chip}'
 
-				crossingTime = chipRead.getTagTime() + self.computerTimeDiff
+				crossingTime = chipRead.getTagTime()
+				if self.computerTimeDiff:
+					crossingTime += self.computerTimeDiff
 
 				while crossingTime in times:
 					# Ensure no equal times.
@@ -188,16 +204,10 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		if (now() - self._lastVoltage).total_seconds() > 15:
 			self.log('get_messages', _('Lost heartbeat.'))
 
-	def get_messages(self) -> List[DecoderMessage]:
-		buffer: str = TCPTimingDevice.get_message_buffer(self)
+	def get_message_buffer(self) -> str:
+		return TCPTimingDevice.get_message_buffer(self)
 
-		if buffer is not None:
-			self.process_message_buffer(buffer)
-
-		msgQueue = super().get_messages()
-		return msgQueue
-
-	def get_command(self, command_type: str) -> TimingDeviceCommand:
+	def get_command(self, command_type: str, *args, **kwargs) -> TimingDeviceCommand:
 		if command_type in UltraDecoder.commands:
 			return UltraDecoder.commands[command_type]
 
@@ -208,11 +218,16 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 	@staticmethod
 	def parse(message: str) -> DecoderMessage|None:
+		log = getLogger('UltraDecoder.parse')
+		log.debug('<< {}'.format(message))
+
 		if (msg := UltraConnectConfirmationMessage.parse(message)) is not None:
 			return msg
 		elif (msg := UltraConnectInfoMessage.parse(message)) is not None:
 			return msg
 		elif (msg := UltraVoltageMessage.parse(message)) is not None:
+			return msg
+		elif (msg := UltraDecoderStatusMessage.parse(message)) is not None:
 			return msg
 		elif (msg := UltraChipReadMessage.parse(message)) is not None:
 			return msg
@@ -234,179 +249,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 		return None
 
-	def makeSyncCall(self, message, comment: str = '') -> str:
-		self.makeCall(message, comment)
-		callBuffer = socketReadDelimited(self._s)
-		return callBuffer
+	def stop_reading(self):
+		TimingDevice.stop_reading(self)
 
-	def makeCall(self, message: str, comment: str = '') -> None:
-		cmd = message.split(';', 1)[0]
-		self.log('makeCall', 'sending: {}{}'.format(message, ' ({})'.format(comment) if comment else ''))
-		try:
-			# socketSend( s, bytes('{}{}'.format(message,EOL)) )
-			socketSendMessage(self._s, message)
-		except Exception as e:
-			self.logEx('makeCall', '{}: {}'.format(cmd, _('Connection failed')), e)
-			raise e
+	def send_data(self, payload: str):
+		TCPTimingDevice.send_data(self, payload)
 
-CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
-
-class UltraDecoderMessage(DecoderMessage):
-	_UltraId: int | None # Integer value. See section 3.1
-
-	def __init__(self, ultraId: int | None):
-		super().__init__()
-		self._UltraId = ultraId
-
-	@property
-	def UltraId(self) -> int | None:
-		return self._UltraId
-
-	@UltraId.setter
-	def UltraId(self, value: int):
-		self._UltraId = value
-
-class UltraConnectConfirmationMessage(UltraDecoderMessage):
-	def __init__(self, ultraId: int):
-		super().__init__(ultraId)
-
-	@staticmethod
-	def parse(message: str) -> Optional['UltraConnectConfirmationMessage']:
-		if message is not None and message.startswith('Connected'):
-			try:
-				Connected, UltraID, CommandCode = message.split(',', 3)
-				return UltraConnectConfirmationMessage(int(UltraID))
-			except ValueError:
-				return None
-		return None
-
-class UltraConnectInfoMessage(UltraDecoderMessage):
-	def __init__(self, ultraId: int):
-		super().__init__(ultraId)
-
-	@staticmethod
-	def parse(message: str) -> Optional['UltraConnectInfoMessage']:
-		if re.match(CONNECT_INFO_FORMAT, message) is not None:
-			return UltraConnectInfoMessage(0)
-		return None
-
-
-class UltraVoltageMessage(UltraDecoderMessage):
-	Voltage: float
-
-	@staticmethod
-	def parse(message: str) -> Optional['UltraVoltageMessage']:
-		if message is not None and message.startswith('V='):
-			return UltraVoltageMessage(0, float(message[2:]))
-		return None
-
-
-	def __init__(self, ultraId: int, voltage: float):
-		super().__init__(ultraId)
-		self._Voltage = voltage
-
-	@property
-	def Voltage(self) -> float:
-		return self._Voltage
-
-class DecoderStatusMessage(UltraDecoderMessage):
-	_readStatus: bool
-	_sendStatus: bool
-
-	@property
-	def readStatus(self) -> bool:
-		return self._readStatus
-
-	@property
-	def sendStatus(self) -> bool:
-		return self._sendStatus
-
-	@staticmethod
-	def parse(message: str) -> Optional['DecoderStatusMessage']:
-		if message is not None and message.startswith('S'):
-			try:
-				_, Payload = message.split('=', 1)
-				if len(Payload) == 2:
-					statusInt = int(Payload)
-					readStatus = statusInt // 10
-					sendStatus = statusInt % 10
-					return DecoderStatusMessage(readStatus == 1, sendStatus == 1)
-
-			except ValueError:
-				return None
-		return
-	def __init__(self, readStatus: bool, sendStatus: bool):
-		super().__init__(None)
-		self._readStatus = readStatus
-		self._sendStatus = sendStatus
-
-# Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
-class UltraChipReadMessage(UltraDecoderMessage):
-	# Retain this field order
-	Zero: int  # Zero (unused at present)
-	_ChipCode: int  # Could be the chip code decimal or hexadecimal value, depending on current setting in Ultra (see section 3.8)
-	Seconds: int  # Integer value representing the number of seconds after 01/01/1980
-	Milliseconds: int  # Integer value representing the millisecond portion of the time.
-	RSSI: int  # Negative integer value. This is the signal strength for the chip
-	IsRewind: int  # 0 or 1. A value of 1 means the data is being transmitted from a rewind command,
-	# in other words it is not a ‘live’ read. Live and rewound data will be mixed up in between
-	# each other if you do a ‘rewind while reading’.
-	ReaderNo: int  # Integer value of from 1 to 3 representing the reader number. There are 2
-	# readers in an Ultra. A reader number of 3 is used for MTB downhill start times.
-	# UltraId: int  # Integer value. See section 3.1 - Defined in superclass
-	ReaderTime: str  # 8 characters representing the 64-bit time recorded by the UHF readers. Not
-	# available for some Ultra models – please speak to your supplier for more information.
-	StartTime: int  # For MTB downhill racing. Integer value representing the number of seconds after 01/01/1980
-	LogId: int  # Integer value representing the record’s position in the log (starting at one)
-
-	# Derived fields
-	ChipCodeAsHexValue: bool
-
-	@staticmethod
-	def chipNumberFromString(chipStr: str) -> int:
-		if chipStr.startswith('0x'):
-			return int(chipStr, 16)
-		return int(chipStr)
-
-	@staticmethod
-	def parse(message: str) -> 'UltraChipReadMessage | None':
-		output: UltraChipReadMessage
-		try:
-			Zero, ChipCode, Seconds, Milliseconds, Extra = message.split(',', 4)
-
-			output = UltraChipReadMessage(0, UltraChipReadMessage.chipNumberFromString(ChipCode))
-			output.Seconds = int(Seconds)
-			output.Milliseconds = int(Milliseconds)
-		except ValueError as e:
-			raise ValueError('Invalid crossing message format parsing {}'.format(message), e)
-
-		try:
-			if Extra is not None:
-				AntennaNo, RSSI, IsRewind, ReaderNo, UltraID, ReaderTime, StartTime, LogID = Extra.split(',', 7)
-				output.AntennaNo = int(AntennaNo)
-				output.RSSI = int(RSSI)
-				output.IsRewind = int(IsRewind)
-				output.ReaderNo = int(ReaderNo)
-				output.UltraId = int(UltraID)
-				output.ReaderTime = ReaderTime
-				output.StartTime = int(StartTime)
-				output.LogId = int(LogID)
-
-		except ValueError:
-			pass
-
-		return output
-
-	def __init__(self, ultraId: int, chipCode: int):
-		super().__init__(ultraId)
-		self._ChipCode = chipCode
-
-	def getTagTime(self) -> datetime.datetime:
-		return EPOCH_TIME + datetime.timedelta(seconds=self.Seconds, milliseconds=self.Milliseconds)
-
-	@property
-	def ChipCode(self) -> int:
-		return self._ChipCode
-
-	def hasValidTag(self) -> bool:
-		return self._ChipCode != 0

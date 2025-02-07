@@ -1,0 +1,184 @@
+import datetime
+import re
+from typing import Optional
+
+from TimingDevices.TimingDevice import DecoderMessage
+from TimingDevices.TimingDeviceCommand import DecoderStatusMessage
+
+CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
+EPOCH_TIME = datetime.datetime(1980, 1, 1)
+
+class UltraDecoderMessage(DecoderMessage):
+	_UltraId: int | None # Integer value. See section 3.1
+
+	def __init__(self, ultraId: int | None):
+		super().__init__()
+		self._UltraId = ultraId
+
+	@property
+	def UltraId(self) -> int | None:
+		return self._UltraId
+
+	@UltraId.setter
+	def UltraId(self, value: int):
+		self._UltraId = value
+
+
+class UltraCommandResponse(UltraDecoderMessage):
+	_timeReceived: datetime.datetime
+	def __init__(self):
+		super().__init__(None)
+		self._timeReceived = datetime.datetime.now()
+
+	@property
+	def timeReceived(self) -> datetime.datetime:
+		return self._timeReceived
+
+
+class UltraConnectConfirmationMessage(UltraDecoderMessage):
+	def __init__(self, lastTimeSent: datetime.datetime, hasUpdates: bool):
+		super().__init__(0)
+		self._lastTimeSent = lastTimeSent
+		self._hasUpdates = hasUpdates
+
+	@staticmethod
+	def parse(message: str) -> Optional['UltraConnectConfirmationMessage']:
+		if message is not None and message.startswith('Connected'):
+			try:
+				Connected, LastTimeSent, CommandCode = message.split(',', 3)
+				lastTimeDate = datetime.datetime.fromtimestamp(EPOCH_TIME.timestamp() + int(LastTimeSent))
+				hasUpdates = CommandCode == 'U'
+				# CommandCode tells us if any data has been missed, but the docs don't say what are valid values.
+				return UltraConnectConfirmationMessage(lastTimeDate, hasUpdates)
+			except ValueError:
+				return None
+		return None
+
+	@property
+	def lastTimeSent(self) -> datetime.datetime:
+		return self._lastTimeSent
+
+	@property
+	def hasUpdates(self) -> bool:
+		return self._hasUpdates
+
+
+class UltraConnectInfoMessage(UltraDecoderMessage):
+	def __init__(self, ultraId: int):
+		super().__init__(ultraId)
+
+	@staticmethod
+	def parse(message: str) -> Optional['UltraConnectInfoMessage']:
+		if re.match(CONNECT_INFO_FORMAT, message) is not None:
+			return UltraConnectInfoMessage(0)
+		return None
+
+
+class UltraVoltageMessage(UltraDecoderMessage):
+	Voltage: float
+
+	@staticmethod
+	def parse(message: str) -> Optional['UltraVoltageMessage']:
+		if message is not None and message.startswith('V='):
+			return UltraVoltageMessage(0, float(message[2:]))
+		return None
+
+
+	def __init__(self, ultraId: int, voltage: float):
+		super().__init__(ultraId)
+		self._Voltage = voltage
+
+	@property
+	def Voltage(self) -> float:
+		return self._Voltage
+
+class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
+	@staticmethod
+	def parse(message: str) -> Optional['UltraDecoderStatusMessage']:
+		if message is not None and message.startswith('S'):
+			try:
+				_, Payload = message.split('=', 1)
+				if len(Payload) == 2:
+					statusInt = int(Payload)
+					readStatus = statusInt // 10
+					sendStatus = statusInt % 10
+					return UltraDecoderStatusMessage(readStatus == 1, sendStatus == 1)
+
+			except ValueError:
+				return None
+		return
+
+	def __init__(self, readStatus: bool, sendStatus: bool):
+		UltraDecoderMessage.__init__(self, 0)
+		DecoderStatusMessage.__init__(self, readStatus, sendStatus)
+
+# Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
+class UltraChipReadMessage(UltraDecoderMessage):
+	# Retain this field order
+	Zero: int  # Zero (unused at present)
+	_ChipCode: int  # Could be the chip code decimal or hexadecimal value, depending on current setting in Ultra (see section 3.8)
+	Seconds: int  # Integer value representing the number of seconds after 01/01/1980
+	Milliseconds: int  # Integer value representing the millisecond portion of the time.
+	RSSI: int  # Negative integer value. This is the signal strength for the chip
+	IsRewind: int  # 0 or 1. A value of 1 means the data is being transmitted from a rewind command,
+	# in other words it is not a ‘live’ read. Live and rewound data will be mixed up in between
+	# each other if you do a ‘rewind while reading’.
+	ReaderNo: int  # Integer value of from 1 to 3 representing the reader number. There are 2
+	# readers in an Ultra. A reader number of 3 is used for MTB downhill start times.
+	# UltraId: int  # Integer value. See section 3.1 - Defined in superclass
+	ReaderTime: str  # 8 characters representing the 64-bit time recorded by the UHF readers. Not
+	# available for some Ultra models – please speak to your supplier for more information.
+	StartTime: int  # For MTB downhill racing. Integer value representing the number of seconds after 01/01/1980
+	LogId: int  # Integer value representing the record’s position in the log (starting at one)
+
+	# Derived fields
+	ChipCodeAsHexValue: bool
+
+	@staticmethod
+	def chipNumberFromString(chipStr: str) -> int:
+		if chipStr.startswith('0x'):
+			return int(chipStr, 16)
+		return int(chipStr)
+
+	@staticmethod
+	def parse(message: str) -> 'UltraChipReadMessage | None':
+		output: UltraChipReadMessage
+		try:
+			Zero, ChipCode, Seconds, Milliseconds, Extra = message.split(',', 4)
+
+			output = UltraChipReadMessage(0, UltraChipReadMessage.chipNumberFromString(ChipCode))
+			output.Seconds = int(Seconds)
+			output.Milliseconds = int(Milliseconds)
+		except ValueError as e:
+			raise ValueError('Invalid crossing message format parsing {}'.format(message), e)
+
+		try:
+			if Extra is not None:
+				AntennaNo, RSSI, IsRewind, ReaderNo, UltraID, ReaderTime, StartTime, LogID = Extra.split(',', 7)
+				output.AntennaNo = int(AntennaNo)
+				output.RSSI = int(RSSI)
+				output.IsRewind = int(IsRewind)
+				output.ReaderNo = int(ReaderNo)
+				output.UltraId = int(UltraID)
+				output.ReaderTime = ReaderTime
+				output.StartTime = int(StartTime)
+				output.LogId = int(LogID)
+
+		except ValueError:
+			pass
+
+		return output
+
+	def __init__(self, ultraId: int, chipCode: int):
+		super().__init__(ultraId)
+		self._ChipCode = chipCode
+
+	def getTagTime(self) -> datetime.datetime:
+		return EPOCH_TIME + datetime.timedelta(seconds=self.Seconds, milliseconds=self.Milliseconds)
+
+	@property
+	def ChipCode(self) -> int:
+		return self._ChipCode
+
+	def hasValidTag(self) -> bool:
+		return self._ChipCode != 0

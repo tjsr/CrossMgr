@@ -1,13 +1,15 @@
 import inspect
 import logging
+import os
 import sys
 import threading
 from typing import Any
 
 lock = threading.Lock()
 
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-traceFormatter = logging.Formatter('%(asctime)s - %(name)s@%(filename)s:%(lineno)d:%(funcName)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(asctime)s %(name)s [%(levelname)s] %(message)s')
+methodFormatter = logging.Formatter('%(asctime)s %(name)s:%(funcName)s [%(levelname)s] %(message)s')
+traceFormatter = logging.Formatter('%(asctime)s %(name)s@%(filename)s:%(lineno)d:%(funcName)s [%(levelname)s] %(message)s')
 # Create a handler that writes log messages to stdout
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
@@ -56,7 +58,13 @@ class CrossMgrLogger(logging.Logger):
 	def exitApp(self, msg: object = 'Application exiting', *args: object, **kwargs: Any) -> None:
 		return self.log(Log.APPLICATION_END, msg, *args, **kwargs)
 
-def getLogger(name: str = None, level: int = logging.INFO) -> CrossMgrLogger:
+def getLogger(name: str = None, level: int = None) -> CrossMgrLogger:
+	if level is None:
+		if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't'):
+			level = logging.DEBUG
+		else:
+			level = logging.INFO
+
 	if name is None:
 		frame = inspect.stack()[1]
 		module = inspect.getmodule(frame[0])

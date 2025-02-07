@@ -1,11 +1,13 @@
 import datetime
 from abc import abstractmethod
-from logging import Logger, getLogger
+from logging import Logger
+from queue import Queue
 from types import TracebackType
-from typing import List, Type, Callable, Any
+from typing import List, Type, Callable, Optional
+from Log import getLogger, Log
 
 from LogQueue import LogQueue
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException, DecoderStatusMessage
 
 CrossingListenerCallableType = Callable[[(str, datetime.datetime)], None]
 
@@ -14,8 +16,11 @@ class SettingChangeCommand:
 
 
 class DecoderMessage:
-	def __init__(self):
+	def __init__(self, *args, **kwargs):
 		pass
+
+	def is_message_type(self, searchType: Type) -> bool:
+		return isinstance(self, searchType)
 
 class UnknownTimingDeviceSetting(Exception):
 	def __init__(self, setting: str):
@@ -27,30 +32,63 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 		super().__init__()
 		self._message = message
 
+class DeviceStatusMessage(DecoderMessage):
+	def __init__(self, *args, **kwargs):
+		super().__init__(args, kwargs)
+
+	@abstractmethod
+	def status(self) -> str:
+		pass
 
 class TimingDevice:
 	_readonly = False
 	_logger: LogQueue | None = None
 	_log: Logger | None = None
-	_messageBuffer: List[DecoderMessage] = []
+	_messageQueue: List[DecoderMessage] = None
+	_commandQueue: Queue[TimingDeviceCommand] = None
 
 	def __init__(self):
-		pass
+		self._commandQueue = Queue()
+		self._messageQueue = []
 
-	def getLog(self) -> Logger:
-		if self._log is None:
-			self._log = getLogger(self.__class__.__name__)
+	def getLog(self, forMethod: bool = False, *args, **kwargs) -> Logger:
+		if kwargs.get('name') is None:
+			kwargs['name'] = self.__class__.__name__
+			if self._log is None:
+				self._log = getLogger(*args, **kwargs)
+		else:
+			return getLogger(*args, **kwargs)
 		return self._log
 
 	def is_readonly_device(self) -> bool:
 		return self._readonly
 
 	def add_message(self, message: DecoderMessage) -> int:
-		self._messageBuffer.append(message)
-		return len(self._messageBuffer)
+		self._messageQueue.append(message)
+		return len(self._messageQueue)
 
-	def get_messages(self) -> List[DecoderMessage]:
-		return self._messageBuffer
+	@abstractmethod
+	def get_message_buffer(self) -> str | None:
+		pass
+
+	def process_commands(self):
+		while not self._commandQueue.empty():
+			command = self._commandQueue.get()
+			self.sync_send_command(command)
+
+	def get_messages(self, searchType: Type[DecoderMessage]|None = None ) -> List[DecoderMessage]:
+		buffer: str = self.get_message_buffer()
+		log = self.getLog(name='TimingDevice.process_commands')
+
+		if buffer is not None:
+			_msgCount = self.process_message_buffer(buffer)
+			# log.debug(f'Processed message buffer now has {msgCount} messages.')
+
+		if searchType is not None:
+			# Filter messages by type and return them
+			return [message for message in self._messageQueue if isinstance(message, searchType)]
+
+		return self._messageQueue
 
 	def process_message_buffer(self, buffer: str) -> int:
 		maxBufSize = -1
@@ -63,15 +101,23 @@ class TimingDevice:
 	def parse_message(self, message: str) -> DecoderMessage:
 		pass
 
+	@property
+	def messageQueueLength(self) -> int:
+		return len(self._messageQueue)
+
+	@property
+	def commandQueueLength(self) -> int:
+		return self._commandQueue.qsize()
+
 	def get_last_message(self) -> DecoderMessage | None:
-		if len(self._messageBuffer) == 0:
+		if len(self._messageQueue) == 0:
 			return None
-		return self._messageBuffer.pop()
+		return self._messageQueue.pop()
 
 	def peek_last_message(self) -> DecoderMessage | None:
-		if len(self._messageBuffer) == 0:
+		if len(self._messageQueue) == 0:
 			return None
-		return self._messageBuffer[-1]
+		return self._messageQueue[-1]
 
 	@property
 	def logger(self) -> LogQueue | None:
@@ -84,7 +130,6 @@ class TimingDevice:
 	def log(self, category: str, message: str):
 		if self._logger:
 			self._logger.q(category, message)
-		pass
 
 	def logEx(self, category: str, msg: str, e: Exception, exc_info: tuple[Type[BaseException], BaseException, TracebackType] | tuple[None, None, None] | None = None) -> list[str] | None:
 		if self._logger:
@@ -92,32 +137,46 @@ class TimingDevice:
 			self.log(category, msg)
 		return None
 
-	def begin_reading( self ):
+	def create_command(self, command_type: str, *args, **kwargs) -> TimingDeviceCommand:
+		return self.get_command(command_type, *args, **kwargs)
+
+	def begin_reading( self ) -> TimingDeviceCommand:
 		if not self.is_readonly_device():
-			self.send_command('start')
-		pass
+			startDeviceCommand = self.create_command(TimingDeviceCommand.COMMAND_START)
+			self.send_command(startDeviceCommand)
+			return startDeviceCommand
 
-	def get_status( self ):
-		self.send_command(TimingDeviceCommand.COMMAND_STATUS)
-		pass
+	def get_status( self, onStatusCallback: Callable[[DecoderStatusMessage], None] | None = None ) -> TimingDeviceCommand:
+		getStatusCommand = self.create_command(TimingDeviceCommand.COMMAND_STATUS)
+		self.send_command(getStatusCommand)
+		return getStatusCommand
 
-	def get_time( self ):
-		self.send_command(TimingDeviceCommand.COMMAND_GET_TIME)
-		pass
+	def get_time( self ) -> TimingDeviceCommand:
+		getTimeCommand = self.create_command(TimingDeviceCommand.COMMAND_GET_TIME)
+		self.send_command(getTimeCommand)
+		return getTimeCommand
 
-	def send_records_from_last(self):
-		self.send_command(TimingDeviceCommand.COMMAND_SEND_RECORDS)
-		pass
+	def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceCommand:
+		setTimeCommand = self.create_command(TimingDeviceCommand.COMMAND_SET_TIME, time)
+		success = self.send_command(setTimeCommand)
+		return setTimeCommand
 
-	def send_records_from_time(self, time: datetime.datetime):
-		self.send_command('send_records')
-		pass
+	def send_records_from_last(self) -> TimingDeviceCommand:
+		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS)
+		self.send_command(sendRecordsCommand)
+		return sendRecordsCommand
+
+	def send_records_from_time(self, time: datetime.datetime) -> TimingDeviceCommand:
+		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS, time)
+		self.send_command(sendRecordsCommand)
+		return sendRecordsCommand
 
 	def get_setting(self, setting: str):
 		if not self.is_valid_setting(setting):
 			raise UnknownTimingDeviceSetting(setting)
-		self.send_command('get_setting')
-		pass
+		getSettingCommand = self.create_command('get_setting', setting)
+		self.send_command(getSettingCommand)
+		return getSettingCommand
 
 	def change_setting(self, settingChangeCommand: SettingChangeCommand):
 		raise NotImplementedError()
@@ -127,33 +186,116 @@ class TimingDevice:
 		return True
 
 	# TODO: Remove 'comment'.
-	def sync_send_command(self, command: str, comment: str = None):
-		pass
+	def sync_send_command(self, command: TimingDeviceCommand) -> bool:
+		data = command.get_command_string()
+		self.send_data(data)
+		command.sentAt = datetime.datetime.now()
+		commandType = command.CommandType
+		self.getLog().info(f'Send {commandType} command immediately to decoder: {data}')
+		if command.expectsResponse:
+			response = self.wait_for_response(5, command)
+			if response is not None:
+				command.response = response
+				return True
+			else:
+				return False
+		else:
+			self.getLog().info(f'No response expected for command: {data}')
+			return True
+
 
 	# TODO: Remove 'comment'.
-	def async_send_command(self, command: str, expect_response: bool = False, comment: str = None):
-		pass
-
-	def send_command(self, command: str, params: Any = None, comment: str = None):
-		cmd = self.get_command(command)
-		cmd.params = params
-		cmd.comment = comment
-		self.push_command(cmd, comment)
-		if cmd.is_sync_command():
-			self.sync_send_command(cmd.get_command_string(), comment)
-		else:
-			self.async_send_command(cmd.get_command_string(), False, comment)
+	def async_send_command(self, command: TimingDeviceCommand) -> bool:
+		# Push to the queue and send later.
+		data = command.get_command_string()
+		self.getLog().info(f'Queuing async command to decoder: {data}')
+		self.push_command(command)
+		return True
 
 	@abstractmethod
-	def get_command(self, command_type: str) -> TimingDeviceCommand:
+	def send_data(self, payload: str):
 		pass
 
-	def push_command(self, command: TimingDeviceCommand, comment: str = None):
+	def send_command(self, command: TimingDeviceCommand) -> bool:
+		assert isinstance(command, TimingDeviceCommand)
+		if command.is_sync_command():
+			return self.sync_send_command(command)
+		else:
+			return self.async_send_command(command)
+
+	@abstractmethod
+	def get_command(self, command_type: str, *args, **kwargs) -> TimingDeviceCommand:
 		pass
+
+	def push_command(self, command: TimingDeviceCommand):
+		self._commandQueue.put(command)
 
 	@abstractmethod
 	def stop_reading(self):
-		pass
+		if not self.is_readonly_device():
+			self.send_command(TimingDeviceCommand.COMMAND_STOP)
+
+	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
+		# TODO: We can abstract this with wait_for_response
+		log = self.getLog(name='TimingDevice.wait_for_message')
+		log.debug(f'Waiting for a matching {messageType} message before continuing...')
+
+		current_time = datetime.datetime.now()
+		start_time = datetime.datetime.now()
+
+		timeout_exceeded = (current_time - start_time).seconds > timeout
+		messages = []
+		attempts = 1
+		while not timeout_exceeded:
+			messages = self.get_messages(messageType)
+			msgCount = len(messages)
+			if msgCount == 0:
+				log.debug(f'No messages for {messageType} iteration on attempt {attempts} with {self.messageQueueLength}...')
+			else:
+				log.debug(f'Got {msgCount} messages for {messageType} iteration on attempt {attempts}...')
+
+			for message in messages:
+				if isinstance(message, messageType):
+					log.debug(f'Found first match {message}')
+					return message
+			attempts += 1
+			current_time = datetime.datetime.now()
+			timeout_exceeded = (current_time - start_time).seconds > timeout
+
+		messageCount = len(messages)
+		log.info(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
+		return None
+
+	def wait_for_response(self, timeout: int, command: TimingDeviceCommand) -> Optional[DecoderMessage]:
+		if not command.providesResponse:
+			raise TimingDeviceCommandException(f'Command {command.__class__} does not provide a response')
+		current_time = datetime.datetime.now()
+		start_time = datetime.datetime.now()
+
+		timeout_exceeded = (current_time - start_time).seconds > timeout
+		messages = []
+		log = self.getLog(name='TimingDevice.wait_for_response')
+		attempts = 1
+		commandClass = command.get_response_type()
+		while not timeout_exceeded:
+			messages = self.get_messages(commandClass)
+			msgCount = len(messages)
+			if msgCount == 0:
+				log.log(Log.TRACE, f'No messages for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
+			else:
+				log.debug(f'Got {msgCount} messages for {commandClass} iteration on attempt {attempts}...')
+
+			for message in messages:
+				if command.match_message(message):
+					log.debug(f'Found first match {message}')
+					return message
+			attempts += 1
+			current_time = datetime.datetime.now()
+			timeout_exceeded = (current_time - start_time).seconds > timeout
+
+		messageCount = len(messages)
+		log.info(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
+		return None
 
 
 class UnrecognisedCommandException(Exception):
