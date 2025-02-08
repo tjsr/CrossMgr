@@ -73,7 +73,7 @@ class TimingDevice:
 	def get_messages(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
 		log = self.getLog(name='TimingDevice.get_messages')
-		log.debug('Getting messages from buffer...')
+		log.trace('Getting messages from buffer...')
 
 		if buffer is not None:
 			_msgCount = self.process_message_buffer(buffer)
@@ -251,14 +251,14 @@ class TimingDevice:
 
 			for message in messages:
 				if isinstance(message, messageType):
-					log.debug(f'Found first match {message}')
+					log.debug(f'Received awaited {messageType} message after {attempts} attempts and {self.messageQueueLength} messages on queue: {message}')
 					return message
 			attempts += 1
 			current_time = datetime.datetime.now()
 			timeout_exceeded = (current_time - start_time).seconds > timeout
 
 		messageCount = len(messages)
-		log.info(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
+		log.warning(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
 		return None
 
 	def wait_for_response(self, timeout: int, command: TimingDeviceCommand) -> Optional[DecoderMessage]:
@@ -276,20 +276,20 @@ class TimingDevice:
 			messages = self.get_messages(commandClass)
 			msgCount = len(messages)
 			if msgCount == 0:
-				log.log(Log.TRACE, f'No messages for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
+				log.log(Log.TRACE, f'No response for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
 			else:
-				log.debug(f'Got {msgCount} messages for {commandClass} iteration on attempt {attempts}...')
+				log.trace(f'Got {msgCount} response for {commandClass} iteration on attempt {attempts}...')
 
 			for message in messages:
 				if command.match_message(message):
-					log.debug(f'Found first match {message}')
+					log.debug(f'Received awaited {commandClass} response after {attempts} attempts and {self.messageQueueLength} messages on queue: {message}')
 					return message
 			attempts += 1
 			current_time = datetime.datetime.now()
 			timeout_exceeded = (current_time - start_time).seconds > timeout
 
 		messageCount = len(messages)
-		log.info(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
+		log.warning(f'Got no matching {commandClass} response in {timeout} seconds with {messageCount} messages in the queue')
 		return None
 
 	@abstractmethod
