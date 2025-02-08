@@ -1,13 +1,13 @@
 import datetime
 from abc import abstractmethod
-from logging import Logger
 from queue import Queue
 from types import TracebackType
 from typing import List, Type, Callable, Optional
-from Log import getLogger, Log
+from Log import getLogger, Log, CrossMgrLogger
 
 from LogQueue import LogQueue
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException, DecoderStatusMessage
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException
+from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
 
 CrossingListenerCallableType = Callable[[(str, datetime.datetime)], None]
 
@@ -15,22 +15,10 @@ class SettingChangeCommand:
 	pass
 
 
-class DecoderMessage:
-	def __init__(self, *args, **kwargs):
-		pass
-
-	def is_message_type(self, searchType: Type) -> bool:
-		return isinstance(self, searchType)
-
 class UnknownTimingDeviceSetting(Exception):
 	def __init__(self, setting: str):
 		super().__init__(f'Unknown setting: {setting}')
 
-class UnrecognisedDecoderMessage(DecoderMessage):
-	_message: str
-	def __init__(self, message: str):
-		super().__init__()
-		self._message = message
 
 class DeviceStatusMessage(DecoderMessage):
 	def __init__(self, *args, **kwargs):
@@ -40,10 +28,16 @@ class DeviceStatusMessage(DecoderMessage):
 	def status(self) -> str:
 		pass
 
+
+class TimingDeviceConnectMessage(DecoderMessage):
+	def __init__(self, *args, **kwargs):
+		super().__init__(args, kwargs)
+
+
 class TimingDevice:
 	_readonly = False
 	_logger: LogQueue | None = None
-	_log: Logger | None = None
+	_log: CrossMgrLogger | None = None
 	_messageQueue: List[DecoderMessage] = None
 	_commandQueue: Queue[TimingDeviceCommand] = None
 
@@ -51,7 +45,7 @@ class TimingDevice:
 		self._commandQueue = Queue()
 		self._messageQueue = []
 
-	def getLog(self, forMethod: bool = False, *args, **kwargs) -> Logger:
+	def getLog(self, forMethod: bool = False, *args, **kwargs) -> CrossMgrLogger:
 		if kwargs.get('name') is None:
 			kwargs['name'] = self.__class__.__name__
 			if self._log is None:
@@ -76,7 +70,7 @@ class TimingDevice:
 			command = self._commandQueue.get()
 			self.sync_send_command(command)
 
-	def get_messages(self, searchType: Type[DecoderMessage]|None = None ) -> List[DecoderMessage]:
+	def get_messages(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
 		log = self.getLog(name='TimingDevice.get_messages')
 		log.debug('Getting messages from buffer...')
@@ -147,7 +141,7 @@ class TimingDevice:
 			self.send_command(startDeviceCommand)
 			return startDeviceCommand
 
-	def get_status( self, onStatusCallback: Callable[[DecoderStatusMessage], None] | None = None ) -> TimingDeviceCommand:
+	async def get_status( self, onStatusCallback: Callable[[DecoderStatusMessage], None] | None = None ) -> TimingDeviceCommand:
 		getStatusCommand = self.create_command(TimingDeviceCommand.COMMAND_STATUS)
 		self.send_command(getStatusCommand)
 		return getStatusCommand
@@ -157,7 +151,7 @@ class TimingDevice:
 		self.send_command(getTimeCommand)
 		return getTimeCommand
 
-	def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceCommand:
+	async def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceCommand:
 		setTimeCommand = self.create_command(TimingDeviceCommand.COMMAND_SET_TIME, time)
 		success = self.send_command(setTimeCommand)
 		return setTimeCommand
@@ -297,6 +291,10 @@ class TimingDevice:
 		messageCount = len(messages)
 		log.info(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
 		return None
+
+	@abstractmethod
+	def on_connect(self, msg: TimingDeviceConnectMessage) -> bool:
+		pass
 
 
 class UnrecognisedCommandException(Exception):

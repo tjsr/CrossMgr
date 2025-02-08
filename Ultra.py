@@ -73,13 +73,13 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 			continue
 
 		#-----------------------------------------------------------------------------------------------------
-		try:
-			time.sleep(delaySecs)
-			ultraDecoder.begin_reading()
-		except ValueError:
-			continue
-		except Exception as e:
-			log.exception( 'ultra.keepGoing', e )
+		# try:
+		# 	time.sleep(delaySecs)
+		# 	ultraDecoder.begin_reading()
+		# except ValueError:
+		# 	continue
+		# except Exception as e:
+		# 	log.exception( 'ultra.keepGoing', e )
 
 		log.q('ultra.keepGoing', '{}'.format(_('Reading data from decoder...')))
 		

@@ -2,8 +2,7 @@ import datetime
 import re
 from typing import Optional
 
-from TimingDevices.TimingDevice import DecoderMessage
-from TimingDevices.TimingDeviceCommand import DecoderStatusMessage
+from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
 
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
 EPOCH_TIME = datetime.datetime(1980, 1, 1)
@@ -11,8 +10,8 @@ EPOCH_TIME = datetime.datetime(1980, 1, 1)
 class UltraDecoderMessage(DecoderMessage):
 	_UltraId: int | None # Integer value. See section 3.1
 
-	def __init__(self, ultraId: int | None):
-		super().__init__()
+	def __init__(self, ultraId: int | None, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 		self._UltraId = ultraId
 
 	@property
@@ -108,9 +107,9 @@ class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
 				return None
 		return
 
-	def __init__(self, readStatus: bool, sendStatus: bool):
-		UltraDecoderMessage.__init__(self, 0)
-		DecoderStatusMessage.__init__(self, readStatus, sendStatus)
+	def __init__(self, readStatus: bool, sendStatus: bool, *args, **kwargs):
+		# super().__init__(0)
+		DecoderStatusMessage.__init__(self, readStatus, sendStatus, *args, **kwargs)
 
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
 class UltraChipReadMessage(UltraDecoderMessage):

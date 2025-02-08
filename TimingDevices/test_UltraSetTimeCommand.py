@@ -1,7 +1,8 @@
 import unittest
 import datetime
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraSetTimeCommandResponse
-from TimingDevices.TimingDevice import DecoderMessage
+from TimingDevices.DecoderMessages import DecoderMessage
+
 
 class TestUltraSetTimeCommand(unittest.TestCase):
 

@@ -1,12 +1,14 @@
+import asyncio
 import datetime
 import socket
 import time
+import traceback
 from typing import cast
 
-from Log import getLogger
+from Log import getLogger, Log
 from LogQueue import LogQueue
-from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, DecoderMessage, \
-	UnrecognisedDecoderMessage, CrossingListenerCallableType
+from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, CrossingListenerCallableType, TimingDeviceConnectMessage
+from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 
@@ -65,22 +67,27 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	def computerTimeDiff(self, offset: datetime.timedelta):
 		self._computerTimeDiff = offset
 
-	def on_connect(self) -> bool:
-		connectMessage = self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage)
+	async def on_socket_connect(self) -> bool:
+		connectMessage = cast(self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage), UltraConnectConfirmationMessage)
 		if connectMessage is not None:
-			return self.on_connect_confirmed()
+			confirmed = await self.on_connect(connectMessage)
+			return confirmed
 		else:
 			self.getLog().warning('Connected to decode but didn\'t get confirmation after waiting.')
 			return False
 
-	def on_connect_confirmed(self) -> bool:
+	async def on_connect(self, msg: UltraConnectConfirmationMessage) -> bool:
 		result = True
 		try:
 			if self.__on_connect_action_set_time:
-				setTimeCommand = self.set_time()
+				await self.set_time()
 
 			if self.__on_connect_action_start_if_stopped:
-				getStatusCommand = self.get_status()
+				getStatusResult = await self.get_status()
+				if getStatusResult.response is not None:
+					if getStatusResult.response.isStopped():
+						self.begin_reading()
+
 
 		except Exception as e:
 			self.getLog().exception('Failed while getting decoder status', e)
@@ -130,37 +137,42 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		return True
 
 	def process_messages(self) -> bool:
-		tagTimes = []
-		times = set()
 		message: DecoderMessage | None = self.peek_last_message()
 		if message is None:
 			return False
 
 		while message := self.get_last_message():
 			if isinstance(message, UltraConnectInfoMessage):
+				self.on_connect(message)
 				self.log('process_messages', '{}: "{}"'.format(_('Connection info'), message))
 				continue
 			elif isinstance(message, UltraVoltageMessage):
 				self._lastVoltage = now()  # If so, reset the last heartbeat time.
 				continue
 			elif isinstance(message, UltraChipReadMessage):
-				chipRead: UltraChipReadMessage = message
-				if not chipRead.hasValidTag():
-					self.log('process_messages', '{}: "{}"'.format(_('Invalid tag in chip read message'), chipRead))
-					continue
-				chip = chipRead.ChipCode
-				tag = f'{chip}'
+				self.on_td_read(message)
+				continue
 
-				crossingTime = chipRead.getTagTime()
-				if self.computerTimeDiff:
-					crossingTime += self.computerTimeDiff
+	def on_td_read(self, message: UltraChipReadMessage) -> bool:
+		tagTimes = []
+		times = set()
+		chipRead: UltraChipReadMessage = message
+		if not chipRead.hasValidTag():
+			self.log('process_messages', '{}: "{}"'.format(_('Invalid tag in chip read message'), chipRead))
+			return False
+		chip = chipRead.ChipCode
+		tag = f'{chip}'
 
-				while crossingTime in times:
-					# Ensure no equal times.
-					crossingTime += tSmall
+		crossingTime = chipRead.getTagTime()
+		if self.computerTimeDiff:
+			crossingTime += self.computerTimeDiff
 
-				times.add(crossingTime)
-				tagTimes.append((tag, crossingTime))
+		while crossingTime in times:
+			# Ensure no equal times.
+			crossingTime += tSmall
+
+		times.add(crossingTime)
+		tagTimes.append((tag, crossingTime))
 
 		# log.q('connection.keepGoing', '{}: "{}"'.format(_('data'), bufMessage))
 		# Otherwise, assume this is a chip read.
@@ -213,13 +225,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 		raise UnrecognisedCommandException(command_type)
 
-	def parse_message(self, message: str) -> DecoderMessage:
-		self.getLog().debug('parse_message')
-		return UltraDecoder.parse(message)
-
-	@staticmethod
-	def parse(message: str) -> DecoderMessage|None:
+	def parse(self, message: str) -> DecoderMessage|None:
 		log = getLogger('UltraDecoder.parse')
+		# log = getLogger()
 		log.debug('<< {}'.format(message))
 
 		if (msg := UltraConnectConfirmationMessage.parse(message)) is not None:
@@ -232,6 +240,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			return msg
 		elif (msg := UltraChipReadMessage.parse(message)) is not None:
 			log.debug('Parsed chip read message: {}'.format(msg))
+			# traceback.print_stack()
 			return msg
 		elif len(message.strip()) > 0:
 			return UnrecognisedDecoderMessage(message)
@@ -250,6 +259,10 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		# 	continue
 
 		return None
+
+	def parse_message(self, message: str) -> DecoderMessage:
+		self.getLog().trace('parse_message')
+		return self.parse(message)
 
 	def stop_reading(self):
 		TimingDevice.stop_reading(self)

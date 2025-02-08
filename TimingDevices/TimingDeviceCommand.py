@@ -7,21 +7,6 @@ class TimingDeviceCommandException(Exception):
 	def __init__(self, msg: str | None, exception: Exception | None = None):
 		super().__init__(msg, exception)
 
-class DecoderStatusMessage():
-	_readStatus: bool
-	_sendStatus: bool
-
-	@property
-	def readStatus(self) -> bool:
-		return self._readStatus
-
-	@property
-	def sendStatus(self) -> bool:
-		return self._sendStatus
-
-	def __init__(self, readStatus: bool, sendStatus: bool):
-		self._readStatus = readStatus
-		self._sendStatus = sendStatus
 
 class TimingDeviceCommand(Generic[CommandResponse]):
 	COMMAND_SEND_RECORDS = 'send_records'
@@ -36,7 +21,7 @@ class TimingDeviceCommand(Generic[CommandResponse]):
 	_expectsResponse: bool = True
 	_providesResponse: bool = True
 	_response: CommandResponse
-	_sent_at: datetime.datetime
+	_sent_at: datetime.datetime | None
 	_comment = str
 	_command_type: str
 	_response_type: Type[CommandResponse]
@@ -47,6 +32,8 @@ class TimingDeviceCommand(Generic[CommandResponse]):
 		self._expectsResponse = sync
 		self._providesResponse = True
 		self._response_type = response_type
+		self._response = None
+		self._sent_at = None
 		self._command_type = self.__class__.__name__
 
 	def is_sync_command(self) -> bool:

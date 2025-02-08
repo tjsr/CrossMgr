@@ -1,8 +1,10 @@
+import asyncio
 import socket
 from abc import abstractmethod
 from logging import Logger
 
 from SocketUtils import socketReadDelimited, socketSendMessage
+from TimingDevices.TimingDevice import TimingDeviceConnectMessage
 
 
 class TCPTimingDevice:
@@ -39,7 +41,7 @@ class TCPTimingDevice:
 			self._s.settimeout(self._timeoutSecs)
 			self._s.connect((self._host, self._port))
 
-			self.on_connect()
+			asyncio.run(self.on_socket_connect())
 		except TimeoutError as e:
 			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
 			log.error(errDesc)
@@ -64,7 +66,7 @@ class TCPTimingDevice:
 		return False
 
 	@abstractmethod
-	def on_connect(self):
+	def on_socket_connect(self):
 		pass
 
 	def connected(self) -> bool:
@@ -83,6 +85,10 @@ class TCPTimingDevice:
 
 	@abstractmethod
 	def on_socket_timeout(self, ex: socket.timeout):
+		pass
+
+	@abstractmethod
+	def on_connect(self, msg: TimingDeviceConnectMessage) -> bool:
 		pass
 
 	def send_data(self, payload: str) -> None:
