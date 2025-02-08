@@ -77,6 +77,8 @@ def getLogger(name: str = None, level: int = None) -> CrossMgrLogger:
 		logging.setLoggerClass(CrossMgrLogger)
 
 		log = logging.getLogger(logger_name)
+		if name is not None:
+			log.propagate = False
 		assert isinstance(log, CrossMgrLogger)
 		if lastLogger != CrossMgrLogger:
 			logging.setLoggerClass(lastLogger)
