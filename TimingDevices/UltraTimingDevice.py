@@ -239,7 +239,6 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		elif (msg := UltraDecoderStatusMessage.parse(message)) is not None:
 			return msg
 		elif (msg := UltraChipReadMessage.parse(message)) is not None:
-			log.debug('Parsed chip read message: {}'.format(msg))
 			# traceback.print_stack()
 			return msg
 		elif len(message.strip()) > 0:
