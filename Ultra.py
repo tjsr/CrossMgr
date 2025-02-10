@@ -70,6 +70,7 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 			time.sleep( delaySecs )
 
 		if not ultraDecoder.connect():
+			time.sleep( delaySecs )
 			continue
 
 		#-----------------------------------------------------------------------------------------------------
