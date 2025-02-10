@@ -237,7 +237,8 @@ class TimingDevice:
 		# TODO: We can abstract this with wait_for_response
 		# log = self.getLog(name='TimingDevice.wait_for_message')
 		log = logging.getLogger('TimingDevice.wait_for_message')
-		log.debug(f'Waiting for a matching {messageType} message before continuing...')
+		message_type_name = messageType.__name__
+		log.debug(f'Waiting for a matching {message_type_name} message before continuing...')
 
 		current_time = datetime.datetime.now()
 		start_time = datetime.datetime.now()
@@ -249,21 +250,24 @@ class TimingDevice:
 			messages = self.get_messages(messageType)
 			msgCount = len(messages)
 			if msgCount == 0:
-				log.debug(f'No messages for {messageType} iteration on attempt {attempts} with {self.messageQueueLength}...')
+				log.debug(f'No messages for {message_type_name} iteration on attempt {attempts} with {self.messageQueueLength}...')
 			else:
-				log.debug(f'Got {msgCount} messages for {messageType} iteration on attempt {attempts}...')
+				log.debug(f'Got {msgCount} messages for {message_type_name} iteration on attempt {attempts}...')
 
 			for message in messages:
 				if isinstance(message, messageType):
-					log.debug(f'Received awaited {messageType} message after {attempts} attempts and {self.messageQueueLength} messages on queue: {message}')
+					log.debug(f'Received awaited {message_type_name} message after {attempts} attempts and {self.messageQueueLength} messages on queue: {message}')
 					return message
 			attempts += 1
 			current_time = datetime.datetime.now()
 			timeout_exceeded = (current_time - start_time).seconds > timeout
 
 		messageCount = len(messages)
+		total_messages = self.messageQueueLength
+
 		msgList = [str(message) for message in messages]
-		log.warning(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue [{msgList}]')
+		log.warning(f'Got no matching {message_type_name} message in {timeout} seconds with {messageCount} ' +
+			f' matched messages and {total_messages} total in the queue [{msgList}]')
 		return None
 
 	def wait_for_response(self, timeout: int, command: TimingDeviceCommand) -> Optional[DecoderMessage]:
@@ -294,9 +298,10 @@ class TimingDevice:
 			current_time = datetime.datetime.now()
 			timeout_exceeded = (current_time - start_time).seconds > timeout
 
+		total_messages = self.messageQueueLength
 		messageCount = len(messages)
 		msgList = [str(message) for message in messages]
-		log.warning(f'Got no matching {commandClass} response in {timeout} seconds with {messageCount} messages in the queue [{msgList}]')
+		log.warning(f'Got no matching {commandClass} response in {timeout} seconds with {messageCount} matched messages and {total_messages} in the queue [{msgList}]')
 		return None
 
 	@abstractmethod
