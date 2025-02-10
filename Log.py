@@ -32,29 +32,28 @@ class CrossMgrLogger(logging.Logger):
   def __init__(self, name: str, level: int | str = logging.NOTSET) -> None:
     super().__init__(name, level)
 
-	def log(self, level: int, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
-		if level == Log.ENTER < logging.DEBUG:
-			filename, lineNumber, functionName, stack = self.findCaller()
-			caller = '{}:{}#{}'.format(filename, lineNumber, functionName)
-			updatedMsg = '{}: {}'.format(caller, msg)
-			return super().log(level, updatedMsg, *args, **kwargs)
+  def log(self, level: int, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
+    if level <= Log.TRACE:
+      filename, lineNumber, functionName, stack = self.findCaller()
+      caller = '{}:{}#{}'.format(filename, lineNumber, functionName)
+      msg = '{}: {}'.format(caller, msg)
 
-		return super().log(level, msg, *args, **kwargs)
+    return super().log(level, msg, *args, **kwargs)
 
-	def entering(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
-		return self.log(Log.ENTER, msg, *args, **kwargs)
+  def entering(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
+    return self.log(Log.ENTER, msg, *args, **kwargs)
 
-	def exiting(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
-		return self.log(Log.EXIT, msg, *args, **kwargs)
+  def exiting(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
+    return self.log(Log.EXIT, msg, *args, **kwargs)
 
-	def trace(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
-		return self.log(Log.TRACE, msg, *args, **kwargs)
+  def trace(self, msg: object, *args, **kwargs) -> None:
+    return self.log(Log.TRACE, msg, *args, **kwargs)
 
-	def returning(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
-		return self.log(Log.RETURN, msg, *args, **kwargs)
+  def returning(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
+    return self.log(Log.RETURN, msg, *args, **kwargs)
 
-	def exitApp(self, msg: object = 'Application exiting', *args: tuple[Any, ...], **kwargs: Any) -> None:
-		return self.log(Log.APPLICATION_END, msg, *args, **kwargs)
+  def exitApp(self, msg: object = 'Application exiting', *args: tuple[Any, ...], **kwargs: Any) -> None:
+    return self.log(Log.APPLICATION_END, msg, *args, **kwargs)
 
 logging.setLoggerClass(CrossMgrLogger)
 
