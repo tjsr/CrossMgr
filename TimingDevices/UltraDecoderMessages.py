@@ -184,9 +184,6 @@ class UltraDecoderTimeMessage(UltraDecoderMessage):
 	def matches(message: str) -> bool:
 		return re.match(UltraDecoderTimeMessage.MESSAGE_FORMAT, message) is not None
 
-
-
-	_time: datetime.datetime
 	def __init__(self, ultraId: int, time: datetime.datetime):
 		super().__init__(ultraId)
 		self._time = time

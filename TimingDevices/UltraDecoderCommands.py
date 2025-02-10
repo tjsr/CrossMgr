@@ -7,8 +7,11 @@ from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecode
 
 
 class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage):
-	def __init__(self, time: datetime.datetime):
-		UltraDecoderTimeMessage.__init__(self, 0, time)
+	def __init__(self, time: datetime.datetime = None, message: UltraDecoderTimeMessage = None):
+		if message is not None:
+			UltraDecoderTimeMessage.__init__(self, message.UltraId, message.time)
+		else:
+			UltraDecoderTimeMessage.__init__(self, 0, time)
 
 	@staticmethod
 	def matches(message: str) -> bool:
@@ -16,18 +19,25 @@ class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage)
 
 	@staticmethod
 	def parse(message: str) -> Optional['UltraSetTimeCommandResponse']:
-		return UltraDecoderTimeMessage.parse(message)
+		response = UltraDecoderTimeMessage.parse(message)
+		if response is not None:
+			return UltraSetTimeCommandResponse(message=response)
+		return None
 
 
 class UltraGetStatusCommandResponse(UltraDecoderStatusMessage):
+	def __init__(self, message: UltraDecoderStatusMessage, *args, **kwargs):
+		super().__init__(message.readStatus, message.sendStatus, *args, **kwargs)
+
 	@staticmethod
 	def matches(message: str) -> bool:
 		return re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, message) is not None
 
 	@staticmethod
 	def parse(message: str) -> Optional['UltraGetStatusCommandResponse']:
-		if UltraGetStatusCommandResponse.matches(message):
-			return UltraDecoderStatusMessage.parse(message)
+		message = UltraDecoderStatusMessage.parse(message)
+		if message is not None:
+			return UltraGetStatusCommandResponse(message)
 		return None
 
 

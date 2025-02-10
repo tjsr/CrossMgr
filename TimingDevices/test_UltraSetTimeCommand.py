@@ -5,7 +5,6 @@ from TimingDevices.DecoderMessages import DecoderMessage
 
 
 class TestUltraSetTimeCommand(unittest.TestCase):
-
     def test_create_ultra_set_time_command(self):
         command = UltraSetTimeCommand(timeToSet = datetime.datetime.fromtimestamp(1423307035))
         expectedDateTime = datetime.datetime(2025, 2, 6, 11, 3, 55)
@@ -30,7 +29,7 @@ class TestUltraSetTimeCommand(unittest.TestCase):
         command = UltraSetTimeCommand()
         responses = [UltraSetTimeCommandResponse.parse(msg) for msg in messages]
         valid_responses = [resp for resp in responses if resp is not None]
-        self.assertEqual(len(valid_responses), 2)
+        self.assertEqual(len(valid_responses), 2, "Should return two valid responses")
         for response in valid_responses:
             self.assertIsInstance(response, UltraSetTimeCommandResponse)
 
