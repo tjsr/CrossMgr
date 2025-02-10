@@ -22,11 +22,12 @@ handler.setFormatter(formatter)
 errHandler.setFormatter(formatter)
 
 class Log:
-	TRACE = 6
-	ENTER = 4
-	EXIT = 2
-	RETURN = 3
-	APPLICATION_END = 5
+  TRACE = 6
+  ENTER = 4
+  EXIT = 2
+  RETURN = 3
+  APPLICATION_END = 5
+
 
 class CrossMgrLogger(logging.Logger):
   def __init__(self, name: str, level: int | str = logging.NOTSET) -> None:
