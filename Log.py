@@ -68,18 +68,9 @@ def getLogger(name: str = None) -> CrossMgrLogger:
   else:
     logger_name = name
 
-	with lock:
-		lastLogger = logging.getLoggerClass()
-		logging.setLoggerClass(CrossMgrLogger)
+  log = logging.getLogger(name=logger_name)
 
-		log = logging.getLogger(logger_name)
-		if name is not None:
-			log.propagate = False
-		assert isinstance(log, CrossMgrLogger)
-		if lastLogger != CrossMgrLogger:
-			logging.setLoggerClass(lastLogger)
+  return cast(CrossMgrLogger, log)
 
-		log.setLevel(level)
 
-	return log
 
