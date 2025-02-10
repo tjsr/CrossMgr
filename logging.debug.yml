@@ -1,0 +1,6 @@
+version: 1
+loggers:
+  UltraDecoder.parse:
+    level: WARNING
+  root:
+    level: DEBUG

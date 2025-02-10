@@ -1,25 +1,12 @@
 import inspect
 import logging
+import logging.config
+import yaml
 import os
-import sys
-import threading
-from typing import Any
+from typing import Any, cast
 
-lock = threading.Lock()
+from YamlUtil import merge_yaml
 
-formatter = logging.Formatter('%(asctime)s %(name)s [%(levelname)s] %(message)s')
-methodFormatter = logging.Formatter('%(asctime)s %(name)s:%(funcName)s [%(levelname)s] %(message)s')
-traceFormatter = logging.Formatter('%(asctime)s %(name)s@%(filename)s:%(lineno)d:%(funcName)s [%(levelname)s] %(message)s')
-# Create a handler that writes log messages to stdout
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
-
-errHandler = logging.StreamHandler(sys.stderr)
-errHandler.setLevel(logging.ERROR)
-
-# Create a formatter and set it for the handler
-handler.setFormatter(formatter)
-errHandler.setFormatter(formatter)
 
 class Log:
   TRACE = 6
@@ -71,4 +58,11 @@ def getLogger(name: str = None) -> CrossMgrLogger:
   return cast(CrossMgrLogger, log)
 
 
+with open('logging.yml', 'r') as logConfig:
+  config = yaml.safe_load(logConfig.read())
+if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't') or True:
+  with open('logging.debug.yml', 'r') as logConfig:
+    debugConfig = yaml.safe_load(logConfig.read())
+    config = merge_yaml(config, debugConfig)
 
+logging.config.dictConfig(config)
