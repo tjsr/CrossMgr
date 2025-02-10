@@ -1,8 +1,10 @@
 import asyncio
+import logging
 import socket
 from abc import abstractmethod
-from logging import Logger
 
+import Log
+from Log import CrossMgrLogger
 from SocketUtils import socketReadDelimited, socketSendMessage
 from TimingDevices.TimingDevice import TimingDeviceConnectMessage
 
@@ -21,21 +23,21 @@ class TCPTimingDevice:
 		self._port = port
 
 	@abstractmethod
-	def getLog(self, name:str|None = None, *args, **kwargs) -> Logger:
-		pass
-
-	@abstractmethod
 	def getDeviceType(self) -> str:
 		pass
 
 	def connect(self) -> bool:
-		log = self.getLog()
+		# log = Log.getLogger()
+		log = logging.getLogger()
 		device = self.getDeviceType()
 		# TODO: wrap with _ for internationalisation
 		description = f'{device} decoder at {self._host}:{self._port}'
 
 		# -----------------------------------------------------------------------------------------------------
-		log.info(_('Attempting to connect to {}').format(description))
+		msg = _('Attempting to connect to {}').format(description)
+		assert log is not None
+		assert msg is not None
+		log.info(msg)
 		try:
 			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self._s.settimeout(self._timeoutSecs)
@@ -93,7 +95,7 @@ class TCPTimingDevice:
 
 	def send_data(self, payload: str) -> None:
 		# cmd = payload.split(';', 1)[0]
-		log = self.getLog(name='TCPTimingDevice.send_data')
+		log = logging.getLogger(name='TCPTimingDevice.send_data')
 		log.debug(f'>> {payload}')
 		try:
 			socketSendMessage(self._s, payload)

@@ -1,25 +1,45 @@
 import datetime
 import re
-from abc import abstractmethod
 from typing import Optional
 
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
-from TimingDevices.UltraDecoderMessages import UltraCommandResponse
+from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage
 
 
-class UltraSetTimeCommandResponse(UltraCommandResponse):
-	_time: datetime.datetime
+class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage):
+	def __init__(self, time: datetime.datetime):
+		UltraDecoderTimeMessage.__init__(self, 0, time)
 
 	@staticmethod
 	def matches(message: str) -> bool:
-		return re.match(r'^t \d{2}:\d{2}:\d{2} \d{2}-\d{2}-\d{4}$', message) is not None
+		return UltraDecoderTimeMessage.matches(message)
 
 	@staticmethod
 	def parse(message: str) -> Optional['UltraSetTimeCommandResponse']:
-		if UltraSetTimeCommandResponse.matches(message):
-			# TODO: Set the time from the string we got
-			return UltraSetTimeCommandResponse()
+		return UltraDecoderTimeMessage.parse(message)
+
+
+class UltraGetStatusCommandResponse(UltraDecoderStatusMessage):
+	@staticmethod
+	def matches(message: str) -> bool:
+		return re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, message) is not None
+
+	@staticmethod
+	def parse(message: str) -> Optional['UltraGetStatusCommandResponse']:
+		if UltraGetStatusCommandResponse.matches(message):
+			return UltraDecoderStatusMessage.parse(message)
 		return None
+
+
+class UltraGetStatusCommand(TimingDeviceCommand):
+	def __init__(self):
+		super().__init__('?', response_type=UltraGetStatusCommandResponse, sync=True)
+
+	def get_command_string(self) -> str:
+		return '?'
+
+	def match_response(self, message: str) -> Optional[UltraGetStatusCommandResponse]:
+		return UltraGetStatusCommandResponse.parse(message)
 
 
 class UltraSetTimeCommand(TimingDeviceCommand):

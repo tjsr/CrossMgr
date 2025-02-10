@@ -58,10 +58,10 @@ def getLogger(name: str = None) -> CrossMgrLogger:
   return cast(CrossMgrLogger, log)
 
 
-with open('logging.yml', 'r') as logConfig:
+with open('../logging.yml', 'r') as logConfig:
   config = yaml.safe_load(logConfig.read())
 if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't') or True:
-  with open('logging.debug.yml', 'r') as logConfig:
+  with open('../logging.debug.yml', 'r') as logConfig:
     debugConfig = yaml.safe_load(logConfig.read())
     config = merge_yaml(config, debugConfig)
 

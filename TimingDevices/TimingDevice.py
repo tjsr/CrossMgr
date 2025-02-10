@@ -1,9 +1,10 @@
 import datetime
+import logging
 from abc import abstractmethod
 from queue import Queue
 from types import TracebackType
 from typing import List, Type, Callable, Optional
-from Log import getLogger, Log, CrossMgrLogger
+from Log import getLogger
 
 from LogQueue import LogQueue
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException
@@ -37,7 +38,8 @@ class TimingDeviceConnectMessage(DecoderMessage):
 class TimingDevice:
 	_readonly = False
 	_logger: LogQueue | None = None
-	_log: CrossMgrLogger | None = None
+	# _log: CrossMgrLogger | None = None
+	# _log: logging.Logger | None = None
 	_messageQueue: List[DecoderMessage] = None
 	_commandQueue: Queue[TimingDeviceCommand] = None
 
@@ -45,14 +47,14 @@ class TimingDevice:
 		self._commandQueue = Queue()
 		self._messageQueue = []
 
-	def getLog(self, forMethod: bool = False, *args, **kwargs) -> CrossMgrLogger:
-		if kwargs.get('name') is None:
-			kwargs['name'] = self.__class__.__name__
-			if self._log is None:
-				self._log = getLogger(*args, **kwargs)
-		else:
-			return getLogger(*args, **kwargs)
-		return self._log
+	# def getLog(self, name: str | None = None, level: int = logging.NOTSET, forMethod: bool = False) -> logging.Logger:
+	# 	if name is None:
+	# 		name = self.__class__.__name__
+	# 		if self._log is None:
+	# 			self._log = getLogger(name, level)
+	# 	else:
+	# 		return getLogger(name, level)
+	# 	return self._log
 
 	def is_readonly_device(self) -> bool:
 		return self._readonly
@@ -72,7 +74,8 @@ class TimingDevice:
 
 	def get_messages(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
-		log = self.getLog(name='TimingDevice.get_messages')
+		# log = self.getLog(name='TimingDevice.get_messages')
+		log = getLogger(name='TimingDevice.get_messages')
 		log.trace('Getting messages from buffer...')
 
 		if buffer is not None:
@@ -186,7 +189,7 @@ class TimingDevice:
 		self.send_data(data)
 		command.sentAt = datetime.datetime.now()
 		commandType = command.CommandType
-		self.getLog().info(f'Send {commandType} command immediately to decoder: {data}')
+		getLogger().info(f'Send {commandType} command immediately to decoder: {data}')
 		if command.expectsResponse:
 			response = self.wait_for_response(5, command)
 			if response is not None:
@@ -195,7 +198,7 @@ class TimingDevice:
 			else:
 				return False
 		else:
-			self.getLog().info(f'No response expected for command: {data}')
+			getLogger().info(f'No response expected for command: {data}')
 			return True
 
 
@@ -203,7 +206,7 @@ class TimingDevice:
 	def async_send_command(self, command: TimingDeviceCommand) -> bool:
 		# Push to the queue and send later.
 		data = command.get_command_string()
-		self.getLog().info(f'Queuing async command to decoder: {data}')
+		getLogger().info(f'Queuing async command to decoder: {data}')
 		self.push_command(command)
 		return True
 
@@ -232,7 +235,8 @@ class TimingDevice:
 
 	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
 		# TODO: We can abstract this with wait_for_response
-		log = self.getLog(name='TimingDevice.wait_for_message')
+		# log = self.getLog(name='TimingDevice.wait_for_message')
+		log = logging.getLogger('TimingDevice.wait_for_message')
 		log.debug(f'Waiting for a matching {messageType} message before continuing...')
 
 		current_time = datetime.datetime.now()
@@ -258,7 +262,8 @@ class TimingDevice:
 			timeout_exceeded = (current_time - start_time).seconds > timeout
 
 		messageCount = len(messages)
-		log.warning(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue')
+		msgList = [str(message) for message in messages]
+		log.warning(f'Got no matching message in {timeout} seconds with {messageCount} messages in the queue [{msgList}]')
 		return None
 
 	def wait_for_response(self, timeout: int, command: TimingDeviceCommand) -> Optional[DecoderMessage]:
@@ -269,14 +274,15 @@ class TimingDevice:
 
 		timeout_exceeded = (current_time - start_time).seconds > timeout
 		messages = []
-		log = self.getLog(name='TimingDevice.wait_for_response')
+		log = getLogger(name='TimingDevice.wait_for_response')
 		attempts = 1
-		commandClass = command.get_response_type()
+		commandClass = command.__class__.__name__
+		responseClass = command.get_response_type()
 		while not timeout_exceeded:
-			messages = self.get_messages(commandClass)
+			messages = self.get_messages(responseClass)
 			msgCount = len(messages)
 			if msgCount == 0:
-				log.log(Log.TRACE, f'No response for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
+				log.trace(f'No response for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
 			else:
 				log.trace(f'Got {msgCount} response for {commandClass} iteration on attempt {attempts}...')
 
@@ -289,7 +295,8 @@ class TimingDevice:
 			timeout_exceeded = (current_time - start_time).seconds > timeout
 
 		messageCount = len(messages)
-		log.warning(f'Got no matching {commandClass} response in {timeout} seconds with {messageCount} messages in the queue')
+		msgList = [str(message) for message in messages]
+		log.warning(f'Got no matching {commandClass} response in {timeout} seconds with {messageCount} messages in the queue [{msgList}]')
 		return None
 
 	@abstractmethod

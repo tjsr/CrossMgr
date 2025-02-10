@@ -2,10 +2,9 @@ import asyncio
 import datetime
 import socket
 import time
-import traceback
 from typing import cast
 
-from Log import getLogger, Log
+from Log import getLogger
 from LogQueue import LogQueue
 from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, CrossingListenerCallableType, TimingDeviceConnectMessage
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
@@ -13,7 +12,7 @@ from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 
 from TimingDevices.UltraAutodetect import AutoDetect
-from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
+from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand
 from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, UltraConnectInfoMessage, \
 	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage
 
@@ -28,7 +27,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	commands = {
 		TimingDeviceCommand.COMMAND_START: TimingDeviceCommand('R', response_type=None, sync=False),
 		TimingDeviceCommand.COMMAND_STOP: TimingDeviceCommand('S', response_type=None, sync=False),
-		TimingDeviceCommand.COMMAND_STATUS: TimingDeviceCommand('?', response_type=UltraDecoderStatusMessage, sync=True),
+		TimingDeviceCommand.COMMAND_STATUS: UltraGetStatusCommand(),
 		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand()
 	}
 
@@ -68,12 +67,12 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		self._computerTimeDiff = offset
 
 	async def on_socket_connect(self) -> bool:
-		connectMessage = cast(self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage), UltraConnectConfirmationMessage)
+		connectMessage = cast(UltraConnectConfirmationMessage, self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage))
 		if connectMessage is not None:
 			confirmed = await self.on_connect(connectMessage)
 			return confirmed
 		else:
-			self.getLog().warning('Connected to decode but didn\'t get confirmation after waiting.')
+			getLogger().warning('Connected to decode but didn\'t get confirmation after waiting.')
 			return False
 
 	async def on_connect(self, msg: UltraConnectConfirmationMessage) -> bool:
@@ -90,7 +89,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 
 		except Exception as e:
-			self.getLog().exception('Failed while getting decoder status', e)
+			getLogger().exception('Failed while getting decoder status', e)
 
 		return result
 
@@ -142,9 +141,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			return False
 
 		while message := self.get_last_message():
-			if isinstance(message, UltraConnectInfoMessage):
-				self.on_connect(message)
+			if isinstance(message, UltraConnectConfirmationMessage):
 				self.log('process_messages', '{}: "{}"'.format(_('Connection info'), message))
+				asyncio.run(self.on_connect(message))
 				continue
 			elif isinstance(message, UltraVoltageMessage):
 				self._lastVoltage = now()  # If so, reset the last heartbeat time.
@@ -260,7 +259,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		return None
 
 	def parse_message(self, message: str) -> DecoderMessage:
-		self.getLog().trace('parse_message')
+		log = getLogger()
+		log.trace('parse_message')
 		return self.parse(message)
 
 	def stop_reading(self):

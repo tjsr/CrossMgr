@@ -92,24 +92,16 @@ class UltraVoltageMessage(UltraDecoderMessage):
 		return self._Voltage
 
 class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
+	MESSAGE_FORMAT = r'^S=[01]{2}$'
 	@staticmethod
 	def parse(message: str) -> Optional['UltraDecoderStatusMessage']:
-		if message is not None and message.startswith('S'):
-			try:
-				_, Payload = message.split('=', 1)
-				if len(Payload) == 2:
-					statusInt = int(Payload)
-					readStatus = statusInt // 10
-					sendStatus = statusInt % 10
-					return UltraDecoderStatusMessage(readStatus == 1, sendStatus == 1)
-
-			except ValueError:
-				return None
-		return
+		if re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, message) is not None:
+			return UltraDecoderStatusMessage(message[2] == '1', message[3] == '1')
+		return None
 
 	def __init__(self, readStatus: bool, sendStatus: bool, *args, **kwargs):
-		# super().__init__(0)
 		DecoderStatusMessage.__init__(self, readStatus, sendStatus, *args, **kwargs)
+
 
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
 class UltraChipReadMessage(UltraDecoderMessage):
@@ -181,3 +173,35 @@ class UltraChipReadMessage(UltraDecoderMessage):
 
 	def hasValidTag(self) -> bool:
 		return self._ChipCode != 0
+
+
+class UltraDecoderTimeMessage(UltraDecoderMessage):
+	MESSAGE_FORMAT = r'^t \d{2}:\d{2}:\d{2} \d{2}-\d{2}-\d{4}$'
+	DATETIME_FORMAT = "%H:%M:%S %d-%m-%Y"
+	_time: datetime.datetime
+
+	@staticmethod
+	def matches(message: str) -> bool:
+		return re.match(UltraDecoderTimeMessage.MESSAGE_FORMAT, message) is not None
+
+
+
+	_time: datetime.datetime
+	def __init__(self, ultraId: int, time: datetime.datetime):
+		super().__init__(ultraId)
+		self._time = time
+
+	@property
+	def time(self) -> datetime.datetime:
+		return self._time
+
+	@staticmethod
+	def parse(message: str) -> Optional['UltraDecoderTimeMessage']:
+		if message is not None and message.startswith('t '):
+			try:
+				time_str = message[2:]
+				parsed_time = datetime.datetime.strptime(time_str, "%H:%M:%S %d-%m-%Y")
+				return UltraDecoderTimeMessage(0, parsed_time)
+			except ValueError:
+				pass
+		return None

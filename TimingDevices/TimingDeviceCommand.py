@@ -62,7 +62,7 @@ class TimingDeviceCommand(Generic[CommandResponse]):
 		return None
 
 	def match_message(self, message: CommandResponse) -> Optional[CommandResponse]:
-		return None
+		return message.matches(message)
 
 	@property
 	def expectsResponse(self) -> bool:
