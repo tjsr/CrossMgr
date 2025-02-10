@@ -29,10 +29,8 @@ class Log:
 	APPLICATION_END = 5
 
 class CrossMgrLogger(logging.Logger):
-	def __init__(self, name: str, level: int | str = 0) -> None:
-		super().__init__(name, level)
-		super().addHandler(handler)
-		super().addHandler(errHandler)
+  def __init__(self, name: str, level: int | str = logging.NOTSET) -> None:
+    super().__init__(name, level)
 
 	def log(self, level: int, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
 		if level == Log.ENTER < logging.DEBUG:
