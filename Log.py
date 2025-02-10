@@ -5,6 +5,7 @@ import yaml
 import os
 from typing import Any, cast
 
+from FileUtils import config_search
 from YamlUtil import merge_yaml
 
 
@@ -57,12 +58,18 @@ def getLogger(name: str = None) -> CrossMgrLogger:
 
   return cast(CrossMgrLogger, log)
 
+def load_logging_config_files() -> None:
+  logConfigPath = config_search('logging.yml')
 
-with open('../logging.yml', 'r') as logConfig:
-  config = yaml.safe_load(logConfig.read())
-if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't') or True:
-  with open('../logging.debug.yml', 'r') as logConfig:
-    debugConfig = yaml.safe_load(logConfig.read())
-    config = merge_yaml(config, debugConfig)
+  with open(logConfigPath, 'r') as logConfig:
+    config = yaml.safe_load(logConfig.read())
+    if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't') or True:
+      debugLogConfigPath = config_search('logging.debug.yml')
+      if debugLogConfigPath is not None:
+        with open(debugLogConfigPath, 'r') as debugLogConfig:
+          debugConfig = yaml.safe_load(debugLogConfig.read())
+          config = merge_yaml(config, debugConfig)
 
-logging.config.dictConfig(config)
+    logging.config.dictConfig(config)
+
+load_logging_config_files()
