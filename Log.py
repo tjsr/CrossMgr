@@ -58,19 +58,15 @@ class CrossMgrLogger(logging.Logger):
 	def exitApp(self, msg: object = 'Application exiting', *args: tuple[Any, ...], **kwargs: Any) -> None:
 		return self.log(Log.APPLICATION_END, msg, *args, **kwargs)
 
-def getLogger(name: str = None, level: int = None) -> CrossMgrLogger:
-	if level is None:
-		if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't'):
-			level = logging.DEBUG
-		else:
-			level = logging.INFO
+logging.setLoggerClass(CrossMgrLogger)
 
-	if name is None:
-		frame = inspect.stack()[1]
-		module = inspect.getmodule(frame[0])
-		logger_name = module.__name__ if module else '__main__'
-	else:
-		logger_name = name
+def getLogger(name: str = None) -> CrossMgrLogger:
+  if name is None:
+    frame = inspect.stack()[1]
+    module = inspect.getmodule(frame[0])
+    logger_name = module.__name__ if module else '__main__'
+  else:
+    logger_name = name
 
 	with lock:
 		lastLogger = logging.getLoggerClass()
