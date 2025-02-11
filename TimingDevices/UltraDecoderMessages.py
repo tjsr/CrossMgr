@@ -3,10 +3,17 @@ import re
 from abc import abstractmethod
 from typing import Optional, cast
 
+from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
 
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
 EPOCH_TIME = datetime.datetime(1980, 1, 1)
+
+def ultra_epoch_to_datetime(epoch: int) -> datetime.datetime:
+	if epoch < 0:
+		raise ValueError(f'Epoch value {epoch} is invalid')
+
+	return EPOCH_TIME + datetime.timedelta(seconds=epoch)
 
 class UltraDecoderMessage(DecoderMessage):
 	_UltraId: int | None # Integer value. See section 3.1
@@ -227,17 +234,19 @@ class UltraChipReadMessage(UltraDecoderMessage):
 
 
 class UltraDecoderTimeMessage(UltraDecoderMessage):
-	MESSAGE_FORMAT = r'^t \d{2}:\d{2}:\d{2} \d{2}-\d{2}-\d{4}$'
+	MESSAGE_FORMAT = r'^(\d{2}:\d{2}:\d{2} \d{2}-\d{2}-\d{4})(\s\(-?\d+\))?$'
 	DATETIME_FORMAT = "%H:%M:%S %d-%m-%Y"
 	_time: datetime.datetime
+	_invalidTime: bool = False
 
 	@staticmethod
-	def matches(message: str) -> bool:
-		return re.match(UltraDecoderTimeMessage.MESSAGE_FORMAT, message) is not None
+	def matches(messageBuf: str) -> bool:
+		return re.match(UltraDecoderTimeMessage.MESSAGE_FORMAT, messageBuf) is not None
 
-	def __init__(self, ultraId: int, time: datetime.datetime):
+	def __init__(self, ultraId: int, time: datetime.datetime, is_invalid: bool = False):
 		super().__init__(ultraId)
 		self._time = time
+		self._invalidTime = is_invalid
 
 	@property
 	def time(self) -> datetime.datetime:
@@ -249,12 +258,61 @@ class UltraDecoderTimeMessage(UltraDecoderMessage):
 		return None
 
 	@staticmethod
-	def parse(message: str) -> Optional['UltraDecoderTimeMessage']:
-		if message is not None and message.startswith('t '):
+	def parse_epoch_component(epoch_tail: str) -> Optional[datetime.datetime]:
+		epoch_component = (epoch_tail
+		                   .replace('(', '')
+		                   .replace(')', '')
+		                   .strip())
+
+		epoch_date = None
+		if epoch_component != '':
+			epoch = int(epoch_component)
+			epoch_date = ultra_epoch_to_datetime(epoch)
+
+		return epoch_date
+
+	@staticmethod
+	def parse(messageBuf: str) -> Optional['UltraDecoderTimeMessage']:
+		log = getLogger('UltraDecoderTimeMessage.parse')
+
+		assert isinstance(messageBuf, str)
+		if messageBuf is None or messageBuf == '':
+			log.warning('No message buffer provided when trying to parse Ultra Set Time response')
+			return None
+
+		parts = re.match(UltraDecoderTimeMessage.MESSAGE_FORMAT, messageBuf)
+		if parts is not None:
+			time_component = messageBuf[parts.regs[1][0]:parts.regs[1][1]]
+
+			invalid_epoch = False
+			epoch_date = None
 			try:
-				time_str = message[2:]
-				parsed_time = datetime.datetime.strptime(time_str, "%H:%M:%S %d-%m-%Y")
-				return UltraDecoderTimeMessage(0, parsed_time)
+				epoch_date = UltraDecoderTimeMessage.parse_epoch_component(messageBuf[len(time_component):])
+			except ValueError:
+				invalid_epoch = True
+
+			try:
+				parsed_time = datetime.datetime.strptime(time_component, "%H:%M:%S %d-%m-%Y")
+				debug_msg = f'Parsed time {time_component} as {parsed_time}'
+
+				if epoch_date:
+					if epoch_date != parsed_time:
+						debug_msg = f'{debug_msg} but epoch value did not match date stamp of {epoch_date}!'
+						log.warning(debug_msg)
+					else:
+						debug_msg = f'{debug_msg} with epoch value {epoch_date}'
+						log.debug(debug_msg)
+				elif invalid_epoch:
+					debug_msg = f'{debug_msg} but epoch value was invalid'
+					log.warning(debug_msg)
+
+				return UltraDecoderTimeMessage(0, parsed_time, is_invalid=invalid_epoch)
 			except ValueError:
 				pass
+
+		log.debug(f'Failed to parse {messageBuf} as time message.')
 		return None
+
+	@property
+	def HasInvalidData(self) -> bool:
+		return self._time is None or self._invalidTime

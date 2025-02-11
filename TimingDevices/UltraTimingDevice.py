@@ -14,10 +14,9 @@ from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 from TimingDevices.UltraAutodetect import AutoDetect
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand
 from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, \
-	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage
+	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage, UltraDecoderTimeMessage
 
 now = datetime.datetime.now
-EPOCH_TIME = datetime.datetime(1980, 1, 1)
 
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
 tSmall = datetime.timedelta( seconds = 0.000001 )
@@ -80,7 +79,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		result = True
 		try:
 			if self.__on_connect_action_set_time:
-				await self.set_time()
+				time_response = await self.set_time()
+				if time_response.response is not None:
+					self.getLog().info(f'Time set on decoder: {time_response.response}')
 
 			if self.__on_connect_action_start_if_stopped:
 				getStatusResult = await self.get_status()

@@ -3,7 +3,7 @@ import logging
 from abc import abstractmethod
 from queue import Queue
 from types import TracebackType
-from typing import List, Type, Callable, Optional
+from typing import List, Type, Callable, Optional, cast
 
 import Log
 from Log import CrossMgrLogger
@@ -11,6 +11,7 @@ from Log import CrossMgrLogger
 from LogQueue import LogQueue
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
+from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
 
 CrossingListenerCallableType = Callable[[(str, datetime.datetime)], None]
 
@@ -175,10 +176,12 @@ class TimingDevice:
 		self.send_command(getTimeCommand)
 		return getTimeCommand
 
-	async def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceCommand:
+	async def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceSetTimeCommand:
 		setTimeCommand = self.create_command(TimingDeviceCommand.COMMAND_SET_TIME, time)
 		success = self.send_command(setTimeCommand)
-		return setTimeCommand
+		if success and setTimeCommand.response is not None:
+			setTimeCommand.Success = success
+		return cast(UltraSetTimeCommand, setTimeCommand)
 
 	def send_records_from_last(self) -> TimingDeviceCommand:
 		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS)
@@ -210,7 +213,7 @@ class TimingDevice:
 		self.send_data(data)
 		command.sentAt = datetime.datetime.now()
 		commandType = command.CommandType
-		self.getLog().debug(f'Send {commandType} command immediately to decoder: {data}')
+		self.getLog().debug(f'Send {commandType} command immediately to decoder: {data}, expectsResponse: {command.expectsResponse}')
 		if command.expectsResponse:
 			response = self.wait_for_response(5, command)
 			if response is not None:

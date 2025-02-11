@@ -1,4 +1,5 @@
 import datetime
+from abc import abstractmethod
 from typing import Generic, TypeVar, Optional, Type
 
 CommandResponseType = TypeVar('CommandResponseType', bound='TimingDeviceCommand')
@@ -26,6 +27,7 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 	_comment = str
 	_command_type: str
 	_response_type: Type[CommandResponseType]
+	_success: bool = False
 
 	def __init__(self, _command_str: str, response_type: Type[CommandResponseType] | None, sync: bool = False):
 		self._command_str = _command_str
@@ -94,7 +96,25 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 	def CommandType(self) -> str:
 		return self._command_type
 
+	@property
+	def Success(self) -> bool:
+		return self._success
+
+	@Success.setter
+	def Success(self, success: bool) -> None:
+		self._success = success
 
 
+class TimingDeviceSetTimeCommand(TimingDeviceCommand):
+	def __init__(self, _command_str: str, response_type: Type[CommandResponseType], sync: bool = False):
+		super().__init__(_command_str, response_type, sync)
 
+	@abstractmethod
+	def get_command_string(self) -> str:
+		raise NotImplementedError('A TimingDeviceSetTimeCommand must implement get_command_string')
 
+	@staticmethod
+	def match_response(self, message: DecoderMessageType) -> Optional[CommandResponseType]:
+		if not isinstance(message, TimingDeviceTimeMessage):
+			return None
+		raise NotImplementedError('A TimingDeviceSetTimeCommand must implement match_response')

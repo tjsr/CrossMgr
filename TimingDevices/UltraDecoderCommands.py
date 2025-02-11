@@ -70,16 +70,23 @@ class UltraGetStatusCommand(TimingDeviceCommand):
 		return UltraGetStatusCommandResponse(message)
 
 
-class UltraSetTimeCommand(TimingDeviceCommand):
+class UltraSetTimeCommand(TimingDeviceSetTimeCommand, TimingDeviceCommand):
 	_time: datetime.datetime
 	def __init__(self, timeToSet: datetime.datetime = datetime.datetime.now()):
+		# TODO: Fix response_type cast
 		super().__init__('t', response_type=UltraDecoderTimeMessage, sync=True)
 		self._time = timeToSet
 
-	def match_response(self, messageBuf: str) -> Optional[UltraSetTimeCommandResponse]:
-		return UltraSetTimeCommandResponse.parse(messageBuf)
+	def match_response(self, message: UltraDecoderMessage) -> Optional[UltraSetTimeCommandResponse]:
+		if not isinstance(message, UltraDecoderTimeMessage):
+			return None
+		return cast(UltraSetTimeCommandResponse, message)
 
 	def get_command_string(self) -> str:
 		decoderMessage = 't {}'.format(self._time.strftime('%H:%M:%S %d-%m-%Y'))
 		return decoderMessage
+
+	@property
+	def Time(self) -> datetime.datetime:
+		return self._time
 
