@@ -1,6 +1,7 @@
 import datetime
 from typing import Optional, cast
 
+from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderMessage
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage, \
@@ -28,6 +29,12 @@ class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage)
 
 	@staticmethod
 	def parse(messageBuf: str) -> Optional['UltraSetTimeCommandResponse']:
+		assert isinstance(messageBuf, str)
+		if messageBuf is None or messageBuf == '':
+			log = getLogger(name='UltraSetTimeCommandResponse.parse')
+			log.warning('No message buffer provided when trying to parse Ultra Set Time response')
+			return None
+
 		response = UltraDecoderTimeMessage.parse(messageBuf)
 		if response is not None:
 			return UltraSetTimeCommandResponse(message=response)
