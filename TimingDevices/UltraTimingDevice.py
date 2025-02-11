@@ -232,16 +232,23 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			log.warning(f'Attempted to parse a empty message buffer.')
 			return None
 
-		if (msg := UltraConnectConfirmationMessage.parse(messageBuf)) is not None:
-			return msg
-		elif (msg := UltraVoltageMessage.parse(messageBuf)) is not None:
-			return msg
-		elif (msg := UltraDecoderStatusMessage.parse(messageBuf)) is not None:
-			return msg
-		elif (msg := UltraChipReadMessage.parse(messageBuf)) is not None:
-			# traceback.print_stack()
-			return msg
-		elif len(messageBuf.strip()) > 0:
+		try:
+			if (msg := UltraConnectConfirmationMessage.parse(messageBuf)) is not None:
+				return msg
+			elif (msg := UltraVoltageMessage.parse(messageBuf)) is not None:
+				return msg
+			elif (msg := UltraDecoderStatusMessage.parse(messageBuf)) is not None:
+				return msg
+			elif (msg := UltraDecoderTimeMessage.parse(messageBuf)) is not None:
+				return msg
+			elif (msg := UltraChipReadMessage.parse(messageBuf)) is not None:
+				# traceback.print_stack()
+				return msg
+		except Exception as e:
+			log.exception(f'Failed to parse message {messageBuf}', e)
+			raise ValueError(f'Failed to parse message {messageBuf}')
+
+		if len(messageBuf.strip()) > 0:
 			log.warning(f'Unrecognised message: {messageBuf}')
 			return UnrecognisedDecoderMessage(messageBuf)
 
