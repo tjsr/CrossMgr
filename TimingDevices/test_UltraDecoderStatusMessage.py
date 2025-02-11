@@ -47,6 +47,12 @@ class TestUltraDecoderStatusMessage(TestCase):
 		response = UltraGetStatusCommandResponse.parse('S=111')
 		self.assertIsNone(response)
 
+	def test_shouldReturnFalseWhenParsingNone(self):
+		message = UltraDecoderStatusMessage.parse(None)
+		self.assertIsNone(message)
+
+		response = UltraGetStatusCommandResponse.parse(None)
+		self.assertIsNone(response)
 
 
 	# def getMessageParser(self):

@@ -21,5 +21,11 @@ class TestUltraConnectConfirmationMessage(unittest.TestCase):
 		result = UltraConnectConfirmationMessage.parse(message)
 		self.assertIsNone(result)
 
+	def test_parse_without_update_char(self):
+		message = "Connected,1423307035"
+		result = UltraConnectConfirmationMessage.parse(message)
+		expectedDateTime = datetime.datetime(2025, 2, 6, 11, 3, 55)
+		self.assertEqual(result.lastTimeSent, expectedDateTime)
+
 if __name__ == '__main__':
 	unittest.main()

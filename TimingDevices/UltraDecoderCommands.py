@@ -1,12 +1,21 @@
 import datetime
-import re
-from typing import Optional
+from typing import Optional, cast
 
+from TimingDevices.DecoderMessages import DecoderMessage
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
-from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage
-
+from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage, \
+	UltraDecoderMessage
 
 class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage):
+	def match_message(self, message: 'UltraDecoderMessage') -> Optional[UltraDecoderTimeMessage]:
+		if isinstance(message, UltraSetTimeCommandResponse):
+			return cast('UltraSetTimeCommandResponse', message)
+
+		if UltraSetTimeCommandResponse.match_message(self, message):
+			return UltraSetTimeCommandResponse(message=cast('UltraSetTimeCommandResponse', message))
+
+		return None
+
 	def __init__(self, time: datetime.datetime = None, message: UltraDecoderTimeMessage = None):
 		if message is not None:
 			UltraDecoderTimeMessage.__init__(self, message.UltraId, message.time)
@@ -14,30 +23,34 @@ class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage)
 			UltraDecoderTimeMessage.__init__(self, 0, time)
 
 	@staticmethod
-	def matches(message: str) -> bool:
-		return UltraDecoderTimeMessage.matches(message)
+	def matches(messageBuf: str) -> bool:
+		return UltraDecoderTimeMessage.matches(messageBuf)
 
 	@staticmethod
-	def parse(message: str) -> Optional['UltraSetTimeCommandResponse']:
-		response = UltraDecoderTimeMessage.parse(message)
+	def parse(messageBuf: str) -> Optional['UltraSetTimeCommandResponse']:
+		response = UltraDecoderTimeMessage.parse(messageBuf)
 		if response is not None:
 			return UltraSetTimeCommandResponse(message=response)
 		return None
 
 
 class UltraGetStatusCommandResponse(UltraDecoderStatusMessage):
-	def __init__(self, message: UltraDecoderStatusMessage, *args, **kwargs):
-		super().__init__(message.readStatus, message.sendStatus, *args, **kwargs)
+	def match_message(self, message: DecoderMessage) -> 'UltraGetStatusCommandResponse':
+		if UltraGetStatusCommandResponse.matches(message.Data):
+			return UltraGetStatusCommandResponse.parse(message.Data)
+
+	def __init__(self, messageObj: UltraDecoderStatusMessage, *args, **kwargs):
+		super().__init__(messageObj.readStatus, messageObj.sendStatus, *args, **kwargs)
 
 	@staticmethod
 	def matches(message: str) -> bool:
-		return re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, message) is not None
+		return UltraDecoderStatusMessage.matches(message)
 
 	@staticmethod
-	def parse(message: str) -> Optional['UltraGetStatusCommandResponse']:
-		message = UltraDecoderStatusMessage.parse(message)
-		if message is not None:
-			return UltraGetStatusCommandResponse(message)
+	def parse(messageBuf: str) -> Optional['UltraGetStatusCommandResponse']:
+		messageBuf = UltraDecoderStatusMessage.parse(messageBuf)
+		if messageBuf is not None:
+			return UltraGetStatusCommandResponse(messageBuf)
 		return None
 
 
@@ -58,8 +71,8 @@ class UltraSetTimeCommand(TimingDeviceCommand):
 		super().__init__('t', response_type=UltraSetTimeCommandResponse, sync=True)
 		self._time = timeToSet
 
-	def match_response(self, message: str) -> Optional[UltraSetTimeCommandResponse]:
-		return UltraSetTimeCommandResponse.parse(message)
+	def match_response(self, messageBuf: str) -> Optional[UltraSetTimeCommandResponse]:
+		return UltraSetTimeCommandResponse.parse(messageBuf)
 
 	def get_command_string(self) -> str:
 		decoderMessage = 't {}'.format(self._time.strftime('%H:%M:%S %d-%m-%Y'))

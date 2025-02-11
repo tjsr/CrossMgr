@@ -1,6 +1,7 @@
 import datetime
 import re
-from typing import Optional
+from abc import abstractmethod
+from typing import Optional, cast
 
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
 
@@ -13,6 +14,10 @@ class UltraDecoderMessage(DecoderMessage):
 	def __init__(self, ultraId: int | None, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._UltraId = ultraId
+
+	@abstractmethod
+	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
+		pass
 
 	@property
 	def UltraId(self) -> int | None:
@@ -33,19 +38,35 @@ class UltraCommandResponse(UltraDecoderMessage):
 	def timeReceived(self) -> datetime.datetime:
 		return self._timeReceived
 
+	@abstractmethod
+	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraCommandResponse']:
+		pass
+
 
 class UltraConnectConfirmationMessage(UltraDecoderMessage):
+	MESSAGE_FORMAT = r'^Connected,\d+(,[U|N])?$'
 	def __init__(self, lastTimeSent: datetime.datetime, hasUpdates: bool):
 		super().__init__(0)
 		self._lastTimeSent = lastTimeSent
 		self._hasUpdates = hasUpdates
 
+	@abstractmethod
+	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraConnectConfirmationMessage']:
+		pass
+
 	@staticmethod
 	def parse(message: str) -> Optional['UltraConnectConfirmationMessage']:
-		if message is not None and message.startswith('Connected'):
+		if re.match(UltraConnectConfirmationMessage.MESSAGE_FORMAT, message):
 			try:
-				Connected, LastTimeSent, CommandCode = message.split(',', 3)
-				lastTimeDate = datetime.datetime.fromtimestamp(EPOCH_TIME.timestamp() + int(LastTimeSent))
+				parts = message.split(',')
+				num = len(parts)
+				if num > 3 or num < 2:
+					return None
+
+				lastTimeDate = datetime.datetime.fromtimestamp(EPOCH_TIME.timestamp() + int(parts[1]))
+
+				CommandCode = parts[2] if num == 3 else None
+
 				hasUpdates = CommandCode == 'U'
 				# CommandCode tells us if any data has been missed, but the docs don't say what are valid values.
 				return UltraConnectConfirmationMessage(lastTimeDate, hasUpdates)
@@ -74,12 +95,18 @@ class UltraConnectInfoMessage(UltraDecoderMessage):
 
 
 class UltraVoltageMessage(UltraDecoderMessage):
+	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraVoltageMessage']:
+		if not isinstance(message, UltraVoltageMessage):
+			return None
+		return message
+
+	MESSAGE_FORMAT = r'^V=\d+(\.\d+)?$'
 	Voltage: float
 
 	@staticmethod
-	def parse(message: str) -> Optional['UltraVoltageMessage']:
-		if message is not None and message.startswith('V='):
-			return UltraVoltageMessage(0, float(message[2:]))
+	def parse(messageBuf: str) -> Optional['UltraVoltageMessage']:
+		if messageBuf is not None and messageBuf.startswith('V='):
+			return UltraVoltageMessage(0, float(messageBuf[2:]))
 		return None
 
 
@@ -93,11 +120,26 @@ class UltraVoltageMessage(UltraDecoderMessage):
 
 class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
 	MESSAGE_FORMAT = r'^S=[01]{2}$'
+
+	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraDecoderStatusMessage']:
+		if not isinstance(message, UltraDecoderStatusMessage):
+			return None
+
+		return UltraDecoderStatusMessage.parse(message.Data)
+
 	@staticmethod
-	def parse(message: str) -> Optional['UltraDecoderStatusMessage']:
-		if re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, message) is not None:
-			return UltraDecoderStatusMessage(message[2] == '1', message[3] == '1')
+	def parse(messageBuf: str) -> Optional['UltraDecoderStatusMessage']:
+		if messageBuf is None:
+			return None
+		if re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, messageBuf) is not None:
+			return UltraDecoderStatusMessage(messageBuf[2] == '1', messageBuf[3] == '1')
 		return None
+
+	@staticmethod
+	def matches(messageBuf: str) -> bool:
+		if messageBuf is None:
+			return False
+		return re.match(UltraDecoderStatusMessage.MESSAGE_FORMAT, messageBuf) is not None
 
 	def __init__(self, readStatus: bool, sendStatus: bool, *args, **kwargs):
 		DecoderStatusMessage.__init__(self, readStatus, sendStatus, *args, **kwargs)
@@ -191,6 +233,11 @@ class UltraDecoderTimeMessage(UltraDecoderMessage):
 	@property
 	def time(self) -> datetime.datetime:
 		return self._time
+
+	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraDecoderTimeMessage']:
+		if  UltraDecoderTimeMessage.matches(message.Data):
+			return cast(UltraDecoderTimeMessage, message)
+		return None
 
 	@staticmethod
 	def parse(message: str) -> Optional['UltraDecoderTimeMessage']:

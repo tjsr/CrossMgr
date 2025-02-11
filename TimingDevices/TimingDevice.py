@@ -4,7 +4,9 @@ from abc import abstractmethod
 from queue import Queue
 from types import TracebackType
 from typing import List, Type, Callable, Optional
-from Log import getLogger
+
+import Log
+from Log import CrossMgrLogger
 
 from LogQueue import LogQueue
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException
@@ -92,11 +94,13 @@ class TimingDevice:
 		maxBufSize = -1
 		for bufMessage in buffer.splitlines(False):
 			nextMessage = self.parse_message(bufMessage)
+			if nextMessage is not None:
+				nextMessage.Data = bufMessage
 			maxBufSize = self.add_message(nextMessage)
 		return maxBufSize
 
 	@abstractmethod
-	def parse_message(self, message: str) -> DecoderMessage:
+	def parse_message(self, messageBuf: str) -> DecoderMessage:
 		pass
 
 	@property

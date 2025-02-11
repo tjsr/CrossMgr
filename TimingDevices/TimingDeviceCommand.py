@@ -1,14 +1,15 @@
 import datetime
 from typing import Generic, TypeVar, Optional, Type
 
-CommandResponse = TypeVar('CommandResponse')
+CommandResponseType = TypeVar('CommandResponseType', bound='TimingDeviceCommand')
+DecoderMessageType = TypeVar('DecoderMessageType', bound='DecoderMessage')
 
 class TimingDeviceCommandException(Exception):
 	def __init__(self, msg: str | None, exception: Exception | None = None):
 		super().__init__(msg, exception)
 
 
-class TimingDeviceCommand(Generic[CommandResponse]):
+class TimingDeviceCommand(Generic[CommandResponseType]):
 	COMMAND_SEND_RECORDS = 'send_records'
 	COMMAND_GET_TIME = 'get_time'
 	COMMAND_SET_TIME = 'set_time'
@@ -20,13 +21,13 @@ class TimingDeviceCommand(Generic[CommandResponse]):
 	_sync: bool = False
 	_expectsResponse: bool = True
 	_providesResponse: bool = True
-	_response: CommandResponse
+	_response: CommandResponseType | None
 	_sent_at: datetime.datetime | None
 	_comment = str
 	_command_type: str
-	_response_type: Type[CommandResponse]
+	_response_type: Type[CommandResponseType]
 
-	def __init__( self, _command_str: str, response_type: Type[CommandResponse], sync: bool = False ):
+	def __init__(self, _command_str: str, response_type: Type[CommandResponseType] | None, sync: bool = False):
 		self._command_str = _command_str
 		self._sync = sync
 		self._expectsResponse = sync
@@ -51,17 +52,22 @@ class TimingDeviceCommand(Generic[CommandResponse]):
 		self._comment = comment
 
 	@property
-	def response(self) -> CommandResponse:
+	def response(self) -> CommandResponseType:
 		return self._response
 
 	@response.setter
-	def response(self, response: CommandResponse):
+	def response(self, response: CommandResponseType):
 		self._response = response
 
-	def match_response(self, message: str) -> Optional[CommandResponse]:
-		return None
+	def match_response(self, message: str) -> Optional[CommandResponseType]:
+		t = self.get_response_type()
+		if t is not None:
+			return t.match_response(message)
+		raise NotImplementedError('A TimingDeviceCommand that expects a response required a specific implementation of match_response')
 
-	def match_message(self, message: CommandResponse) -> Optional[CommandResponse]:
+	def match_message(self, message: DecoderMessageType) -> Optional[CommandResponseType]:
+		assert not isinstance(message, str)
+		assert message.Data is not None
 		return message.matches(message)
 
 	@property

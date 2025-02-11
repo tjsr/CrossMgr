@@ -6,14 +6,14 @@ from typing import cast
 
 from Log import getLogger
 from LogQueue import LogQueue
-from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, CrossingListenerCallableType, TimingDeviceConnectMessage
+from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 
 from TimingDevices.UltraAutodetect import AutoDetect
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand
-from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, UltraConnectInfoMessage, \
+from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, \
 	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage
 
 now = datetime.datetime.now
@@ -89,7 +89,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 
 		except Exception as e:
-			getLogger().exception('Failed while getting decoder status', e)
+			self.getLog().exception('Failed while getting decoder status', e)
 
 		return result
 
@@ -224,24 +224,24 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 		raise UnrecognisedCommandException(command_type)
 
-	def parse(self, message: str) -> DecoderMessage|None:
-		log = getLogger('UltraDecoder.parse')
-		# log = getLogger()
-		log.debug('<< {}'.format(message))
+	def parse(self, messageBuf: str) -> DecoderMessage | None:
+		log = self.getLog(child='parse')
+		if messageBuf is None:
+			log.warning(f'Attempted to parse a empty message buffer.')
+			return None
 
-		if (msg := UltraConnectConfirmationMessage.parse(message)) is not None:
+		if (msg := UltraConnectConfirmationMessage.parse(messageBuf)) is not None:
 			return msg
-		elif (msg := UltraConnectInfoMessage.parse(message)) is not None:
+		elif (msg := UltraVoltageMessage.parse(messageBuf)) is not None:
 			return msg
-		elif (msg := UltraVoltageMessage.parse(message)) is not None:
+		elif (msg := UltraDecoderStatusMessage.parse(messageBuf)) is not None:
 			return msg
-		elif (msg := UltraDecoderStatusMessage.parse(message)) is not None:
-			return msg
-		elif (msg := UltraChipReadMessage.parse(message)) is not None:
+		elif (msg := UltraChipReadMessage.parse(messageBuf)) is not None:
 			# traceback.print_stack()
 			return msg
-		elif len(message.strip()) > 0:
-			return UnrecognisedDecoderMessage(message)
+		elif len(messageBuf.strip()) > 0:
+			log.warning(f'Unrecognised message: {messageBuf}')
+			return UnrecognisedDecoderMessage(messageBuf)
 
 		# log.q('connection.keepGoing', '{}: "{}"'.format(_('data'), message))
 		# # Otherwise, assume this is a chip read.
@@ -258,10 +258,10 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 		return None
 
-	def parse_message(self, message: str) -> DecoderMessage:
-		log = getLogger()
-		log.trace('parse_message')
-		return self.parse(message)
+	def parse_message(self, messageBuf: str) -> DecoderMessage:
+		log = self.getLog(child='parse_message')
+		log.trace(f'Parsing message {messageBuf} and adding datat to message object.')
+		return self.parse(messageBuf)
 
 	def stop_reading(self):
 		TimingDevice.stop_reading(self)
