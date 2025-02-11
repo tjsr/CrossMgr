@@ -15,6 +15,7 @@ class Log:
   EXIT = 2
   RETURN = 3
   APPLICATION_END = 5
+  TODO: logging.WARNING + 5
 
 
 class CrossMgrLogger(logging.Logger):
@@ -43,6 +44,9 @@ class CrossMgrLogger(logging.Logger):
 
   def exitApp(self, msg: object = 'Application exiting', *args: tuple[Any, ...], **kwargs: Any) -> None:
     return self.log(Log.APPLICATION_END, msg, *args, **kwargs)
+
+  def todo(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
+    return self.log(Log.TODO, 'TODO: ' + str(msg), *args, **kwargs)
 
 logging.setLoggerClass(CrossMgrLogger)
 
