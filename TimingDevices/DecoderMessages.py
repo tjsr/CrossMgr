@@ -1,12 +1,32 @@
+from abc import abstractmethod
 from typing import Type
 
 
 class DecoderMessage:
+	_data: str | None
+
 	def __init__(self, *args, **kwargs):
-		pass
+		self._data = None
 
 	def is_message_type(self, searchType: Type) -> bool:
 		return isinstance(self, searchType)
+
+	@abstractmethod
+	def match_message(self, message: 'DecoderMessage'):
+		pass
+
+	@property
+	def Data(self) -> str | None:
+		return self._data
+
+	@Data.setter
+	def Data(self, value: str):
+		self._data = value
+
+	def __str__(self):
+		if self._data is not None:
+			return self._data
+		return f'{self.__class__.__name__}: ' + str(self.__dict__)
 
 
 class DecoderStatusMessage(DecoderMessage):
@@ -22,13 +42,20 @@ class DecoderStatusMessage(DecoderMessage):
 		return self._sendStatus
 
 	def __init__(self, readStatus: bool, sendStatus: bool, *args, **kwargs):
-		super().__init__(self, *args, **kwargs)
+		super().__init__(*args, **kwargs)
 		self._readStatus = readStatus
 		self._sendStatus = sendStatus
 
+	@abstractmethod
+	def match_message(self, message: DecoderMessage) -> DecoderMessage:
+		pass
+
 
 class UnrecognisedDecoderMessage(DecoderMessage):
-	_message: str
-	def __init__(self, message: str):
-		super().__init__()
-		self._message = message
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+
+	@abstractmethod
+	def match_message(self, received: DecoderMessage) -> DecoderMessage:
+		return received
+

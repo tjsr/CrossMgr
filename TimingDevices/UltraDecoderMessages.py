@@ -83,15 +83,15 @@ class UltraConnectConfirmationMessage(UltraDecoderMessage):
 		return self._hasUpdates
 
 
-class UltraConnectInfoMessage(UltraDecoderMessage):
-	def __init__(self, ultraId: int):
-		super().__init__(ultraId)
-
-	@staticmethod
-	def parse(message: str) -> Optional['UltraConnectInfoMessage']:
-		if re.match(CONNECT_INFO_FORMAT, message) is not None:
-			return UltraConnectInfoMessage(0)
-		return None
+# class UltraConnectInfoMessage(UltraDecoderMessage):
+# 	def __init__(self, ultraId: int):
+# 		super().__init__(ultraId)
+#
+# 	@staticmethod
+# 	def parse(message: str) -> Optional['UltraConnectInfoMessage']:
+# 		if re.match(CONNECT_INFO_FORMAT, message) is not None:
+# 			return UltraConnectInfoMessage(0)
+# 		return None
 
 
 class UltraVoltageMessage(UltraDecoderMessage):
@@ -174,16 +174,16 @@ class UltraChipReadMessage(UltraDecoderMessage):
 		return int(chipStr)
 
 	@staticmethod
-	def parse(message: str) -> 'UltraChipReadMessage | None':
+	def parse(messageBuf: str) -> Optional['UltraChipReadMessage']:
 		output: UltraChipReadMessage
 		try:
-			Zero, ChipCode, Seconds, Milliseconds, Extra = message.split(',', 4)
+			Zero, ChipCode, Seconds, Milliseconds, Extra = messageBuf.split(',', 4)
 
 			output = UltraChipReadMessage(0, UltraChipReadMessage.chipNumberFromString(ChipCode))
 			output.Seconds = int(Seconds)
 			output.Milliseconds = int(Milliseconds)
 		except ValueError as e:
-			raise ValueError('Invalid crossing message format parsing {}'.format(message), e)
+			raise ValueError('Invalid crossing message format parsing {}'.format(messageBuf), e)
 
 		try:
 			if Extra is not None:
@@ -206,7 +206,8 @@ class UltraChipReadMessage(UltraDecoderMessage):
 		super().__init__(ultraId)
 		self._ChipCode = chipCode
 
-	def getTagTime(self) -> datetime.datetime:
+	@property
+	def Time(self) -> datetime.datetime:
 		return EPOCH_TIME + datetime.timedelta(seconds=self.Seconds, milliseconds=self.Milliseconds)
 
 	@property
@@ -215,6 +216,14 @@ class UltraChipReadMessage(UltraDecoderMessage):
 
 	def hasValidTag(self) -> bool:
 		return self._ChipCode != 0
+
+	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
+		if not isinstance(message, UltraChipReadMessage):
+			return None
+
+		return message
+
+
 
 
 class UltraDecoderTimeMessage(UltraDecoderMessage):

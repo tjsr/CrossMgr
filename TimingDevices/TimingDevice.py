@@ -40,7 +40,7 @@ class TimingDeviceConnectMessage(DecoderMessage):
 class TimingDevice:
 	_readonly = False
 	_logger: LogQueue | None = None
-	# _log: CrossMgrLogger | None = None
+	_log: CrossMgrLogger | None = None
 	# _log: logging.Logger | None = None
 	_messageQueue: List[DecoderMessage] = None
 	_commandQueue: Queue[TimingDeviceCommand] = None
@@ -48,6 +48,20 @@ class TimingDevice:
 	def __init__(self):
 		self._commandQueue = Queue()
 		self._messageQueue = []
+
+	def getLogName(self) -> str:
+		class_name = self.__class__.__name__
+		return f'TimingDevice[{class_name}]'
+
+	def getLog(self, child: str | None = None) -> CrossMgrLogger:
+		log = None
+		if self._log is not None:
+			log = self._log
+		else:
+			log = Log.getLogger(name=self.getLogName())
+		if child is not None:
+			log = log.getChild(child)
+		return log
 
 	# def getLog(self, name: str | None = None, level: int = logging.NOTSET, forMethod: bool = False) -> logging.Logger:
 	# 	if name is None:
@@ -77,10 +91,12 @@ class TimingDevice:
 	def get_messages(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
 		# log = self.getLog(name='TimingDevice.get_messages')
-		log = getLogger(name='TimingDevice.get_messages')
-		log.trace('Getting messages from buffer...')
 
 		if buffer is not None:
+			log = self.getLog()
+			buffer_size = len(buffer)
+			log.trace(f'Got {buffer_size} bytes of messages from buffer...')
+
 			_msgCount = self.process_message_buffer(buffer)
 			# log.debug(f'Processed message buffer now has {msgCount} messages.')
 
@@ -93,6 +109,7 @@ class TimingDevice:
 	def process_message_buffer(self, buffer: str) -> int:
 		maxBufSize = -1
 		for bufMessage in buffer.splitlines(False):
+			self.getLog(child='input').info(bufMessage)
 			nextMessage = self.parse_message(bufMessage)
 			if nextMessage is not None:
 				nextMessage.Data = bufMessage
@@ -193,7 +210,7 @@ class TimingDevice:
 		self.send_data(data)
 		command.sentAt = datetime.datetime.now()
 		commandType = command.CommandType
-		getLogger().info(f'Send {commandType} command immediately to decoder: {data}')
+		self.getLog().debug(f'Send {commandType} command immediately to decoder: {data}')
 		if command.expectsResponse:
 			response = self.wait_for_response(5, command)
 			if response is not None:
@@ -202,7 +219,7 @@ class TimingDevice:
 			else:
 				return False
 		else:
-			getLogger().info(f'No response expected for command: {data}')
+			self.getLog().debug(f'No response expected for command: {data}')
 			return True
 
 
@@ -210,7 +227,7 @@ class TimingDevice:
 	def async_send_command(self, command: TimingDeviceCommand) -> bool:
 		# Push to the queue and send later.
 		data = command.get_command_string()
-		getLogger().info(f'Queuing async command to decoder: {data}')
+		self.getLog().debug(f'Queuing async command to decoder: {data}')
 		self.push_command(command)
 		return True
 
@@ -240,7 +257,7 @@ class TimingDevice:
 	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
 		# TODO: We can abstract this with wait_for_response
 		# log = self.getLog(name='TimingDevice.wait_for_message')
-		log = logging.getLogger('TimingDevice.wait_for_message')
+		log = self.getLog()
 		message_type_name = messageType.__name__
 		log.debug(f'Waiting for a matching {message_type_name} message before continuing...')
 
@@ -282,7 +299,7 @@ class TimingDevice:
 
 		timeout_exceeded = (current_time - start_time).seconds > timeout
 		messages = []
-		log = getLogger(name='TimingDevice.wait_for_response')
+		log = self.getLog()
 		attempts = 1
 		commandClass = command.__class__.__name__
 		responseClass = command.get_response_type()
@@ -295,8 +312,10 @@ class TimingDevice:
 				log.trace(f'Got {msgCount} response for {commandClass} iteration on attempt {attempts}...')
 
 			for message in messages:
-				if command.match_message(message):
+				if command.match_response(message):
 					log.debug(f'Received awaited {commandClass} response after {attempts} attempts and {self.messageQueueLength} messages on queue: {message}')
+					## TODO: Pop this from the queue
+					log.todo('Pop the message from the queue after processing it')
 					return message
 			attempts += 1
 			current_time = datetime.datetime.now()
@@ -305,7 +324,7 @@ class TimingDevice:
 		total_messages = self.messageQueueLength
 		messageCount = len(messages)
 		msgList = [str(message) for message in messages]
-		log.warning(f'Got no matching {commandClass} response in {timeout} seconds with {messageCount} matched messages and {total_messages} in the queue [{msgList}]')
+		log.warning(f'Timed out after {timeout}s waiting for {commandClass} response. {messageCount}/{total_messages} in the queue [{msgList}]')
 		return None
 
 	@abstractmethod

@@ -69,10 +69,11 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	async def on_socket_connect(self) -> bool:
 		connectMessage = cast(UltraConnectConfirmationMessage, self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage))
 		if connectMessage is not None:
+			self._messageQueue.remove(connectMessage)
 			confirmed = await self.on_connect(connectMessage)
 			return confirmed
 		else:
-			getLogger().warning('Connected to decode but didn\'t get confirmation after waiting.')
+			self.getLog(child='event').warning('Connected to decoder but didn\'t get confirmation after waiting.')
 			return False
 
 	async def on_connect(self, msg: UltraConnectConfirmationMessage) -> bool:
@@ -162,7 +163,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		chip = chipRead.ChipCode
 		tag = f'{chip}'
 
-		crossingTime = chipRead.getTagTime()
+		crossingTime = chipRead.Time()
 		if self.computerTimeDiff:
 			crossingTime += self.computerTimeDiff
 
@@ -268,4 +269,3 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 	def send_data(self, payload: str):
 		TCPTimingDevice.send_data(self, payload)
-

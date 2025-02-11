@@ -12,13 +12,16 @@ class TestUltraSetTimeCommand(unittest.TestCase):
         self.assertIsInstance(command, UltraSetTimeCommand)
         self.assertTrue(command.providesResponse)
 
-    def test_match_response(self):
+    def test_parse_valid_time(self):
         valid_message = "t 12:34:56 01-01-2023"
-        invalid_message = "invalid message"
         response = UltraSetTimeCommandResponse.parse(valid_message)
         self.assertIsNotNone(response)
         self.assertIsInstance(response, UltraSetTimeCommandResponse)
-        self.assertIsNone(UltraSetTimeCommandResponse.parse(invalid_message))
+
+    def test_parse_invalid_time(self):
+        invalid_message = "invalid message"
+        response = UltraSetTimeCommandResponse.parse(invalid_message)
+        self.assertIsNone(response)
 
     def test_get_messages_of_ultra_set_time_command_type(self):
         messages = [

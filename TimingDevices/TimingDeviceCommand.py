@@ -59,9 +59,10 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 	def response(self, response: CommandResponseType):
 		self._response = response
 
-	def match_response(self, message: str) -> Optional[CommandResponseType]:
+	def match_response(self, message: DecoderMessageType) -> Optional[CommandResponseType]:
 		t = self.get_response_type()
 		if t is not None:
+			self._response = message
 			return t.match_response(message)
 		raise NotImplementedError('A TimingDeviceCommand that expects a response required a specific implementation of match_response')
 
