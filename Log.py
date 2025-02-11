@@ -15,7 +15,7 @@ class Log:
   EXIT = 2
   RETURN = 3
   APPLICATION_END = 5
-  TODO: logging.WARNING + 5
+  TODO = logging.WARNING + 5
 
 
 class CrossMgrLogger(logging.Logger):
