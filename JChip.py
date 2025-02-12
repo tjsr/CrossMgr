@@ -55,7 +55,7 @@ listener = None
 tSmall = datetime.timedelta( seconds = 0.00001 )
 tDay = datetime.timedelta( days = 1 )
 
-def parseTime( tStr, day = 0 ):
+def parseTime( tStr: str, day: int = 0 ) -> datetime:
 	global dateToday
 	global tLast
 	global tSameCount
