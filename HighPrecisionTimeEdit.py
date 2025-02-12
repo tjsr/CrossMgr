@@ -1,6 +1,7 @@
+import logging
+
 import wx
 import re
-import platform
 import datetime
 import Utils
 
@@ -43,6 +44,82 @@ def getSeconds( v, display_seconds, display_milliseconds ):
 		return v
 	else:
 		return 0.0
+
+class TimeValidator(wx.Validator):
+	_log: logging.Logger = logging.getLogger('CrossMgr.TimeValidator')
+	_allow_none: bool = False
+	_background_error_colour: wx.Colour = wx.Colour(255, 0, 0)
+
+	def __init__(self, allow_none: bool = False):
+		wx.Validator.__init__(self)
+		self._allow_none = allow_none
+
+	def Clone(self):
+		""" Standard cloner.
+
+				Note that every validator must implement the Clone() method.
+		"""
+		return TimeValidator()
+
+	def MarkInvalid(self, textCtrl: wx.TextCtrl, message: str = None):
+		self._log.debug('Marking invalid')
+		textCtrl.SetBackgroundColour(self._background_error_colour)
+		if message is not None:
+			wx.MessageBox(message, "Error")
+
+	def MarkValid(self, textCtrl: wx.TextCtrl):
+		self._log.debug('Marking valid')
+		textCtrl.SetBackgroundColour(wx.NullColour)
+
+	def Validate(self, textCtrl: wx.TextCtrl) -> bool:
+		""" Validate the contents of the given text control.
+		"""
+		self._log.info('Validating...')
+		if textCtrl is None:
+			textCtrl = self.GetWindow()
+		text = textCtrl.GetValue()
+
+		if len(text) == 0 and not self._allow_none:
+			self.MarkInvalid(textCtrl)
+			return False
+		else:
+			if self.ValidateTimeFormat(text):
+				self.MarkValid(textCtrl)
+				return True
+			else:
+				self.MarkInvalid(textCtrl)
+				return False
+
+	def ValidateTimeFormat(self, time: str):
+		if not time and self._allow_none:
+			return True
+
+		for time_format in ('%H:%M', '%H:%M:%S', '%H:%M:%S.%f'):
+			try:
+				datetime.datetime.strptime(time, time_format)
+				return True
+			except Exception:
+				pass
+
+		return False
+
+	def TransferToWindow(self):
+		""" Transfer data from validator to window.
+
+				The default implementation returns False, indicating that an error
+				occurred.  We simply return True, as we don't do any data transfer.
+		"""
+		return True  # Prevent wxDialog from complaining.
+
+
+	def TransferFromWindow(self):
+		""" Transfer data from window to validator.
+
+				The default implementation returns False, indicating that an error
+				occurred.  We simply return True, as we don't do any data transfer.
+		"""
+		return True  # Prevent wxDialog from complaining.
+
 
 # Masked controls still don't work on anything but Windows.  Sigh :(
 if False: # platform.system() == 'Windows':
@@ -115,9 +192,9 @@ else:
 		emptyValue   = ''
 
 		def __init__( self, parent, id=wx.ID_ANY, seconds=None, value=None, display_seconds=True, display_milliseconds=True, allow_none=False, style=0, size=wx.DefaultSize ):
-		
+			validator = TimeValidator(allow_none=allow_none)
 			# Utils.writeLog( 'HighPrecisionTimeEdit: Mac/Linux' )
-			
+
 			self.allow_none = allow_none
 			self.display_seconds = display_seconds
 			self.display_milliseconds = display_seconds and display_milliseconds
@@ -135,6 +212,7 @@ else:
 				value		= value,
 				style		= style & ~(wx.TE_PROCESS_ENTER|wx.TE_PROCESS_TAB|wx.TE_MULTILINE|wx.TE_PASSWORD),
 				size        = size,
+				validator = validator
 			)
 			if value is None and seconds is not None:
 				self.SetSeconds( seconds )
@@ -162,14 +240,15 @@ else:
 			return
 		
 		def onPaste(self, event):
-			self.text_data = wx.TextDataObject()
+			text_data = wx.TextDataObject()
+			success = False
 			if wx.TheClipboard.Open():
-				success = wx.TheClipboard.GetData(self.text_data)
+				success = wx.TheClipboard.GetData(text_data)
 				wx.TheClipboard.Close()
 			if success:
-				self.text_data = self.text_data.GetText()
-				if self.ValidateTimeFormat(self.text_data):
-					self.SetValue(self.text_data)
+				text_data = super().GetValue()
+				if self.GetValidator().ValidateTimeFormat(text_data):
+					self.SetValue(text_data)
 					return
 				else:
 					WarnTip = TextBoxTipPopup(self, wx.SIMPLE_BORDER, "Incorrect time format on the clipboard")
@@ -181,19 +260,6 @@ else:
 
 		def onDoubleClick(self, event):
 			self.SetSelection(-1,-1)
-
-		def ValidateTimeFormat(self, time):
-			if not time and self.allow_none:
-				return True
-			
-			for format in ('%H:%M', '%H:%M:%S', '%H:%M:%S.%f'):
-				try:
-					datetime.datetime.strptime(time, format)
-					return True
-				except Exception:
-					pass
-				
-			return False
 
 		def GetSeconds( self ):
 			v = self.GetValue()
