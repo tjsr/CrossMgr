@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import socket
 import time
-from typing import cast
+from typing import cast, Callable
 
 from Log import getLogger
 from LogQueue import LogQueue
@@ -85,9 +85,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 			if self.__on_connect_action_start_if_stopped:
 				getStatusResult = await self.get_status()
-				if getStatusResult.response is not None:
-					if getStatusResult.response.isStopped():
-						self.begin_reading()
+				response: UltraDecoderStatusMessage = getStatusResult.response
+				if response is not None and response.readStatus == False:
+					self.begin_reading()
 
 
 		except Exception as e:
@@ -136,6 +136,12 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			self.logEx('setTime', 'Failed to set time on decoder', e)
 			return False
 		return True
+
+	async def get_status( self, onStatusCallback: Callable[[UltraDecoderStatusMessage], None] | None = None ) -> UltraGetStatusCommand:
+		getStatusCommand = super().get_status(onStatusCallback)
+		ultraStatusCommand = cast(UltraGetStatusCommand, getStatusCommand)
+		return ultraStatusCommand
+
 
 	def process_messages(self) -> bool:
 		message: DecoderMessage | None = self.peek_last_message()

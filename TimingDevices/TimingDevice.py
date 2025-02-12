@@ -166,7 +166,7 @@ class TimingDevice:
 			self.send_command(startDeviceCommand)
 			return startDeviceCommand
 
-	async def get_status( self, onStatusCallback: Callable[[DecoderStatusMessage], None] | None = None ) -> TimingDeviceCommand:
+	async def get_status( self, onStatusCallback: Callable[[DecoderStatusMessage], None] | None = None ) -> TimingDeviceCommand[DecoderStatusMessage]:
 		getStatusCommand = self.create_command(TimingDeviceCommand.COMMAND_STATUS)
 		self.send_command(getStatusCommand)
 		return getStatusCommand
