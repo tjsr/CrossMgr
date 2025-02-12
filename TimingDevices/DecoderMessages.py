@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from datetime import datetime
 from typing import Type
 
 
@@ -49,6 +50,28 @@ class DecoderStatusMessage(DecoderMessage):
 	@abstractmethod
 	def match_message(self, message: DecoderMessage) -> DecoderMessage:
 		pass
+
+
+class DecoderTimeMessage(DecoderMessage):
+	_time: datetime
+	_invalidTime: bool = False
+
+	@property
+	def time(self) -> datetime:
+		return self._time
+
+	def __init__(self, time: datetime, is_invalid: bool = False, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._time = time
+		self._invalidTime = is_invalid
+
+	@abstractmethod
+	def match_message(self, message: DecoderMessage) -> DecoderMessage:
+		pass
+
+	@property
+	def HasInvalidData(self) -> bool:
+		return self._time is None or self._invalidTime
 
 
 class UnrecognisedDecoderMessage(DecoderMessage):

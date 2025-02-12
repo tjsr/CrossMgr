@@ -3,7 +3,7 @@ from typing import Optional, cast
 
 from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderMessage
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceSetTimeCommand
 from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage, \
 	UltraDecoderMessage
 
@@ -81,7 +81,7 @@ class UltraSetTimeCommand(TimingDeviceSetTimeCommand, TimingDeviceCommand):
 	_time: datetime.datetime
 	def __init__(self, timeToSet: datetime.datetime = datetime.datetime.now()):
 		# TODO: Fix response_type cast
-		super().__init__('t', response_type=UltraDecoderTimeMessage, sync=True)
+		TimingDeviceSetTimeCommand.__init__(self, 't', response_type=UltraDecoderTimeMessage, sync=True)
 		self._time = timeToSet
 
 	def match_response(self, message: UltraDecoderMessage) -> Optional[UltraSetTimeCommandResponse]:

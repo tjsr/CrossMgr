@@ -2,7 +2,9 @@ import datetime
 from abc import abstractmethod
 from typing import Generic, TypeVar, Optional, Type
 
-CommandResponseType = TypeVar('CommandResponseType', bound='TimingDeviceCommand')
+from TimingDevices.DecoderMessages import DecoderTimeMessage
+
+CommandResponseType = TypeVar('CommandResponseType', bound='TimingDeviceMessage')
 DecoderMessageType = TypeVar('DecoderMessageType', bound='DecoderMessage')
 
 class TimingDeviceCommandException(Exception):
@@ -69,6 +71,7 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 		raise NotImplementedError('A TimingDeviceCommand that expects a response required a specific implementation of match_response')
 
 	def match_message(self, message: DecoderMessageType) -> Optional[CommandResponseType]:
+		assert self is not None
 		assert not isinstance(message, str)
 		assert message.Data is not None
 		return message.matches(message)
@@ -113,8 +116,7 @@ class TimingDeviceSetTimeCommand(TimingDeviceCommand):
 	def get_command_string(self) -> str:
 		raise NotImplementedError('A TimingDeviceSetTimeCommand must implement get_command_string')
 
-	@staticmethod
 	def match_response(self, message: DecoderMessageType) -> Optional[CommandResponseType]:
-		if not isinstance(message, TimingDeviceTimeMessage):
+		if not isinstance(message, DecoderTimeMessage):
 			return None
 		raise NotImplementedError('A TimingDeviceSetTimeCommand must implement match_response')

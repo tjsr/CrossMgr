@@ -50,3 +50,13 @@ class TestUltraDecoderTimeMessage(TestCase):
 		valid_message = "21:25:26 11-02-2025 (1423776326) 123"
 		response = UltraDecoderTimeMessage.parse(valid_message)
 		self.assertIsNone(response)
+
+	def test_should_not_match_chip_read(self):
+		invalid_message = "0,838871135,1423827949,253,1,-62,0,1,1,0000000000000000,0,363710"
+		result = UltraDecoderTimeMessage.matches(invalid_message)
+		self.assertFalse(result)
+
+	def test_should_not_parse_chip_read(self):
+		invalid_message = "0,838871135,1423827949,253,1,-62,0,1,1,0000000000000000,0,363710"
+		result = UltraDecoderTimeMessage.parse(invalid_message)
+		self.assertIsNone(result)

@@ -138,7 +138,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		return True
 
 	async def get_status( self, onStatusCallback: Callable[[UltraDecoderStatusMessage], None] | None = None ) -> UltraGetStatusCommand:
-		getStatusCommand = super().get_status(onStatusCallback)
+		getStatusCommand = await super().get_status(onStatusCallback)
 		ultraStatusCommand = cast(UltraGetStatusCommand, getStatusCommand)
 		return ultraStatusCommand
 

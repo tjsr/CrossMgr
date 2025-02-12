@@ -1,5 +1,4 @@
 import datetime
-import logging
 from abc import abstractmethod
 from queue import Queue
 from types import TracebackType
@@ -9,7 +8,8 @@ import Log
 from Log import CrossMgrLogger
 
 from LogQueue import LogQueue
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException, \
+	TimingDeviceSetTimeCommand
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
 
@@ -34,6 +34,10 @@ class DeviceStatusMessage(DecoderMessage):
 
 
 class TimingDeviceConnectMessage(DecoderMessage):
+	@abstractmethod
+	def match_message(self, message: 'DecoderMessage'):
+		pass
+
 	def __init__(self, *args, **kwargs):
 		super().__init__(args, kwargs)
 
@@ -55,7 +59,6 @@ class TimingDevice:
 		return f'TimingDevice[{class_name}]'
 
 	def getLog(self, child: str | None = None) -> CrossMgrLogger:
-		log = None
 		if self._log is not None:
 			log = self._log
 		else:
@@ -204,6 +207,7 @@ class TimingDevice:
 		raise NotImplementedError()
 
 	def is_valid_setting(self, setting: str) -> bool:
+		self.getLog(child='is_valid_setting').todo(f'Implement this. Checking setting for {setting}')
 		# TODO: Implement this
 		return True
 
