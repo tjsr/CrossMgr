@@ -164,7 +164,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		chip = chipRead.ChipCode
 		tag = f'{chip}'
 
-		crossingTime = chipRead.Time()
+		crossingTime = chipRead.Time
 		if self.computerTimeDiff:
 			crossingTime += self.computerTimeDiff
 
