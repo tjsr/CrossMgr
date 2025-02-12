@@ -1,6 +1,12 @@
 version: 1
+handlers:
+  debugfile:
+    class: logging.FileHandler
+    formatter: method
+    filename: logs/crossmgr-debug.log
 loggers:
   UltraDecoder.parse:
     level: WARNING
   root:
     level: DEBUG
+    handlers: [console, file, debugfile]
