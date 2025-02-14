@@ -97,3 +97,44 @@ class UltraSetTimeCommand(TimingDeviceSetTimeCommand, TimingDeviceCommand):
 	def Time(self) -> datetime.datetime:
 		return self._time
 
+
+class UltraSendRecordsCommand(TimingDeviceSendRecordsCommand):
+	_fromDateTime: datetime.datetime | None
+	_toDateTime: datetime.datetime | None
+
+	_from_record: int | None
+	_to_record: int | None
+
+	def __init__(self, from_datetime: datetime.datetime | None, to_datetime: datetime.datetime | None, from_record: int | None, to_record: int | None):
+		super().__init__(None, None, False)
+		if from_datetime is not None and from_record is not None:
+			raise TimingDeviceCommandException('A TimingDeviceSendRecordsCommand must have either a from_datetime or a from_record, not both')
+
+		if to_datetime is not None and to_record is not None:
+			raise TimingDeviceCommandException('A TimingDeviceSendRecordsCommand must have either a to_datetime or a to_record, not both')
+
+		self._from_record = from_record
+		self._to_record = to_record
+
+		self._fromDateTime = from_datetime
+		self._toDateTime = to_datetime
+
+
+	@abstractmethod
+	def get_command_string(self) -> str:
+		if self._fromDateTime is not None:
+			from_epoch = self._fromDateTime.timestamp()
+			raise NotImplementedError('A TimingDeviceSendRecordsCommand must implement get_command_string')
+
+		raise NotImplementedError('A TimingDeviceSendRecordsCommand must implement get_command_string')
+
+	def __init__(self, *args, **kwargs):
+		super().__init__('r', response_type=UltraDecoderMessage, sync=True)
+
+	def get_command_string(self) -> str:
+		return 'r'
+
+	def match_response(self, message: UltraDecoderMessage) -> Optional[UltraDecoderMessage]:
+		if not isinstance(message, UltraDecoderMessage):
+			return None
+		return message

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import socket
+import time
 from abc import abstractmethod
 
 import Log
@@ -19,10 +20,12 @@ class TCPTimingDevice:
 	_s: socket.socket | None = None
 	_timeoutSecs: int = 5
 	_log: CrossMgrLogger | None = None
+	__unsuccessfulConnectionAttempts: int = 0
 
 	def __init__(self, host: str, port: int ):
 		self._host = host
 		self._port = port
+		self._s = None
 
 	def getLog(self, child:str = None) -> CrossMgrLogger:
 		log = None
@@ -55,16 +58,20 @@ class TCPTimingDevice:
 			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self._s.settimeout(self._timeoutSecs)
 			self._s.connect((self._host, self._port))
+			self.__unsuccessfulConnectionAttempts = 0
 
+			time.sleep(2)
 			asyncio.run(self.on_socket_connect())
 		except TimeoutError as e:
 			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
 			log.error(errDesc)
 			self._s = None
+			self.__unsuccessfulConnectionAttempts += 1
 			return False
 		except Exception as e:
 			log.exception('{}: {}'.format(_('Unknown error connecting to {}'), description, e))
 			self._s = None
+			self.__unsuccessfulConnectionAttempts += 1
 			return False
 
 		log.info(_('Successfully connected to {}').format(description))
@@ -76,8 +83,10 @@ class TCPTimingDevice:
 				self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT).info(_('Disconnecting from {}').format(self.getDeviceType()))
 				self._s.shutdown(socket.SHUT_RDWR)
 				self._s.close()
+				self._s = None
 				return True
 			except Exception:
+				self._s = None
 				pass
 		return False
 
@@ -117,3 +126,6 @@ class TCPTimingDevice:
 			log.exception(msg='{}: {}'.format(payload, _('Failed sending data')), exc_info=e)
 			raise e
 
+	@property
+	def UnsuccessfulConnectionAttempts(self) -> int:
+		return self.__unsuccessfulConnectionAttempts

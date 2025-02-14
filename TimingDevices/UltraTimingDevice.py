@@ -27,7 +27,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		TimingDeviceCommand.COMMAND_START: TimingDeviceCommand('R', response_type=None, sync=False),
 		TimingDeviceCommand.COMMAND_STOP: TimingDeviceCommand('S', response_type=None, sync=False),
 		TimingDeviceCommand.COMMAND_STATUS: UltraGetStatusCommand(),
-		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand()
+		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand(),
+		TimingDeviceCommand.COMMAND_SEND_RECORDS: UltraSendRecordsCommand()
 	}
 
 	DEFAULT_PORT: int = 23
@@ -40,6 +41,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	_crossing_listener: CrossingListenerCallableType | None = None
 	__on_connect_action_set_time: bool = True
 	__on_connect_action_start_if_stopped: bool = True
+	__on_disconnect_send_stop: bool = False
 
 	def __init__( self, log: LogQueue, host: str, port: int ):
 		TimingDevice.__init__(self)
@@ -107,6 +109,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		return False
 
 	def setTime(self) -> bool:
+		getLogger().warning('Using deprecated setTime method')
 		#-----------------------------------------------------------------------------------------------------
 		# Set the reader's time.
 		# Wait for the boundary of a second.  This is the best synchronization we are going to get.
@@ -141,7 +144,6 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		getStatusCommand = await super().get_status(onStatusCallback)
 		ultraStatusCommand = cast(UltraGetStatusCommand, getStatusCommand)
 		return ultraStatusCommand
-
 
 	def process_messages(self) -> bool:
 		message: DecoderMessage | None = self.peek_last_message()
@@ -283,3 +285,18 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 	def send_data(self, payload: str):
 		TCPTimingDevice.send_data(self, payload)
+
+	def connected(self) -> bool:
+		return TCPTimingDevice.connected(self)
+
+	def disconnect(self) -> bool:
+		if self.connected() and self.__on_disconnect_send_stop == True:
+			self.stop_reading()
+
+		return TCPTimingDevice.disconnect(self)
+
+	def send_command(self, command: TimingDeviceCommand):
+		if not TCPTimingDevice.connected:
+			self.getLog().error(f'Decoder not connected, cannot send command {command}')
+
+		super().send_command(command)

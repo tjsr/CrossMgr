@@ -10,7 +10,7 @@ from Log import CrossMgrLogger
 from LogQueue import LogQueue
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException, \
 	TimingDeviceSetTimeCommand
-from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage
+from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
 
 CrossingListenerCallableType = Callable[[(str, datetime.datetime)], None]
@@ -112,12 +112,20 @@ class TimingDevice:
 
 	def process_message_buffer(self, buffer: str) -> int:
 		maxBufSize = -1
+		inputLog = self.getLog(child='input')
 		for bufMessage in buffer.splitlines(False):
-			self.getLog(child='input').info(bufMessage)
-			nextMessage = self.parse_message(bufMessage)
-			if nextMessage is not None:
-				nextMessage.Data = bufMessage
-			maxBufSize = self.add_message(nextMessage)
+			try:
+				nextMessage = self.parse_message(bufMessage)
+				if nextMessage is not None:
+					nextMessage.Data = bufMessage
+				if isinstance(nextMessage, UnrecognisedDecoderMessage):
+					inputLog.warning(bufMessage)
+				else:
+					inputLog.info(bufMessage)
+
+				maxBufSize = self.add_message(nextMessage)
+			except Exception as e:
+				inputLog.error(bufMessage)
 		return maxBufSize
 
 	@abstractmethod
@@ -191,8 +199,8 @@ class TimingDevice:
 		self.send_command(sendRecordsCommand)
 		return sendRecordsCommand
 
-	def send_records_from_time(self, time: datetime.datetime) -> TimingDeviceCommand:
-		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS, time)
+	def send_records_from_time(self, startTime: datetime.datetime, endTime: datetime.datetime) -> TimingDeviceCommand:
+		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS, start_time=startTime, end_time=endTime)
 		self.send_command(sendRecordsCommand)
 		return sendRecordsCommand
 

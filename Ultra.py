@@ -3,6 +3,7 @@ import time
 import datetime
 from typing import List, Union
 
+import Log
 from ByteUtils import EOL
 from LogQueue import LogQueue
 
@@ -39,6 +40,7 @@ tSmall = datetime.timedelta( seconds = 0.000001 )
 reNonDigit = re.compile( '[^0-9]+' )
 def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 	global readerEventWindow
+	reconnect:bool = True
 	log: LogQueue = LogQueue(q, 'ultra')
 	ultraDecoder = UltraDecoder(log, HOST, PORT)
 
@@ -55,22 +57,31 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 	delaySecs = 3
 
 	def keepGoing():
+		nonlocal reconnect
 		try:
 			shutdownQ.get_nowait()
+			reconnect = False
 		except Empty:
 			return True
-		return False
+		return reconnect
 	
 	def autoDetectCallback( m ):
 		log.q( 'autodetect', '{} {}'.format(_('Checking'), m) )
 		return keepGoing()
 
 	while keepGoing():
-		if ultraDecoder.disconnect():
-			time.sleep( delaySecs )
-
 		if not ultraDecoder.connect():
-			time.sleep( delaySecs )
+			if ultraDecoder.UnsuccessfulConnectionAttempts > 3:
+				waitTime = 30
+			elif ultraDecoder.UnsuccessfulConnectionAttempts > 5:
+				waitTime = 60
+			else:
+				waitTime = delaySecs
+
+			if waitTime > delaySecs:
+				Log.getLogger(name='Ultra').warning(f'Too many unsuccessful connection attempts, waiting {waitTime} seconds before trying again.')
+
+			time.sleep( waitTime )
 			continue
 
 		#-----------------------------------------------------------------------------------------------------
@@ -92,7 +103,7 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 			except Exception as e:
 				log.exception('ultra.keepGoing', e)
 				break
-	
+
 	# Final cleanup.
 	ultraDecoder.disconnect()
 		
@@ -168,17 +179,17 @@ if __name__ == '__main__':
 			cols = 1
 			while 1:
 				time.sleep( 1 )
-				sys.stdout.write( '.' )
+				# sys.stdout.write( '.' )
 				messages = GetData()
 				if messages or cols % 80 == 0:
-					sys.stdout.write( '\n' )
+					# sys.stdout.write( '\n' )
 					cols = 1
 				else:
 					cols += 1
 				for m in messages:
 					if m[0] == 'data':
 						count += 1
-						print( '{}: {}, {}'.format(count, m[1], m[2].time()) )
+						# print( '{}: {}, {}'.format(count, m[1], m[2].time()) )
 					else:
 						print( 'other: {}, {}'.format(m[0], ', '.join('"{}"'.format(s) for s in m[1:])) )
 				sys.stdout.flush()

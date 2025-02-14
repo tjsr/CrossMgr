@@ -18,6 +18,8 @@ class ChipReader:
 		self.StopListener = None
 		self.CleanupListener = None
 		self.IsListening = None
+		self.Disconnect = None
+		self.Reconnect = None
 		self.reset()
 		
 	def reset( self, chipReaderType=None ):
@@ -38,6 +40,8 @@ class ChipReader:
 			self.IsListening = RaceResult.IsListening
 			
 		elif self.chipReaderType == ChipReader.Ultra:
+			self.Disconnect = Ultra.Disconnect
+			self.Reconnect = Ultra.Reconnect
 			self.StartListener = Ultra.StartListener
 			self.GetData = Ultra.GetData
 			self.StopListener = Ultra.StopListener

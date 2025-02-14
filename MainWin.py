@@ -23,6 +23,10 @@ from urllib.parse import quote
 from collections import defaultdict
 
 import locale
+
+import DecoderReplayDialog
+import Log
+
 try:
 	localDateFormat = locale.nl_langinfo( locale.D_FMT )
 	localTimeFormat = locale.nl_langinfo( locale.T_FMT )
@@ -319,6 +323,8 @@ def AppendMenuItemBitmap( menu, id, name, help, bitmap ):
 	return mi
 		
 class MainWin( wx.Frame ):
+	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
+
 	def __init__( self, parent, id = wx.ID_ANY, title='', size=(200,200) ):
 		super().__init__(parent, id, title, size=size)
 
@@ -725,10 +731,7 @@ class MainWin( wx.Frame ):
 		
 		self.chipMenu.AppendSeparator()
 
-		item = self.chipMenu.Append( wx.ID_ANY, _("Send 'start' command..."), _("For electronic timing decoders only") )
-		self.Bind(wx.EVT_MENU, self.menuStartDecoder, item )
-		item = self.chipMenu.Append( wx.ID_ANY, _("Send 'stop' command..."), _("For electronic timing only") )
-		self.Bind(wx.EVT_MENU, self.menuStopDecoder, item )
+		addDecoderMenuItems( self.chipMenu )
 
 		self.chipMenu.AppendSeparator()
 		
@@ -932,8 +935,14 @@ class MainWin( wx.Frame ):
 		self.lastPhotoTime = now()
 		
 	@property
-	def chipReader( self ):
+	def chipReader( self ) -> ChipReader:
 		return ChipReader.chipReaderCur
+
+	@property
+	def log ( self ) -> Log.CrossMgrLogger:
+		if self.__log is None:
+			self.__log = Log.GetLogger('CrossMgr.MainWin')
+		return self.__log
 		
 	def handleChipReaderEvent( self, event ):
 		race = Model.race
@@ -1088,7 +1097,28 @@ class MainWin( wx.Frame ):
 			for t in rNew.times:
 				numTimeInfo.add( newNum, t )
 			wx.CallAfter( self.refresh )
-		
+
+	def addMenuItem(self, menu: wx.Menu, text: str, help: str, handler) -> wx.MenuItem:
+		item = menu.Append( _(text), help, handler )
+		self.Bind( wx.EVT_MENU, handler, item )
+
+		item = wx.MenuItem(menu, id, text, help, kind)
+		menu.Append(item)
+		self.Bind(wx.EVT_MENU, handler, item)
+		return item
+
+	def addDecoderMenuItems (menu) -> None:
+		etdOnlyHintString = _("For electronic timing decoders only")
+		list = [
+			("Disconnect from decoder.", self.menuDecoderDisconnect),
+			("&Connect/reconnect to decoder.", self.menuDecoderReconnect),
+			("Send 'start' command", self.menuStartDecoder),
+			("Send 'stop' command", self.menuStopDecoder),
+			("Re-send data...", self.menuShowReplay),
+		]
+		for text, handler in list:
+			self.addMenuItem( menu, text, etdOnlyHintString, handler)
+
 	@logCall
 	def menuDNS( self, event ):
 		with DNSManagerDialog(self) as dns:
@@ -1276,6 +1306,14 @@ class MainWin( wx.Frame ):
 		with JChipSetup.JChipSetupDialog(self) as dlg:
 			dlg.ShowModal()
 
+	def menuDecoderDisconnect (self, event ):
+		if self.chipReader is not None:
+			self.chipReader.Disconnect()
+
+	def menuDecoderReconnect (self, event ):
+		if self.chipReader is not None:
+			self.chipReader.Reconnect()
+
 	def menuStartDecoder( self, event ):
 		if self.chipReader is not None:
 			self.chipReader.StartListener()
@@ -1283,6 +1321,32 @@ class MainWin( wx.Frame ):
 	def menuStopDecoder( self, event ):
 		if self.chipReader is not None:
 			self.chipReader.StopListener()
+
+	def menuShowReplay(self, event):
+		if not Model.race:
+			Utils.MessageOK(self, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"), iconMask=wx.ICON_ERROR)
+			return
+		if not self.chipReader:
+			Utils.MessageOK( self, _('No Chip Reader'), _('No Chip Reader'), iconMask=wx.ICON_ERROR )
+			return
+
+		with DecoderReplayDialog.DecoderReplayDialog(self) as dlg:
+			result = dlg.ShowModal()
+			if result == wx.ID_OK:
+				start = dlg.StartTime
+				end = dlg.EndTime
+
+				if start is None or end is None:
+					self.log.error('Invalid start or end time')
+					return
+
+				self.log.info('Start time: %s, End time: %s', start, end)
+
+			elif result == DecoderReplayDialog.ID_INVALID_START:
+				self.log.error('Invalid start time')
+			elif result == DecoderReplayDialog.ID_INVALID_END:
+				self.log.error('Invalid end time')
+
 
 	def sendUltraCommand( self, command ):
 		if not self.chipReader:

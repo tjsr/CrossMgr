@@ -20,7 +20,7 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 	COMMAND_START = 'start'
 	COMMAND_STOP = 'stop'
 
-	_command_str: str
+	_command_str: str | None
 	_sync: bool = False
 	_expectsResponse: bool = True
 	_providesResponse: bool = True
@@ -31,7 +31,7 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 	_response_type: Type[CommandResponseType]
 	_success: bool = False
 
-	def __init__(self, _command_str: str, response_type: Type[CommandResponseType] | None, sync: bool = False):
+	def __init__(self, _command_str: str | None, response_type: Type[CommandResponseType] | None, sync: bool = False):
 		self._command_str = _command_str
 		self._sync = sync
 		self._expectsResponse = sync
@@ -43,9 +43,6 @@ class TimingDeviceCommand(Generic[CommandResponseType]):
 
 	def is_sync_command(self) -> bool:
 		return self._sync
-
-	def get_command_string(self) -> str:
-		return self._command_str
 
 	@property
 	def comment(self) -> str | None:
@@ -120,3 +117,11 @@ class TimingDeviceSetTimeCommand(TimingDeviceCommand):
 		if not isinstance(message, DecoderTimeMessage):
 			return None
 		raise NotImplementedError('A TimingDeviceSetTimeCommand must implement match_response')
+
+
+class TimingDeviceSendRecordsCommand(TimingDeviceCommand):
+	def __init__(self, *args, **kwargs):
+		super().__init__(kwargs['command_str'], kwargs['response_type'], sync=True)
+
+	def match_response(self, message: DecoderMessageType) -> Optional[CommandResponseType]:
+		raise NotImplementedError('A TimingDeviceSendRecordsCommand must implement match_response')
