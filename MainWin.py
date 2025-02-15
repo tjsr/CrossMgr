@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import sys
@@ -731,7 +732,7 @@ class MainWin( wx.Frame ):
 		
 		self.chipMenu.AppendSeparator()
 
-		addDecoderMenuItems( self.chipMenu )
+		self.addDecoderMenuItems( self.chipMenu )
 
 		self.chipMenu.AppendSeparator()
 		
@@ -1099,22 +1100,25 @@ class MainWin( wx.Frame ):
 			wx.CallAfter( self.refresh )
 
 	def addMenuItem(self, menu: wx.Menu, text: str, help: str, handler) -> wx.MenuItem:
-		item = menu.Append( _(text), help, handler )
-		self.Bind( wx.EVT_MENU, handler, item )
+		# item = menu.Append( _(text), help, handler )
+		# self.Bind( wx.EVT_MENU, handler, item )
 
-		item = wx.MenuItem(menu, id, text, help, kind)
+		item = wx.MenuItem(menu, wx.ID_ANY, text, help)
 		menu.Append(item)
 		self.Bind(wx.EVT_MENU, handler, item)
 		return item
 
-	def addDecoderMenuItems (menu) -> None:
+	def addDecoderMenuItems (self, menu) -> None:
 		etdOnlyHintString = _("For electronic timing decoders only")
 		list = [
 			("Disconnect from decoder.", self.menuDecoderDisconnect),
 			("&Connect/reconnect to decoder.", self.menuDecoderReconnect),
-			("Send 'start' command", self.menuStartDecoder),
-			("Send 'stop' command", self.menuStopDecoder),
+			("Start decoder read thread.", self.menuStartDecoderThread),
+			("Stop decoder read thread.", self.menuStopDecoderThread),
+			("Send 'start' command", self.menuDecoderSendStartRead),
+			("Send 'stop' command", self.menuDecoderSendStopRead),
 			("Re-send data...", self.menuShowReplay),
+			("Stop replaying data.", self.menuDecoderStopRewind),
 		]
 		for text, handler in list:
 			self.addMenuItem( menu, text, etdOnlyHintString, handler)
@@ -1306,28 +1310,84 @@ class MainWin( wx.Frame ):
 		with JChipSetup.JChipSetupDialog(self) as dlg:
 			dlg.ShowModal()
 
-	def menuDecoderDisconnect (self, event ):
-		if self.chipReader is not None:
-			self.chipReader.Disconnect()
+	def checkDecoderIsUltra(self, requires_current: bool = True):
+		if self.chipReader is None:
+			Utils.MessageOK(self, _("No Chip Reader"), _("No Chip Reader"), iconMask=wx.ICON_ERROR)
+			return False
+
+		# TODO: Fix this to be a reference to the Ultra value not a magic number
+		if not (self.chipReader.chipReaderType == 2):
+			Utils.MessageOK(self, _("Currently only supprted for Ultra decoders"), _("No Ultra Decoder"),
+			                iconMask=wx.ICON_ERROR)
+			return False
+
+		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		if requires_current and ultraDecoder is None:
+			Utils.MessageOK(self, _("No Ultra decoder thread currently running."), _("No Ultra Decoder"), iconMask=wx.ICON_ERROR)
+			return False
+
+		return True
+
+	def DecoderMenuItemError(self, e: Exception, function_name: str) -> None:
+		logging.critical('Error disconnecting from decoder: %s', e)
+		Utils.MessageOK(self, "Critical error interacting with decoder.  See log.", _("Error in {function_name}"), iconMask=wx.ICON_ERROR)
+
+	def menuDecoderDisconnect (self, event ) -> None:
+		if not self.checkDecoderIsUltra(True):
+			return
+		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		try:
+			ultraDecoder.disconnect()
+		except Exception as e:
+			self.DecoderMenuItemError(e, __name__)
 
 	def menuDecoderReconnect (self, event ):
-		if self.chipReader is not None:
-			self.chipReader.Reconnect()
+		if not self.checkDecoderIsUltra(True):
+			return
 
-	def menuStartDecoder( self, event ):
-		if self.chipReader is not None:
+		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		try:
+			ultraDecoder.reconnect()
+		except Exception as e:
+			self.DecoderMenuItemError(e, __name__)
+
+	def menuStartDecoderThread( self, event ):
+		if not self.checkDecoderIsUltra(False):
+			return
+
+		try:
 			self.chipReader.StartListener()
+		except Exception as e:
+			self.DecoderMenuItemError(e, __name__)
 
-	def menuStopDecoder( self, event ):
-		if self.chipReader is not None:
+	def menuStopDecoderThread( self, event ):
+		if not self.checkDecoderIsUltra(False):
+			return
+
+		try:
 			self.chipReader.StopListener()
+		except Exception as e:
+			self.DecoderMenuItemError(e, __name__)
+
+	def menuDecoderSendStartRead( self, event ):
+		if not self.checkDecoderIsUltra(True):
+			return
+
+		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		ultraDecoder.begin_reading()
+
+	def menuDecoderSendStopRead( self, event ):
+		if not self.checkDecoderIsUltra(True):
+			return
+
+		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		try:
+			ultraDecoder.stop_reading()
+		except Exception as e:
+			self.DecoderMenuItemError(e, __name__)
 
 	def menuShowReplay(self, event):
-		if not Model.race:
-			Utils.MessageOK(self, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"), iconMask=wx.ICON_ERROR)
-			return
-		if not self.chipReader:
-			Utils.MessageOK( self, _('No Chip Reader'), _('No Chip Reader'), iconMask=wx.ICON_ERROR )
+		if not self.checkDecoderIsUltra(True):
 			return
 
 		with DecoderReplayDialog.DecoderReplayDialog(self) as dlg:
@@ -1340,12 +1400,26 @@ class MainWin( wx.Frame ):
 					self.log.error('Invalid start or end time')
 					return
 
-				self.log.info('Start time: %s, End time: %s', start, end)
-
+				ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+				self.log.info('Requesting replay from decoder of %s to %s', start, end)
+				try:
+					ultraDecoder.send_records_from_time(start_time=start, end_time=end)
+				except Exception as e:
+					self.DecoderMenuItemError(e, __name__)
 			elif result == DecoderReplayDialog.ID_INVALID_START:
 				self.log.error('Invalid start time')
 			elif result == DecoderReplayDialog.ID_INVALID_END:
 				self.log.error('Invalid end time')
+
+	def menuDecoderStopRewind(self):
+		if not self.checkDecoderIsUltra(True):
+			return
+
+		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		try:
+			ultraDecoder.stop_rewind()
+		except Exception as e:
+			self.DecoderMenuItemError(e, __name__)
 
 
 	def sendUltraCommand( self, command ):

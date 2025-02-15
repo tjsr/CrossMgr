@@ -1,7 +1,7 @@
 import sys
 import time
 import datetime
-from typing import List, Union
+from typing import List, Union, Optional
 
 import Log
 from ByteUtils import EOL
@@ -24,6 +24,7 @@ import JChip
 ChipReaderEvent, EVT_CHIP_READER = JChip.ChipReaderEvent, JChip.EVT_CHIP_READER
 
 readerEventWindow = None
+ultraDecoder: Optional[UltraDecoder] = None
 def sendReaderEvent( tagTimes ):
 	if tagTimes and readerEventWindow:
 		wx.PostEvent( readerEventWindow, ChipReaderEvent(tagTimes = tagTimes) )
@@ -40,6 +41,7 @@ tSmall = datetime.timedelta( seconds = 0.000001 )
 reNonDigit = re.compile( '[^0-9]+' )
 def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 	global readerEventWindow
+	global ultraDecoder
 	reconnect:bool = True
 	log: LogQueue = LogQueue(q, 'ultra')
 	ultraDecoder = UltraDecoder(log, HOST, PORT)
@@ -141,6 +143,10 @@ def StopListener():
 	
 def IsListening():
 	return listener is not None
+
+def GetCurrentDecoder():
+	global ultraDecoder
+	return ultraDecoder
 
 
 def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):

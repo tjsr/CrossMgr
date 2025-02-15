@@ -1,25 +1,28 @@
 from abc import abstractmethod
 from datetime import datetime
+from typing import Callable
 
 import JChip
 import RaceResult
 import Ultra
 import WebReader
 import MyLapsServer
+from TimingDevices.TimingDevice import TimingDevice
+
 
 class ChipReader:
+	CurrentDecoder: (Callable[[], TimingDevice|None]) | None
 	JChip, RaceResult, Ultra, WebReader, MyLaps = tuple( range(5) )	# Add new options at the end.
 	Choices = (_('JChip/Impinj/Alien'), _('RaceResult'), _('Ultra'), _('WebReader'), _('MyLaps'))
 	
 	def __init__( self ):
+		self.CurrentDecoder = None
 		self.chipReaderType = None
 		self.StartListener = None
 		self.GetData = None
 		self.StopListener = None
 		self.CleanupListener = None
 		self.IsListening = None
-		self.Disconnect = None
-		self.Reconnect = None
 		self.reset()
 		
 	def reset( self, chipReaderType=None ):
@@ -38,10 +41,10 @@ class ChipReader:
 			self.StopListener = RaceResult.StopListener
 			self.CleanupListener = RaceResult.CleanupListener
 			self.IsListening = RaceResult.IsListening
-			
+
 		elif self.chipReaderType == ChipReader.Ultra:
-			self.Disconnect = Ultra.Disconnect
-			self.Reconnect = Ultra.Reconnect
+			self.CurrentDecoder = Ultra.GetCurrentDecoder
+
 			self.StartListener = Ultra.StartListener
 			self.GetData = Ultra.GetData
 			self.StopListener = Ultra.StopListener

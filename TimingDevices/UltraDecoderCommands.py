@@ -1,9 +1,11 @@
 import datetime
+from abc import abstractmethod, ABC
 from typing import Optional, cast
 
 from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderMessage
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceSetTimeCommand
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceSetTimeCommand, \
+	TimingDeviceStopResendRecords, TimingDeviceCommandException, TimingDeviceSendRecordsCommand
 from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage, \
 	UltraDecoderMessage
 
@@ -98,6 +100,10 @@ class UltraSetTimeCommand(TimingDeviceSetTimeCommand, TimingDeviceCommand):
 		return self._time
 
 
+class UltraCommandException(TimingDeviceCommandException):
+	pass
+
+
 class UltraSendRecordsCommand(TimingDeviceSendRecordsCommand):
 	_fromDateTime: datetime.datetime | None
 	_toDateTime: datetime.datetime | None
@@ -105,36 +111,59 @@ class UltraSendRecordsCommand(TimingDeviceSendRecordsCommand):
 	_from_record: int | None
 	_to_record: int | None
 
-	def __init__(self, from_datetime: datetime.datetime | None, to_datetime: datetime.datetime | None, from_record: int | None, to_record: int | None):
-		super().__init__(None, None, False)
-		if from_datetime is not None and from_record is not None:
-			raise TimingDeviceCommandException('A TimingDeviceSendRecordsCommand must have either a from_datetime or a from_record, not both')
+	def validate_parameters(self, start_time: datetime.datetime | None, end_time: datetime.datetime | None, from_record: int | None, to_record: int | None):
+		if start_time is not None:
+			if from_record is not None or to_record is not None:
+				raise TimingDeviceCommandException('A UltraSendRecordsCommand must have either datetime record values, not both')
+			if end_time is not None and start_time > end_time:
+				raise UltraCommandException('The start timestamp must be before the end timestamp.')
+		if end_time is not None:
+			if from_record is not None or to_record is not None:
+				raise TimingDeviceCommandException('A UltraSendRecordsCommand must have either datetime record values, not both')
+			if start_time is None:
+				raise UltraCommandException('An UltraSendRecordsCommand may not have an end timestamp without specifying the start timestamp.')
 
-		if to_datetime is not None and to_record is not None:
-			raise TimingDeviceCommandException('A TimingDeviceSendRecordsCommand must have either a to_datetime or a to_record, not both')
+		if from_record is not None:
+			if to_record is not None and from_record > to_record:
+				raise UltraCommandException('The start record must be before the end record.')
+		else:
+			if to_record is not None:
+				raise UltraCommandException('An UltraSendRecordsCommand may not have an end record without specifying the start record.')
+
+		return True
+
+	def __init__(self, start_time: datetime.datetime | None = None, end_time: datetime.datetime | None = None, from_record: int | None = None, to_record: int | None = None):
+		super().__init__(command_str=None, response_type=None, sync=False)
+		UltraSendRecordsCommand.validate_parameters(self, start_time, end_time, from_record, to_record)
 
 		self._from_record = from_record
 		self._to_record = to_record
 
-		self._fromDateTime = from_datetime
-		self._toDateTime = to_datetime
+		self._fromDateTime = start_time
+		self._toDateTime = end_time
 
 
-	@abstractmethod
 	def get_command_string(self) -> str:
 		if self._fromDateTime is not None:
-			from_epoch = self._fromDateTime.timestamp()
-			raise NotImplementedError('A TimingDeviceSendRecordsCommand must implement get_command_string')
+			t1980 = datetime.datetime(1980, 1, 1).timestamp()
+			from_epoch = int(self._fromDateTime.timestamp() - t1980)
+			to_epoch = int(self._toDateTime.timestamp() if self._toDateTime is not None else datetime.datetime.now().timestamp() - t1980)
 
-		raise NotImplementedError('A TimingDeviceSendRecordsCommand must implement get_command_string')
+			return f'800{from_epoch}\0x0D{to_epoch}'
+		elif self._from_record is not None:
+			if self._to_record is not None:
+				return f'600{self._from_record}\0x0D{self._to_record}'
+			else:
+				return f'600{self._from_record}'
 
-	def __init__(self, *args, **kwargs):
-		super().__init__('r', response_type=UltraDecoderMessage, sync=True)
-
-	def get_command_string(self) -> str:
-		return 'r'
+		raise ValueError('UltraSendRecordsCommand must have either a datetime range or record range')
 
 	def match_response(self, message: UltraDecoderMessage) -> Optional[UltraDecoderMessage]:
 		if not isinstance(message, UltraDecoderMessage):
 			return None
 		return message
+
+
+class UltraStopResendRecords(TimingDeviceStopResendRecords, ABC):
+	def __init__(self):
+		super().__init__(command_str='9', response_type=None, sync=False)

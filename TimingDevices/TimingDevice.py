@@ -9,7 +9,7 @@ from Log import CrossMgrLogger
 
 from LogQueue import LogQueue
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException, \
-	TimingDeviceSetTimeCommand
+	TimingDeviceSetTimeCommand, TimingDeviceSendRecordsCommand
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
 
@@ -199,10 +199,10 @@ class TimingDevice:
 		self.send_command(sendRecordsCommand)
 		return sendRecordsCommand
 
-	def send_records_from_time(self, startTime: datetime.datetime, endTime: datetime.datetime) -> TimingDeviceCommand:
-		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS, start_time=startTime, end_time=endTime)
+	def send_records_from_time(self, start_time: datetime.datetime, end_time: datetime.datetime) -> TimingDeviceSendRecordsCommand:
+		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS, start_time=start_time, end_time=end_time)
 		self.send_command(sendRecordsCommand)
-		return sendRecordsCommand
+		return cast(TimingDeviceSendRecordsCommand, sendRecordsCommand)
 
 	def get_setting(self, setting: str):
 		if not self.is_valid_setting(setting):
@@ -267,7 +267,8 @@ class TimingDevice:
 	@abstractmethod
 	def stop_reading(self):
 		if not self.is_readonly_device():
-			self.send_command(TimingDeviceCommand.COMMAND_STOP)
+			command = self.get_command(TimingDeviceCommand.COMMAND_STOP)
+			self.send_command(command)
 
 	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
 		# TODO: We can abstract this with wait_for_response

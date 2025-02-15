@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import inspect
 import socket
 import time
 from typing import cast, Callable
@@ -9,10 +10,11 @@ from LogQueue import LogQueue
 from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceSendRecordsCommand
 
 from TimingDevices.UltraAutodetect import AutoDetect
-from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand
+from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand, UltraSendRecordsCommand, \
+	UltraStopResendRecords
 from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, \
 	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage, UltraDecoderTimeMessage
 
@@ -23,13 +25,16 @@ tSmall = datetime.timedelta( seconds = 0.000001 )
 
 
 class UltraDecoder(TimingDevice, TCPTimingDevice):
+	COMMAND_STOP_REWIND = 'stop_rewind'
 	commands = {
 		TimingDeviceCommand.COMMAND_START: TimingDeviceCommand('R', response_type=None, sync=False),
 		TimingDeviceCommand.COMMAND_STOP: TimingDeviceCommand('S', response_type=None, sync=False),
 		TimingDeviceCommand.COMMAND_STATUS: UltraGetStatusCommand(),
-		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand(),
-		TimingDeviceCommand.COMMAND_SEND_RECORDS: UltraSendRecordsCommand()
+		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand,
+		TimingDeviceCommand.COMMAND_SEND_RECORDS: UltraSendRecordsCommand,
+		COMMAND_STOP_REWIND: UltraStopResendRecords()
 	}
+
 
 	DEFAULT_PORT: int = 23
 	# DEFAULT_PORT = 8642
@@ -230,7 +235,10 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 	def get_command(self, command_type: str, *args, **kwargs) -> TimingDeviceCommand:
 		if command_type in UltraDecoder.commands:
-			return UltraDecoder.commands[command_type]
+			if inspect.isclass(UltraDecoder.commands[command_type]):
+				return UltraDecoder.commands[command_type](*args, **kwargs)
+			else:
+				return UltraDecoder.commands[command_type]
 
 		raise UnrecognisedCommandException(command_type)
 
@@ -283,6 +291,10 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	def stop_reading(self):
 		TimingDevice.stop_reading(self)
 
+	def stop_rewind(self):
+		command = self.get_command(UltraDecoder.COMMAND_STOP_REWIND)
+		self.send_command(command)
+
 	def send_data(self, payload: str):
 		TCPTimingDevice.send_data(self, payload)
 
@@ -295,8 +307,25 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 		return TCPTimingDevice.disconnect(self)
 
+	def reconnect(self) -> bool:
+		if self.connected():
+			TCPTimingDevice.disconnect(self)
+			return TCPTimingDevice.connect(self)
+
 	def send_command(self, command: TimingDeviceCommand):
 		if not TCPTimingDevice.connected:
 			self.getLog().error(f'Decoder not connected, cannot send command {command}')
 
 		super().send_command(command)
+
+	def send_records_from_record(self,
+		start_record: int,
+		end_record: int | None = None
+		) -> UltraSendRecordsCommand:
+		sendRecordsCommand = self.create_command(
+			TimingDeviceCommand.COMMAND_SEND_RECORDS,
+			from_record=start_record,
+			to_record=end_record)
+		self.send_command(sendRecordsCommand)
+		return cast(UltraSendRecordsCommand, sendRecordsCommand)
+
