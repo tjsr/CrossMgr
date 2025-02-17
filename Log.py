@@ -1,9 +1,13 @@
+import faulthandler
 import inspect
 import logging
 import logging.config
-import yaml
 import os
+import sys
+
 from typing import Any, cast
+
+import yaml
 
 from FileUtils import config_search
 from YamlUtil import merge_yaml
@@ -65,8 +69,13 @@ def getLogger(name: str = None) -> CrossMgrLogger:
 def load_logging_config_files() -> None:
   logConfigPath = config_search('logging.yml')
 
+  if logConfigPath is None:
+    sys.stderr.write('No logging configuration file found in any search path.')
+    return
+
   with open(logConfigPath, 'r') as logConfig:
     config = yaml.safe_load(logConfig.read())
+
     if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't') or True:
       debugLogConfigPath = config_search('logging.debug.yml')
       if debugLogConfigPath is not None:
@@ -76,4 +85,14 @@ def load_logging_config_files() -> None:
 
     logging.config.dictConfig(config)
 
-load_logging_config_files()
+try:
+  if __name__ == '__main__':
+    faulthandler.enable()
+  load_logging_config_files()
+except Exception as e:
+  sys.stderr.write('Error loading logging configuration: {}'.format(e))
+except BaseException as be:
+  sys.stderr('Error loading logging configuration: {}'.format(be))
+
+if __name__ == '__main__':
+  logging.getLogger().info("Test")
