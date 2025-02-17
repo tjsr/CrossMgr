@@ -2,8 +2,8 @@ import os
 from typing import List, Callable
 
 
-def get_file_from_directory(file_name: str, dir: str) -> str|None:
-  file_path = os.path.join(dir, file_name)
+def get_file_from_directory(file_name: str, search_dir: str) -> str|None:
+  file_path = os.path.join(search_dir, file_name)
   if os.path.isfile(file_path):
     return file_path
   return None
