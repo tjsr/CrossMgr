@@ -1,6 +1,10 @@
 import sys
 import collections
 
+from wx import StandardPaths
+
+import FileSystemUtils
+
 isWindows = sys.platform.startswith('win')
 
 #------------------------------------------------------------------------
@@ -513,25 +517,12 @@ def ordinal( value ):
 		'en': lambda v: "{}{}".format(v, ['th','st','nd','rd','th','th','th','th','th','th'][v%10]) if (v % 100)//10 != 1 else "{}{}".format(value, "th"),
 	}.get( lang[:2], lambda v: '{}.\u00B0'.format(v) )( value )	# Default: show with a degree sign.
 
-def getHomeDir( appName='CrossMgr' ):
-	sp = wx.StandardPaths.Get()
-	homedir = sp.GetUserDataDir()
-	try:
-		if os.path.basename(homedir) == '.{}'.format(appName):
-			homedir = os.path.join( os.path.dirname(homedir), '.{}App'.format(appName) )
-	except Exception:
-		pass
-	if not os.path.exists(homedir):
-		os.makedirs( homedir )
-	return homedir
+def getHomeDir( appName='CrossMgr' ) -> str:
+	return FileSystemUtils.getHomeDir( appName )
 
-def getDocumentsDir():
-	sp = wx.StandardPaths.Get()
-	dd = sp.GetDocumentsDir()
-	if not os.path.exists(dd):
-		os.makedirs( dd )
-	return dd
-	
+def getDocumentsDir() -> str:
+	return FileSystemUtils.getDocumentsDir()
+
 #------------------------------------------------------------------------
 def positiveFloatLocale( v ):
 	if isinstance( v, float ):
