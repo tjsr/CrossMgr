@@ -105,8 +105,8 @@ class UltraCommandException(TimingDeviceCommandException):
 
 
 class UltraSendRecordsCommand(TimingDeviceSendRecordsCommand):
-	_fromDateTime: datetime.datetime | None
-	_toDateTime: datetime.datetime | None
+	_from_date_time: datetime.datetime | None
+	_to_date_time: datetime.datetime | None
 
 	_from_record: int | None
 	_to_record: int | None
@@ -139,15 +139,15 @@ class UltraSendRecordsCommand(TimingDeviceSendRecordsCommand):
 		self._from_record = from_record
 		self._to_record = to_record
 
-		self._fromDateTime = start_time
-		self._toDateTime = end_time
+		self._from_date_time = start_time
+		self._to_date_time = end_time
 
 
 	def get_command_string(self) -> str:
-		if self._fromDateTime is not None:
+		if self._from_date_time is not None:
 			t1980 = datetime.datetime(1980, 1, 1).timestamp()
-			from_epoch = int(self._fromDateTime.timestamp() - t1980)
-			to_epoch = int(self._toDateTime.timestamp() if self._toDateTime is not None else datetime.datetime.now().timestamp() - t1980)
+			from_epoch = int(self._from_date_time.timestamp() - t1980)
+			to_epoch = int(self._to_date_time.timestamp() if self._to_date_time is not None else datetime.datetime.now().timestamp() - t1980)
 
 			return f'800{from_epoch}\0x0D{to_epoch}'
 		elif self._from_record is not None:

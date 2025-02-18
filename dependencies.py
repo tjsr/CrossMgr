@@ -13,7 +13,6 @@ dependencies = [
 	'xlsxwriter',
 	'pygments',
 	'xlrd',
-	'pytz',
 	'fpdf',
 	'natural-keys',
 	'xlwt',
