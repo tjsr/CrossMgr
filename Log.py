@@ -14,14 +14,21 @@ import yaml
 from FileUtils import config_search
 from YamlUtil import merge_yaml
 
-log_base_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'CrossMgr')
+log_base_dir = None
 
 def set_log_base_dir(base_dir: str) -> str:
   global log_base_dir
+  if not os.path.exists(base_dir):
+    os.makedirs(base_dir)
+    if not os.access(base_dir, os.W_OK):
+      err_message = f"Write permission denied for directory: {base_dir}"
+      sys.stderr.write(err_message)
+      raise PermissionError(err_message)
+    sys.stdout(f'Log directory created at {base_dir}')
   log_base_dir = base_dir
   return log_base_dir
 
-get_log_base_dir: Callable[[str], str]
+set_log_base_dir(os.path.join(os.path.expanduser('~'), 'CrossMgr'))
 
 def get_log_path(log_name: str) -> str:
   return os.path.abspath(os.path.join(log_base_dir, log_name))
@@ -90,11 +97,21 @@ def make_safe_key(file_path: str) -> str:
 
 def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encoding: str | None=None, owner=None):
   log_path = get_log_path(filename)
-  if not os.path.exists(log_path):
-    log_parent = os.path.dirname(log_path)
-    if not os.path.exists(log_parent):
-      os.makedirs(log_parent)
-    open(log_path, 'a').close()
+  log_parent = os.path.dirname(log_path)
+  if not os.path.exists(log_parent):
+    os.makedirs(log_parent)
+    if not os.access(log_parent, os.W_OK):
+      err_message = f"Write permission denied for directory: {log_parent}"
+      sys.stderr.write(err_message)
+      raise PermissionError(err_message)
+    sys.stdout(f'Log directory created at {log_parent}')
+
+  if not os.access(log_path, os.W_OK):
+    err_message = f"Write permission denied for log file: {log_path}"
+    sys.stderr.write(err_message)
+    raise PermissionError(err_message)
+
+  open(log_path, 'a').close()
   if owner:
     shutil.chown(log_path, *owner)
   key = make_safe_key(log_path)
@@ -111,8 +128,6 @@ def load_logging_config_files() -> None:
     return
 
   with open(logConfigPath, 'r') as logConfig:
-    logConfigParent = os.path.dirname(logConfigPath)
-    set_log_base_dir(logConfigParent)
     config = yaml.safe_load(logConfig.read())
     logConfig.close()
 
@@ -120,14 +135,10 @@ def load_logging_config_files() -> None:
       debugLogConfigPath = config_search('logging.debug.yml')
       if debugLogConfigPath is not None:
         with open(debugLogConfigPath, 'r') as debugLogConfig:
-          debugLogConfigParent = os.path.dirname(debugLogConfigPath)
-          set_log_base_dir(debugLogConfigParent)
-
           debugConfig = yaml.safe_load(debugLogConfig.read())
 
           config = merge_yaml(config, debugConfig)
           debugLogConfig.close()
-
 
     logging.config.dictConfig(config)
 
