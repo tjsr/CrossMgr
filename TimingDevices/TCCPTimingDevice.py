@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 import socket
 import time
@@ -21,11 +22,13 @@ class TCPTimingDevice:
 	_timeoutSecs: int = 5
 	_log: CrossMgrLogger | None = None
 	__unsuccessfulConnectionAttempts: int = 0
+	__attempt_reconnect_after: datetime.datetime = datetime.datetime.fromtimestamp(0)
 
 	def __init__(self, host: str, port: int ):
 		self._host = host
 		self._port = port
 		self._s = None
+		self.__reset_reconnect_backoff()
 
 	def getLog(self, child:str = None) -> CrossMgrLogger:
 		log = None
@@ -58,6 +61,7 @@ class TCPTimingDevice:
 			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self._s.settimeout(self._timeoutSecs)
 			self._s.connect((self._host, self._port))
+			self.__reset_reconnect_backoff()
 			self.__unsuccessfulConnectionAttempts = 0
 
 			time.sleep(2)
@@ -66,12 +70,12 @@ class TCPTimingDevice:
 			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
 			log.error(errDesc)
 			self._s = None
-			self.__unsuccessfulConnectionAttempts += 1
+			self.__set_reconnect_backoff()
 			return False
 		except Exception as e:
 			log.exception('{}: {}'.format(_('Unknown error connecting to {}'), description, e))
 			self._s = None
-			self.__unsuccessfulConnectionAttempts += 1
+			self.__set_reconnect_backoff()
 			return False
 
 		log.info(_('Successfully connected to {}').format(description))
@@ -129,3 +133,27 @@ class TCPTimingDevice:
 	@property
 	def UnsuccessfulConnectionAttempts(self) -> int:
 		return self.__unsuccessfulConnectionAttempts
+
+	@property
+	def WaitForReconnect(self) -> bool:
+		if not self.connected() and not (datetime.datetime.now() > self.__attempt_reconnect_after):
+			return True
+		return False
+
+	def __set_reconnect_backoff(self):
+		self.__unsuccessfulConnectionAttempts += 1
+		delta = 5
+		if self.__unsuccessfulConnectionAttempts == 3:
+			delta += 25
+		if self.__unsuccessfulConnectionAttempts == 5:
+			delta += 30
+
+		self.__attempt_reconnect_after = datetime.datetime.now() + datetime.timedelta(seconds=delta)
+
+	def __reset_reconnect_backoff(self):
+		self.__attempt_reconnect_after = datetime.datetime.fromtimestamp(0)
+		self.__unsuccessfulConnectionAttempts = 0
+
+	@property
+	def NextReconnectTime(self) -> datetime.datetime:
+		return self.__attempt_reconnect_after

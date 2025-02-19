@@ -72,28 +72,13 @@ def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
 		return keepGoing()
 
 	while keepGoing():
-		if not ultraDecoder.connect():
-			if ultraDecoder.UnsuccessfulConnectionAttempts > 3:
-				waitTime = 30
-			elif ultraDecoder.UnsuccessfulConnectionAttempts > 5:
-				waitTime = 60
-			else:
-				waitTime = delaySecs
-
-			if waitTime > delaySecs:
-				Log.getLogger(name='Ultra').warning(f'Too many unsuccessful connection attempts, waiting {waitTime} seconds before trying again.')
-
-			time.sleep( waitTime )
+		if ultraDecoder.WaitForReconnect:
+			time.sleep(0.500)
 			continue
-
-		#-----------------------------------------------------------------------------------------------------
-		# try:
-		# 	time.sleep(delaySecs)
-		# 	ultraDecoder.begin_reading()
-		# except ValueError:
-		# 	continue
-		# except Exception as e:
-		# 	log.exception( 'ultra.keepGoing', e )
+		if not ultraDecoder.connect():
+			Log.getLogger(name='Ultra').warning(
+				f'Waiting until {ultraDecoder.NextReconnectTime} before trying again.')
+			continue
 
 		log.q('ultra.keepGoing', '{}'.format(_('Reading data from decoder...')))
 		
