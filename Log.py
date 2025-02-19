@@ -1,13 +1,30 @@
+import faulthandler
+import hashlib
 import inspect
 import logging
 import logging.config
-import yaml
 import os
-from typing import Any, cast
+import shutil
+import sys
+
+from typing import Any, cast, Callable
+
+import yaml
 
 from FileUtils import config_search
 from YamlUtil import merge_yaml
 
+log_base_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'CrossMgr')
+
+def set_log_base_dir(base_dir: str) -> str:
+  global log_base_dir
+  log_base_dir = base_dir
+  return log_base_dir
+
+get_log_base_dir: Callable[[str], str]
+
+def get_log_path(log_name: str) -> str:
+  return os.path.abspath(os.path.join(log_base_dir, log_name))
 
 class Log:
   TRACE = 6
@@ -62,18 +79,70 @@ def getLogger(name: str = None) -> CrossMgrLogger:
 
   return cast(CrossMgrLogger, log)
 
+def getLogBaseDir() -> str:
+  return os.path.join(os.path.expanduser('~'), 'Documents', 'CrossMgr')
+
+file_handlers = {}
+
+
+def make_safe_key(file_path: str) -> str:
+  return hashlib.md5(file_path.encode()).hexdigest()
+
+def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encoding: str | None=None, owner=None):
+  log_path = get_log_path(filename)
+  if not os.path.exists(log_path):
+    log_parent = os.path.dirname(log_path)
+    if not os.path.exists(log_parent):
+      os.makedirs(log_parent)
+    open(log_path, 'a').close()
+  if owner:
+    shutil.chown(log_path, *owner)
+  key = make_safe_key(log_path)
+  if not key in file_handlers or file_handlers[key] is None:
+    file_handlers[key] = logging.FileHandler(log_path, mode, encoding)
+
+  return file_handlers[key]
+
 def load_logging_config_files() -> None:
   logConfigPath = config_search('logging.yml')
 
+  if logConfigPath is None:
+    sys.stderr.write('No logging configuration file found in any search path.')
+    return
+
   with open(logConfigPath, 'r') as logConfig:
+    logConfigParent = os.path.dirname(logConfigPath)
+    set_log_base_dir(logConfigParent)
     config = yaml.safe_load(logConfig.read())
+    logConfig.close()
+
     if os.getenv('DEBUG', 'False').lower() in ('true', '1', 't') or True:
       debugLogConfigPath = config_search('logging.debug.yml')
       if debugLogConfigPath is not None:
         with open(debugLogConfigPath, 'r') as debugLogConfig:
+          debugLogConfigParent = os.path.dirname(debugLogConfigPath)
+          set_log_base_dir(debugLogConfigParent)
+
           debugConfig = yaml.safe_load(debugLogConfig.read())
+
           config = merge_yaml(config, debugConfig)
+          debugLogConfig.close()
+
 
     logging.config.dictConfig(config)
 
-load_logging_config_files()
+try:
+  if __name__ == '__main__':
+    faulthandler.enable()
+  load_logging_config_files()
+except Exception as e:
+  sys.stderr.write('Error loading logging configuration: {}'.format(e))
+  if e.__cause__ is not None and isinstance(e.__cause__, FileNotFoundError):
+    sys.stderr.write('FileNotFound: {}'.format(e.__cause__))
+except BaseException as be:
+  sys.stderr('Error loading logging configuration: {}'.format(be))
+  if be.__cause__ is not None:
+    sys.stderr.write('Cause: {}'.format(e.__cause__))
+
+if __name__ == '__main__':
+  logging.getLogger().info("Test")
