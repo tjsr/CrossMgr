@@ -24,7 +24,7 @@ def set_log_base_dir(base_dir: str) -> str:
       err_message = f"Write permission denied for directory: {base_dir}"
       sys.stderr.write(err_message)
       raise PermissionError(err_message)
-    sys.stdout(f'Log directory created at {base_dir}')
+    sys.stdout.write(f'Log directory created at {base_dir}')
   log_base_dir = base_dir
   return log_base_dir
 
@@ -104,16 +104,17 @@ def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encodin
       err_message = f"Write permission denied for directory: {log_parent}"
       sys.stderr.write(err_message)
       raise PermissionError(err_message)
-    sys.stdout(f'Log directory created at {log_parent}')
+    sys.stdout.write(f'Log directory created at {log_parent}')
 
+  if owner:
+    shutil.chown(log_path, *owner)
+
+  open(log_path, 'a').close()
   if not os.access(log_path, os.W_OK):
     err_message = f"Write permission denied for log file: {log_path}"
     sys.stderr.write(err_message)
     raise PermissionError(err_message)
 
-  open(log_path, 'a').close()
-  if owner:
-    shutil.chown(log_path, *owner)
   key = make_safe_key(log_path)
   if not key in file_handlers or file_handlers[key] is None:
     file_handlers[key] = logging.FileHandler(log_path, mode, encoding)
