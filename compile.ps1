@@ -251,6 +251,7 @@ function CopyAssets($program)
 	if ($program -eq "CrossMgr")
 	{
 		Copy-Item -Force -Path 'CrossMgrTutorial.pdf' -Destination "$resourcedir"
+		Copy-Item -Force -Path 'logging.yml' -Destination "$resourcedir"
 		if (Test-Path "CrossMgrHelpIndex")
 		{
 			Remove-Item -Recurse -Force -Path "CrossMgrHelpIndex"
