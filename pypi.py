@@ -145,7 +145,7 @@ for dir in data_dirs:
 print( 'Copying doc files to doc directory.' )
 docDir = os.path.join( pypiDir, 'CrossMgr','CrossMgrDoc' )
 os.mkdir( docDir )
-for f in ['MacInstallReadme.txt', 'LinuxInstallReadme.txt', 'CrossMgrTutorial.doc']:
+for f in ['MacInstallReadme.txt', 'LinuxInstallReadme.txt', 'CrossMgrTutorial.doc', 'logging.yml']:
 	shutil.copy( f, os.path.join(docDir, f) )
 
 print( 'Copy the src files and add the copyright notice.' )

@@ -1,0 +1,48 @@
+version: 1
+
+formatters:
+  simple:
+    format: '%(asctime)s %(name)s [%(levelname)s] %(message)s'
+  method:
+    format: '%(asctime)s %(name)s:%(funcName)s [%(levelname)s] %(message)s'
+  trace:
+    format: '%(asctime)s %(name)s@%(filename)s:%(lineno)d:%(funcName)s [%(levelname)s] %(message)s'
+  input:
+    format: '%(message)s'
+  output:
+    format: '#%(message)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: simple
+    stream: ext://sys.stdout
+  file:
+    '()': ext://Log.owned_file_handler
+    formatter: method
+    filename: 'logs/crossmgr.log'
+    encoding: utf-8
+  decoderinput:
+    # TODO: Replace this with a single handler for I/O.
+    '()': ext://Log.owned_file_handler
+    formatter: input
+    filename: 'logs/decoder.log'
+    encoding: utf-8
+  decoderoutput:
+    # TODO: Replace this with a single handler for I/O.
+    '()': ext://Log.owned_file_handler
+    formatter: output
+    filename: 'logs/decoder-out.log'
+    encoding: utf-8
+
+loggers:
+  'TimingDevice[UltraDecoder].input':
+    level: INFO
+    handlers: [decoderinput]
+  'TimingDevice[UltraDecoder].output':
+    level: INFO
+    handlers: [decoderoutput]
+  root:
+    class: CrossMgrLogger
+    level: INFO
+    handlers: [console, file]

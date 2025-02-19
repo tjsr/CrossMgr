@@ -72,6 +72,7 @@ for dir in ['images', 'htmldoc', 'html']:
 
 targetDir = os.path.join( 'CrossMgr', 'doc' )
 tf.add( 'CrossMgrTutorial.doc', os.path.join(targetDir,'CrossMgrTutorial.doc') )
+tf.add( 'logging.yml', os.path.join(targetDir,'logging.yml') )
 	
 tf.close()
 sys.exit()
@@ -107,6 +108,7 @@ for dir in ['images', 'htmldoc', 'html']:
 
 targetDir = os.path.join( 'CrossMgr', 'doc' )
 tf.add( 'CrossMgrTutorial.doc', os.path.join(targetDir,'CrossMgrTutorial.doc') )
+tf.add( 'logging.yml', os.path.join(targetDir,'logging.yml') )
 	
 tf.close()
 sys.exit()
