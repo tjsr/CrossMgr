@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from datetime import datetime
 from typing import Callable
 
@@ -9,12 +9,26 @@ import WebReader
 import MyLapsServer
 from TimingDevices.TimingDevice import TimingDevice
 
+class ChipReaderType:
+	IsListening: Callable[[], bool] | None
 
-class ChipReader:
+	@abstractmethod
+	def StartListener( self, time: datetime, host: str, port: int, test: bool | None = None ) -> None:
+		pass
+
+	@abstractmethod
+	def GetData( self ) -> list[str]:
+		pass
+
+	@abstractmethod
+	def StopListener( self ) -> None:
+		pass
+
+class ChipReader(ChipReaderType, ABC):
 	CurrentDecoder: (Callable[[], TimingDevice|None]) | None
 	JChip, RaceResult, Ultra, WebReader, MyLaps = tuple( range(5) )	# Add new options at the end.
 	Choices = (_('JChip/Impinj/Alien'), _('RaceResult'), _('Ultra'), _('WebReader'), _('MyLaps'))
-	
+
 	def __init__( self ):
 		self.CurrentDecoder = None
 		self.chipReaderType = None
@@ -72,18 +86,6 @@ class ChipReader:
 			self.CleanupListener = JChip.CleanupListener
 			self.IsListening = JChip.IsListening
 
-	@abstractmethod
-	def StartListener( self, time: datetime, host: str, port: int, test: bool | None = None ) -> None:
-		pass
-
-	@abstractmethod
-	def GetData( self ) -> list[str]:
-		pass
-
-	@abstractmethod
-	def StopListener( self ) -> None:
-		pass
-			
 chipReaderCur = ChipReader()
 
 
