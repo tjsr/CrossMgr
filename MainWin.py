@@ -47,6 +47,7 @@ import xlwt
 import xlsxwriter
 
 import Utils
+from typing import Callable, Union
 
 from AddExcelInfo import AddExcelInfo
 from LogPrintStackStderr import LogPrintStackStderr
@@ -122,7 +123,6 @@ import Flags
 import WebServer
 import ImageIO
 from ModuleUnpickler import ModuleUnpickler
-from typing import Union
 
 now = datetime.datetime.now
 
@@ -244,6 +244,7 @@ class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
 	__restartTimingDeviceListener: bool = True
 	config: wx.Config
+	__menuItemEnabledState: {int, Callable[[], bool]} = {}
 
 	def __init__( self, parent, id = wx.ID_ANY, title='', size=(200,200) ):
 		super().__init__(parent, id, title, size=size)
@@ -1040,6 +1041,83 @@ class MainWin( wx.Frame ):
 			for t in rNew.times:
 				numTimeInfo.add( newNum, t )
 			wx.CallAfter( self.refresh )
+
+	def addMenuItem(self, menu: wx.Menu, text: str, help: str, handler) -> wx.MenuItem:
+		# item = menu.Append( _(text), help, handler )
+		# self.Bind( wx.EVT_MENU, handler, item )
+
+		item = wx.MenuItem(menu, wx.ID_ANY, text, help)
+		menu.Append(item)
+		self.Bind(wx.EVT_MENU, handler, item)
+		return item
+
+	def isDecoderConnected (self) -> bool:
+		cr: ChipReader = self.chipReader
+		if cr is not None:
+			if not cr.IsListening():
+				return False
+
+			cd: TimingDevice = cr.CurrentDecoder()
+			if cd is None and cr:
+				return True
+			else:
+				return cd.isConnected()
+
+	def isRaceActive(self) -> bool:
+		return Model.race is not None
+
+	def isMenuItemEnabled(self, item_id: int) -> bool:
+		is_enabled = True
+		if not self.__menuItemEnabledState.has_key(itemId):
+			return True
+
+		check = self.__menuItemEnabledState[itemId]
+		if check is None or not callable(check):
+			return True
+
+		is_enabled = check()
+		return is_enabled
+
+	def enableOrDisableMenuItems(self, menu: wx.Menu) -> None:
+		for itemId, check in self.__menuItemEnabledState.items():
+			try:
+				if check is not None and callable(check):
+					menuItemList = menu.FindItem(itemId)
+					if menuItemList is None or len(menuItemList) == 0:
+						log.warn(f'Item {itemId} was in menu for enable check but UI control not found.')
+						continue
+
+					if not isinstance(menuItemList[0], wx.MenuItem):
+						log.warn(f'Item {itemId} was in menu for enable check but is not a wx.MenuItem ')
+						continue
+
+					menuItem: MenuItem = menuItemList[0]
+					is_enabled = check()
+					menuItem.Enable(enable=is_enabled)
+			except Exception as e:
+				self.log.exception(f'Error enabling menu item {itemId}: {e}')
+
+	def addDecoderMenuItems (self, menu: wx.Menu) -> None:
+		etdOnlyHintString: str = _("For electronic timing decoders only")
+		list: (str, callable, callable[[], bool]) = [
+			("Disconnect from decoder.", self.menuDecoderDisconnect, lambda: self.isDecoderConnected()),
+			("&Connect/reconnect to decoder.", self.menuDecoderReconnect, lambda: self.isRaceActive()),
+			("Start decoder read thread.", self.menuStartDecoderThread, lambda: self.isRaceActive()),
+			("Stop decoder read thread.", self.menuStopDecoderThread, lambda:  self.isDecoderConnected()),
+			("Send 'start' command", self.menuDecoderSendStartRead, lambda: self.isDecoderConnected()),
+			("Send 'stop' command", self.menuDecoderSendStopRead, lambda: self.isDecoderConnected()),
+			("Re-send data...", self.menuShowReplay, lambda: self.isDecoderConnected()),
+			("Stop replaying data.", self.menuDecoderStopRewind, lambda: self.isDecoderConnected()),
+		]
+		if self.__menuItemEnabledState is None:
+			self.__menuItemEnabledState: {int, Callable[[], bool]} = {}
+
+		for text, handler, enableCondition in list:
+			handlerCall = lambda *args, **kwargs: self.safeDecoderMenuCall(handler, *args, **kwargs)
+			item: wx.MenuItem = self.addMenuItem( menu, text, etdOnlyHintString, handlerCall)
+
+			if enableCondition is not None and callable(enableCondition):
+				self.__menuItemEnabledState[item.GetId()] = enableCondition
 
 	@logCall
 	def menuDNS( self, event ):
@@ -4075,7 +4153,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		race = Model.race
 		if not race:
 			return False
-			
+
 		if not race or not race.enableJChipIntegration:
 			if ChipReader.chipReaderCur.IsListening():
 				ChipReader.chipReaderCur.StopListener()
