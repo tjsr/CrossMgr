@@ -42,11 +42,31 @@ class TimingDeviceConnectMessage(DecoderMessage):
 		super().__init__(args, kwargs)
 
 
-class TimingDevice:
-	_readonly = False
+class LogQueueClass:
 	_logger: LogQueue | None = None
+
+	@property
+	def logger(self) -> LogQueue | None:
+		return self._logger
+
+	@logger.setter
+	def logger(self, value: LogQueue):
+		self._logger = value
+
+	def log(self, category: str, message: str):
+		if self._logger:
+			self._logger.q(category, message)
+
+	def logEx(self, category: str, msg: str, e: Exception, exc_info: tuple[Type[BaseException], BaseException, TracebackType] | tuple[None, None, None] | None = None) -> list[str] | None:
+		if self._logger:
+			trace = self._logger.exception(category, e, exc_info)
+			self.log(category, msg)
+		return None
+
+
+class TimingDevice(LogQueueClass):
+	_readonly = False
 	_log: CrossMgrLogger | None = None
-	# _log: logging.Logger | None = None
 	_messageQueue: List[DecoderMessage] = None
 	_commandQueue: Queue[TimingDeviceCommand] = None
 
@@ -66,15 +86,6 @@ class TimingDevice:
 		if child is not None:
 			log = log.getChild(child)
 		return log
-
-	# def getLog(self, name: str | None = None, level: int = logging.NOTSET, forMethod: bool = False) -> logging.Logger:
-	# 	if name is None:
-	# 		name = self.__class__.__name__
-	# 		if self._log is None:
-	# 			self._log = getLogger(name, level)
-	# 	else:
-	# 		return getLogger(name, level)
-	# 	return self._log
 
 	def is_readonly_device(self) -> bool:
 		return self._readonly
@@ -149,24 +160,6 @@ class TimingDevice:
 		if len(self._messageQueue) == 0:
 			return None
 		return self._messageQueue[-1]
-
-	@property
-	def logger(self) -> LogQueue | None:
-		return self._logger
-
-	@logger.setter
-	def logger(self, value: LogQueue):
-		self._logger = value
-
-	def log(self, category: str, message: str):
-		if self._logger:
-			self._logger.q(category, message)
-
-	def logEx(self, category: str, msg: str, e: Exception, exc_info: tuple[Type[BaseException], BaseException, TracebackType] | tuple[None, None, None] | None = None) -> list[str] | None:
-		if self._logger:
-			trace = self._logger.exception(category, e, exc_info)
-			self.log(category, msg)
-		return None
 
 	def create_command(self, command_type: str, *args, **kwargs) -> TimingDeviceCommand:
 		return self.get_command(command_type, *args, **kwargs)
