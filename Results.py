@@ -82,7 +82,8 @@ class Results( wx.Panel ):
 
 	def __init__( self, parent, id = wx.ID_ANY ):
 		super().__init__(parent, id)
-		
+
+		self.closeFinishBibs = None
 		self.category = None
 		self.showRiderData = True
 		self.selectDisplay = 0
