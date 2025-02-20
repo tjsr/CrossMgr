@@ -27,6 +27,7 @@ import locale
 
 import DecoderReplayDialog
 import Log
+from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 
 try:
 	localDateFormat = locale.nl_langinfo( locale.D_FMT )
@@ -41,6 +42,7 @@ import xlwt
 import xlsxwriter
 
 import Utils
+from typing import Callable
 
 from AddExcelInfo import AddExcelInfo
 from LogPrintStackStderr import LogPrintStackStderr
@@ -117,6 +119,7 @@ from TemplateSubstitute import TemplateSubstitute
 from GetMatchingExcelFile import GetMatchingExcelFile
 import ChangeRaceStartTime
 from PageDialog			import PageDialog
+from ChipReader import ChipReaderType
 import ChipReader
 import Flags
 import WebServer
@@ -325,6 +328,7 @@ def AppendMenuItemBitmap( menu, id, name, help, bitmap ):
 		
 class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
+	__menuItemEnabledState: {int, Callable[[], bool]} = {}
 
 	def __init__( self, parent, id = wx.ID_ANY, title='', size=(200,200) ):
 		super().__init__(parent, id, title, size=size)
@@ -732,7 +736,11 @@ class MainWin( wx.Frame ):
 		
 		self.chipMenu.AppendSeparator()
 
-		self.addDecoderMenuItems( self.chipMenu )
+		self.addDecoderMenuItems(self.chipMenu)
+		try:
+			self.enableOrDisableMenuItems(self.chipMenu)
+		except Exception as e:
+			self.log.critical(f'Failed while enabling or disabling menu items: {e}')
 
 		self.chipMenu.AppendSeparator()
 		
@@ -936,7 +944,7 @@ class MainWin( wx.Frame ):
 		self.lastPhotoTime = now()
 		
 	@property
-	def chipReader( self ) -> ChipReader:
+	def chipReader( self ) -> ChipReaderType:
 		return ChipReader.chipReaderCur
 
 	@property
@@ -1108,21 +1116,75 @@ class MainWin( wx.Frame ):
 		self.Bind(wx.EVT_MENU, handler, item)
 		return item
 
-	def addDecoderMenuItems (self, menu) -> None:
-		etdOnlyHintString = _("For electronic timing decoders only")
-		list = [
-			("Disconnect from decoder.", self.menuDecoderDisconnect),
-			("&Connect/reconnect to decoder.", self.menuDecoderReconnect),
-			("Start decoder read thread.", self.menuStartDecoderThread),
-			("Stop decoder read thread.", self.menuStopDecoderThread),
-			("Send 'start' command", self.menuDecoderSendStartRead),
-			("Send 'stop' command", self.menuDecoderSendStopRead),
-			("Re-send data...", self.menuShowReplay),
-			("Stop replaying data.", self.menuDecoderStopRewind),
+	def isDecoderConnected (self) -> bool:
+		cr: ChipReader = self.chipReader
+		if cr is not None:
+			if not cr.IsListening():
+				return False
+
+			cd: TimingDevice = cr.CurrentDecoder()
+			if cd is None and cr:
+				return True
+			elif isinstance(cd, TCPTimingDevice):
+				return cd.isConnected()
+		return False
+
+	def isRaceActive(self) -> bool:
+		return Model.race is not None
+
+	def isMenuItemEnabled(self, item_id: int) -> bool:
+		is_enabled = True
+		if not self.__menuItemEnabledState.has_key(itemId):
+			return True
+
+		check = self.__menuItemEnabledState[itemId]
+		if check is None or not callable(check):
+			return True
+
+		is_enabled = check()
+		return is_enabled
+
+	def enableOrDisableMenuItems(self, menu: wx.Menu) -> None:
+		assert menu is not None, 'Menu to re-check enable state cannot be None'
+		for itemId, check in self.__menuItemEnabledState.items():
+			try:
+				if check is not None and callable(check):
+					menuItemList = menu.FindItem(itemId)
+					if menuItemList is None or len(menuItemList) == 0:
+						log.warn(f'Item {itemId} was in menu for enable check but UI control not found.')
+						continue
+
+					if not isinstance(menuItemList[0], wx.MenuItem):
+						log.warn(f'Item {itemId} was in menu for enable check but is not a wx.MenuItem ')
+						continue
+
+					menuItem: MenuItem = menuItemList[0]
+					is_enabled = check()
+					menuItem.Enable(enable=is_enabled)
+			except Exception as e:
+				self.log.exception(f'Error enabling menu item {itemId}: {e}')
+
+	def addDecoderMenuItems (self, menu: wx.Menu) -> None:
+		etdOnlyHintString: str = _("For electronic timing decoders only")
+		list: (str, callable, callable[[], bool]) = [
+			("Disconnect from decoder.", self.menuDecoderDisconnect, lambda: self.isDecoderConnected()),
+			("&Connect/reconnect to decoder.", self.menuDecoderReconnect, lambda: self.isRaceActive()),
+			("Start decoder read thread.", self.menuStartDecoderThread, lambda: self.isRaceActive()),
+			("Stop decoder read thread.", self.menuStopDecoderThread, lambda:  self.isDecoderConnected()),
+			("Send 'start' command", self.menuDecoderSendStartRead, lambda: self.isDecoderConnected()),
+			("Send 'stop' command", self.menuDecoderSendStopRead, lambda: self.isDecoderConnected()),
+			("Re-send data...", self.menuShowReplay, lambda: self.isDecoderConnected()),
+			("Stop replaying data.", self.menuDecoderStopRewind, lambda: self.isDecoderConnected()),
 		]
-		for text, handler in list:
+		if self.__menuItemEnabledState is None:
+			self.__menuItemEnabledState: {int, Callable[[], bool]} = {}
+
+		for text, handler, enableCondition in list:
 			handlerCall = lambda *args, **kwargs: self.safeDecoderMenuCall(handler, *args, **kwargs)
-			self.addMenuItem( menu, text, etdOnlyHintString, handlerCall)
+			item: wx.MenuItem = self.addMenuItem( menu, text, etdOnlyHintString, handlerCall)
+
+			if enableCondition is not None and callable(enableCondition):
+				self.__menuItemEnabledState[item.GetId()] = enableCondition
 
 	@logCall
 	def menuDNS( self, event ):
@@ -4214,7 +4276,8 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		race = Model.race
 		self.menuItemHighPrecisionTimes.Check( bool(race and race.highPrecisionTimes) )
 		self.menuItemSyncCategories.Check( bool(race and race.syncCategories) )
-		
+		self.enableOrDisableMenuItems(self.chipMenu)
+
 		self.updateRaceClock()
 
 	def refreshTTStart( self ):
@@ -4546,4 +4609,6 @@ def MainLoop():
 	app.MainLoop()
 
 if __name__ == '__main__':
+	Utils.disable_stdout_buffering()
+	Log.getLogger('CrossMgr').debug('Starting CrossMgr - debug mode logging enabled.')
 	MainLoop()
