@@ -1121,7 +1121,8 @@ class MainWin( wx.Frame ):
 			("Stop replaying data.", self.menuDecoderStopRewind),
 		]
 		for text, handler in list:
-			self.addMenuItem( menu, text, etdOnlyHintString, handler)
+			handlerCall = lambda *args, **kwargs: self.safeDecoderMenuCall(handler, *args, **kwargs)
+			self.addMenuItem( menu, text, etdOnlyHintString, handlerCall)
 
 	@logCall
 	def menuDNS( self, event ):
@@ -1332,47 +1333,37 @@ class MainWin( wx.Frame ):
 		logging.critical('Error disconnecting from decoder: %s', e)
 		Utils.MessageOK(self, "Critical error interacting with decoder.  See log.", _("Error in {function_name}"), iconMask=wx.ICON_ERROR)
 
+	def safeDecoderMenuCall(self, function: callable, *args, **kwargs) -> None:
+		try:
+			function(*args[1:], **kwargs)
+		except Exception as e:
+			self.DecoderMenuItemError(e, function.__name__)
+
 	def menuDecoderDisconnect (self, event ) -> None:
 		if not self.checkDecoderIsUltra(True):
 			return
-		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
-		try:
-			ultraDecoder.disconnect()
-		except Exception as e:
-			self.DecoderMenuItemError(e, __name__)
+		ultraDecoder: UltraDecoder = self.chipReader.CurrentDecoder()
+		ultraDecoder.disconnect()
 
 	def menuDecoderReconnect (self, event ):
 		if not self.checkDecoderIsUltra(True):
 			return
-
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
-		try:
-			ultraDecoder.reconnect()
-		except Exception as e:
-			self.DecoderMenuItemError(e, __name__)
+		ultraDecoder.reconnect()
 
 	def menuStartDecoderThread( self, event ):
 		if not self.checkDecoderIsUltra(False):
 			return
-
-		try:
-			self.chipReader.StartListener()
-		except Exception as e:
-			self.DecoderMenuItemError(e, __name__)
+		self.chipReader.StartListener()
 
 	def menuStopDecoderThread( self, event ):
 		if not self.checkDecoderIsUltra(False):
 			return
-
-		try:
-			self.chipReader.StopListener()
-		except Exception as e:
-			self.DecoderMenuItemError(e, __name__)
+		self.chipReader.StopListener()
 
 	def menuDecoderSendStartRead( self, event ):
 		if not self.checkDecoderIsUltra(True):
 			return
-
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
 		ultraDecoder.begin_reading()
 
@@ -1381,10 +1372,7 @@ class MainWin( wx.Frame ):
 			return
 
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
-		try:
-			ultraDecoder.stop_reading()
-		except Exception as e:
-			self.DecoderMenuItemError(e, __name__)
+		ultraDecoder.stop_reading()
 
 	def menuShowReplay(self, event):
 		if not self.checkDecoderIsUltra(True):
@@ -1416,10 +1404,7 @@ class MainWin( wx.Frame ):
 			return
 
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
-		try:
-			ultraDecoder.stop_rewind()
-		except Exception as e:
-			self.DecoderMenuItemError(e, __name__)
+		ultraDecoder.stop_rewind()
 
 
 	def sendUltraCommand( self, command ):
