@@ -22,6 +22,7 @@ class TCPTimingDevice:
 	_timeoutSecs: int = 5
 	_log: CrossMgrLogger | None = None
 	__unsuccessfulConnectionAttempts: int = 0
+	__maximumReconnectionAttempts: int = 5
 	__attempt_reconnect_after: datetime.datetime = datetime.datetime.fromtimestamp(0)
 
 	def __init__(self, host: str, port: int ):
@@ -29,6 +30,7 @@ class TCPTimingDevice:
 		self._port = port
 		self._s = None
 		self.__reset_reconnect_backoff()
+		self.__maximumReconnectionAttempts = 5
 
 	def getLog(self, child:str = None) -> CrossMgrLogger:
 		log = self._log if self._log is not None else Log.getLogger(name='TCPTimingDevice')
@@ -132,6 +134,8 @@ class TCPTimingDevice:
 
 	@property
 	def WaitForReconnect(self) -> bool:
+		if self.__unsuccessfulConnectionAttempts >= self.__maximumReconnectionAttempts:
+			return False
 		if not self.connected() and not (datetime.datetime.now() > self.__attempt_reconnect_after):
 			return True
 		return False
@@ -153,3 +157,14 @@ class TCPTimingDevice:
 	@property
 	def NextReconnectTime(self) -> datetime.datetime:
 		return self.__attempt_reconnect_after
+
+	@property
+	def MaximumReconnectionAttempts(self) -> int:
+		return self.__maximumReconnectionAttempts
+
+	@MaximumReconnectionAttempts.setter
+	def MaximumReconnectionAttempts(self, value: int = 5):
+		self.__maximumReconnectionAttempts = value
+
+	def ShouldReconnect(self) -> bool:
+		return self.__unsuccessfulConnectionAttempts < self.__maximumReconnectionAttempts
