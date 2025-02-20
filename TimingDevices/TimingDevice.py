@@ -342,8 +342,3 @@ class TimingDevice(LogQueueClass):
 	def on_connect(self, msg: TimingDeviceConnectMessage) -> bool:
 		pass
 
-
-class UnrecognisedCommandException(Exception):
-	def __init__(self, command: str):
-		super().__init__('Unrecognised command type: {}'.format(command))
-

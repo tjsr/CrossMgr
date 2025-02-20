@@ -7,10 +7,11 @@ from typing import cast, Callable
 
 from Log import getLogger
 from LogQueue import LogQueue
-from TimingDevices.TimingDevice import UnrecognisedCommandException, TimingDevice, CrossingListenerCallableType
+from TimingDevices.TimingDevice import TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceSendRecordsCommand
+from TimingDevices.TimingDeviceExceptions import TimingDeviceNotConnectedException, UnrecognisedCommandException
 
 from TimingDevices.UltraAutodetect import AutoDetect
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand, UltraSendRecordsCommand, \
@@ -165,6 +166,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			elif isinstance(message, UltraChipReadMessage):
 				self.on_td_read(message)
 				continue
+		return True
 
 	def on_td_read(self, message: UltraChipReadMessage) -> bool:
 		tagTimes = []
@@ -310,10 +312,14 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		if self.connected():
 			TCPTimingDevice.disconnect(self)
 			return TCPTimingDevice.connect(self)
+		else:
+			raise TimingDeviceNotConnectedException('Decoder not connected - do not call reconnect without first checking connect state.')
 
 	def send_command(self, command: TimingDeviceCommand):
 		if not TCPTimingDevice.connected:
-			self.getLog().error(f'Decoder not connected, cannot send command {command}')
+			errMsg = f'Decoder not connected, cannot send command {command}'
+			self.getLog().error(errMsg)
+			raise TimingDeviceNotConnectedException(errMsg)
 
 		super().send_command(command)
 
