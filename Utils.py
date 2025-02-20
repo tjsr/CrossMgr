@@ -589,8 +589,8 @@ def approximateMatch( s1, s2 ):
 #------------------------------------------------------------------------
 PlatformName = platform.system()
 AppVer = 'v' + AppVerName.split(' ')[1]
-def writeLog( message:str ) -> None:
-	log = getLogger()
+def writeLog( message:str, stackDepth: int = 1 ) -> None:
+	log = getLogger(stackDepth=stackDepth+1)
 	log.info(message.strip() if message else '')
 
 def disable_stdout_buffering():
@@ -607,8 +607,8 @@ def logCall( f: callable ) -> callable:
 		return f( *args, **kwargs)
 	return new_f
 	
-def logException( e: Exception, exc_info ) -> None:
-	log = getLogger()
+def logException( e: Exception, exc_info, stackDepth:int = 0 ) -> None:
+	log = getLogger(stackDepth=stackDepth+1)
 	log.exception( e )
 
 #------------------------------------------------------------------------

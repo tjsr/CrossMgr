@@ -74,11 +74,12 @@ class CrossMgrLogger(logging.Logger):
 
 logging.setLoggerClass(CrossMgrLogger)
 
-def getLogger(name: str = None) -> CrossMgrLogger:
+def getLogger(name: str = None, stackDepth:int = 0) -> CrossMgrLogger:
   if name is None:
-    frame = inspect.stack()[1]
+    stack = inspect.stack()
+    frame = stack[stackDepth]
     module = inspect.getmodule(frame[0])
-    logger_name = module.__name__ if module else '__main__'
+    logger_name = frame.function if hasattr(frame, 'function') else module.__name__ if module else '__main__'
   else:
     logger_name = name
 
