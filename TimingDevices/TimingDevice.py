@@ -164,11 +164,13 @@ class TimingDevice(LogQueueClass):
 	def create_command(self, command_type: str, *args, **kwargs) -> TimingDeviceCommand:
 		return self.get_command(command_type, *args, **kwargs)
 
-	def begin_reading( self ) -> TimingDeviceCommand:
+	def begin_reading( self ) -> TimingDeviceCommand | None:
 		if not self.is_readonly_device():
 			startDeviceCommand = self.create_command(TimingDeviceCommand.COMMAND_START)
 			self.send_command(startDeviceCommand)
 			return startDeviceCommand
+
+		return None
 
 	async def get_status( self, onStatusCallback: Callable[[DecoderStatusMessage], None] | None = None ) -> TimingDeviceCommand[DecoderStatusMessage]:
 		getStatusCommand = self.create_command(TimingDeviceCommand.COMMAND_STATUS)
