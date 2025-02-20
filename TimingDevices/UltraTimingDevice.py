@@ -37,7 +37,6 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 
 	DEFAULT_PORT: int = 23
-	# DEFAULT_PORT = 8642
 	DEFAULT_HOST: str = '127.0.0.1'  # Port to connect to the Ultra receiver.
 
 	_delaySecs: int = 3
