@@ -31,11 +31,7 @@ class TCPTimingDevice:
 		self.__reset_reconnect_backoff()
 
 	def getLog(self, child:str = None) -> CrossMgrLogger:
-		log = None
-		if self._log is not None:
-			log = self._log
-		else:
-			log = Log.getLogger(name='TCPTimingDevice')
+		log = self._log if self._log is not None else Log.getLogger(name='TCPTimingDevice')
 
 		if child is not None:
 			log = log.getChild(child)
