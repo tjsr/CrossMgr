@@ -104,10 +104,13 @@ class TCPTimingDevice:
 				self._s.shutdown(socket.SHUT_RDWR)
 				self._s.close()
 				self._s = None
+				self._connected = False
 				return True
 			except Exception:
 				self._s = None
+				self._connected = False
 				pass
+		self._connected = False
 		return False
 
 	@abstractmethod
@@ -166,9 +169,9 @@ class TCPTimingDevice:
 
 		delta = TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL
 		if self.__unsuccessfulConnectionAttempts == 3:
-			delta += (TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL * 5)
+			delta += TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL
 		if self.__unsuccessfulConnectionAttempts == 5:
-			delta += (TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL * 6)
+			delta += (TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL * 4)
 
 		self.__attempt_reconnect_after = datetime.datetime.now() + datetime.timedelta(seconds=delta)
 
@@ -194,7 +197,7 @@ class TCPTimingDevice:
 
 	@property
 	def ShouldReconnect(self) -> bool:
-		if self.__unsuccessfulConnectionAttempts >= self.__maximumReconnectionAttempts:
+		if self.__maximumReconnectionAttempts is not None and self.__unsuccessfulConnectionAttempts >= self.__maximumReconnectionAttempts:
 			return False
 
 		if self.__attempt_reconnect_after is None:
