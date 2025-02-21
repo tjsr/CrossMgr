@@ -331,6 +331,7 @@ def AppendMenuItemBitmap( menu, id, name, help, bitmap ):
 class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
 	__menuItemEnabledState: {int, Callable[[], bool]} = {}
+	__restartTimingDeviceListener: bool = True
 
 	def __init__( self, parent, id = wx.ID_ANY, title='', size=(200,200) ):
 		super().__init__(parent, id, title, size=size)
@@ -950,16 +951,27 @@ class MainWin( wx.Frame ):
 		self.Bind(Ultra.EVT_DECODER_THREAD_ENDED, self.onTimingDeviceThreadEnded)
 
 	def onTimingDeviceThreadEnded(self, event: Ultra.DecoderThreadEndedEvent):
-		getLogger().info( 'onDecoderThreadEnded' )
-		pass
+		owner: threading.Thread = event.owner
+		max_attempts = 30
+		while owner.is_alive() and max_attempts > 0:
+			owner.join(0.1)
+			max_attempts -= 1
+
+		self.__restartTimingDeviceListener = event.should_restart_thread
+
+		if max_attempts == 0 or owner.is_alive():
+			log.warning(f'Decoder read thread ending was signalled but is still alive.')
+
+		Log.getLogger().info( 'onDecoderThreadEnded' )
+		self.enableOrDisableMenuItems(self.chipMenu)
 
 	def onTimingDeviceDisconnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceDisconnectedEvent):
-		getLogger().info( 'onDecoderDisconnected' )
-		pass
+		Log.getLogger().info( 'onDecoderDisconnected' )
+		self.enableOrDisableMenuItems(self.chipMenu)
 
 	def onTimingDeviceConnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceConnectedEvent):
-		getLogger().info( 'onDecoderConnected' )
-		pass
+		Log.getLogger().info( 'onDecoderConnected' )
+		self.enableOrDisableMenuItems(self.chipMenu)
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
@@ -1163,10 +1175,13 @@ class MainWin( wx.Frame ):
 			return True
 
 		is_enabled = check()
+		self.log.getChild('isMenuItemEnabled').debug(f'Item {item_id} is enabled: {is_enabled}')
 		return is_enabled
 
 	def enableOrDisableMenuItems(self, menu: wx.Menu) -> None:
 		assert menu is not None, 'Menu to re-check enable state cannot be None'
+		log = self.log.getChild('enableOrDisableMenuItems')
+		log.debug(f'Enabling or disabling menu items for menu {menu.GetTitle()}')
 		for itemId, check in self.__menuItemEnabledState.items():
 			try:
 				if check is not None and callable(check):
@@ -1179,11 +1194,12 @@ class MainWin( wx.Frame ):
 						log.warn(f'Item {itemId} was in menu for enable check but is not a wx.MenuItem ')
 						continue
 
-					menuItem: MenuItem = menuItemList[0]
+					menuItem: wx.MenuItem = menuItemList[0]
 					is_enabled = check()
+					self.log.getChild('isMenuItemEnabled').debug(f'MenuItem {menuItem.GetId()}/{menuItem.ItemLabelText} is enabled: {is_enabled}')
 					menuItem.Enable(enable=is_enabled)
 			except Exception as e:
-				self.log.exception(f'Error enabling menu item {itemId}: {e}')
+				log.exception(f'Error enabling menu item {itemId}', exc_info=e)
 
 	@property
 	def HasChipReader(self) -> bool:
@@ -1203,7 +1219,7 @@ class MainWin( wx.Frame ):
 			("Disconnect from decoder.", self.menuDecoderDisconnect, self.isDecoderConnected),
 			("&Connect/reconnect to decoder.", self.menuDecoderReconnect, lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
 			("Start decoder read thread.", self.menuStartDecoderThread, lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
-			("Stop decoder read thread.", self.menuStopDecoderThread, lambda:  self.canStopDecoderThread()),
+			("Stop decoder read thread.", self.menuStopDecoderThread, self.canStopDecoderThread),
 			("Send 'start' command", self.menuDecoderSendStartRead, self.isDecoderConnected),
 			("Send 'stop' command", self.menuDecoderSendStopRead, self.isDecoderConnected),
 			("Re-send data...", self.menuShowReplay, self.isDecoderConnected),
@@ -1425,7 +1441,7 @@ class MainWin( wx.Frame ):
 		return True
 
 	def DecoderMenuItemError(self, e: Exception, function_name: str) -> None:
-		logging.critical('Error disconnecting from decoder: %s', e)
+		logging.critical('Error calling decoder action: %s', exc_info=e)
 		Utils.MessageOK(self, "Critical error interacting with decoder.  See log.", _("Error in {function_name}"), iconMask=wx.ICON_ERROR)
 
 	def safeDecoderMenuCall(self, function: callable, *args, **kwargs) -> None:
@@ -1434,34 +1450,40 @@ class MainWin( wx.Frame ):
 		except Exception as e:
 			self.DecoderMenuItemError(e, function.__name__)
 
+	@logCall
 	def menuDecoderDisconnect (self, event ) -> None:
 		if not self.checkDecoderIsUltra(True):
 			return
 		ultraDecoder: UltraDecoder = self.chipReader.CurrentDecoder()
 		ultraDecoder.disconnect()
 
-	def menuDecoderReconnect (self, event ):
+	@logCall
+	async def menuDecoderReconnect (self, event ):
 		if not self.checkDecoderIsUltra(True):
 			return
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
-		ultraDecoder.reconnect()
+		await ultraDecoder.reconnect()
 
+	@logCall
 	def menuStartDecoderThread( self, event ):
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.chipReader.StartListener()
 
+	@logCall
 	def menuStopDecoderThread( self, event ):
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.chipReader.StopListener()
 
+	@logCall
 	def menuDecoderSendStartRead( self, event ):
 		if not self.checkDecoderIsUltra(True):
 			return
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
 		ultraDecoder.begin_reading()
 
+	@logCall
 	def menuDecoderSendStopRead( self, event ):
 		if not self.checkDecoderIsUltra(True):
 			return
@@ -1469,6 +1491,7 @@ class MainWin( wx.Frame ):
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
 		ultraDecoder.stop_reading()
 
+	@logCall
 	def menuShowReplay(self, event):
 		if not self.checkDecoderIsUltra(True):
 			return
@@ -1494,13 +1517,14 @@ class MainWin( wx.Frame ):
 			elif result == DecoderReplayDialog.ID_INVALID_END:
 				self.log.error('Invalid end time')
 
+	@logCall
 	def menuDecoderStopRewind(self):
 		if not self.checkDecoderIsUltra(True):
 			return
 
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
-		ultraDecoder.stop_rewind()
-
+		if ultraDecoder.connected():
+			ultraDecoder.stop_rewind()
 
 	def sendUltraCommand( self, command ):
 		if not self.chipReader:
@@ -4402,8 +4426,8 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			if ChipReader.chipReaderCur.IsListening():
 				ChipReader.chipReaderCur.StopListener()
 			return False
-		
-		if not ChipReader.chipReaderCur.IsListening():
+
+		if not ChipReader.chipReaderCur.IsListening() and self.__restartTimingDeviceListener is True:
 			ChipReader.chipReaderCur.reset( race.chipReaderType )
 			ChipReader.chipReaderCur.StartListener( race.startTime )
 			GetTagNums( True )
