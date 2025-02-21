@@ -80,12 +80,36 @@ class ChipReader(ChipReaderType, ABC):
 			self.CleanupListener = MyLapsServer.CleanupListener
 			self.IsListening = MyLapsServer.IsListening
 
-		else: # self.chipReaderType == ChipReader.JChip:
+		elif self.chipReaderType is not None: # self.chipReaderType == ChipReader.JChip:
 			self.StartListener = JChip.StartListener
 			self.GetData = JChip.GetData
 			self.StopListener = JChip.StopListener
 			self.CleanupListener = JChip.CleanupListener
 			self.IsListening = JChip.IsListening
+
+
+# For future use - each type with its own class.
+class UltraChipReaderType(ChipReader):
+	CurrentDecoder: Callable[[], TimingDevice|None]
+
+	def __init__(self):
+		self.chipReaderType = ChipReader.Ultra
+		super().__init__()
+
+	def reset(self, chipReaderType=None):
+		self.chipReaderType = ChipReader.Ultra
+
+		super().CurrentDecoder = Ultra.GetCurrentDecoder
+		super().StartListener = Ultra.StartListener
+		super().GetData = Ultra.GetData
+		super().StopListener = Ultra.StopListener
+		super().CleanupListener = Ultra.CleanupListener
+		super().IsListening = Ultra.IsListening
+
+	@abstractmethod
+	def GetCurrentDecoder( self ) -> TimingDevice:
+		pass
+
 
 chipReaderCur = ChipReader()
 
