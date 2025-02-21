@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import logging
 import socket
 import time
 from abc import abstractmethod
@@ -15,20 +14,23 @@ class TCPTimingDevice:
 	DEFAULT_PORT: int = 23
 	DEFAULT_HOST: str = '127.0.0.1'
 	LOG_TYPE_TCP_EVENT = 'tcpevent'
+	CONNECTION_RETRY_TIME_INTERVAL: int = 5
 
 	_host: str = DEFAULT_HOST
 	_port: int = DEFAULT_PORT
 	_s: socket.socket | None = None
+	_connected: bool = False
 	_timeoutSecs: int = 5
 	_log: CrossMgrLogger | None = None
 	__unsuccessfulConnectionAttempts: int = 0
 	__maximumReconnectionAttempts: int = 5
-	__attempt_reconnect_after: datetime.datetime = datetime.datetime.fromtimestamp(0)
+	__attempt_reconnect_after: datetime.datetime | None = datetime.datetime.fromtimestamp(0)
 
 	def __init__(self, host: str, port: int ):
 		self._host = host
 		self._port = port
 		self._s = None
+		self._connected = False
 		self.__reset_reconnect_backoff()
 		self.__maximumReconnectionAttempts = 5
 
@@ -61,6 +63,7 @@ class TCPTimingDevice:
 			self._s.connect((self._host, self._port))
 			self.__reset_reconnect_backoff()
 			self.__unsuccessfulConnectionAttempts = 0
+			self._connected = True
 
 			time.sleep(2)
 			asyncio.run(self.on_socket_connect())
@@ -68,18 +71,33 @@ class TCPTimingDevice:
 			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
 			log.error(errDesc)
 			self._s = None
+			self._connected = False
 			self.__set_reconnect_backoff()
 			return False
 		except Exception as e:
 			log.exception('{}: {}'.format(_('Unknown error connecting to {}'), description, e))
 			self._s = None
+			self._connected = False
 			self.__set_reconnect_backoff()
 			return False
 
 		log.info(_('Successfully connected to {}').format(description))
 		return True
 
-	def disconnect(self) -> bool:
+	@abstractmethod
+	async def _wait_until_ready(self) -> bool:
+		pass
+
+	async def disconnect(self, allow_reconnect: bool = False) -> bool:
+		await self._wait_until_ready()
+
+		self.__unsuccessfulConnectionAttempts = 0
+		if allow_reconnect is True:
+			self.__attempt_reconnect_after = datetime.datetime.now() + datetime.timedelta(seconds=TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL)
+		else:
+			self.__unsuccessfulConnectionAttempts = 0
+			self.__attempt_reconnect_after = None
+
 		if self._s is not None:
 			try:
 				self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT).info(_('Disconnecting from {}').format(self.getDeviceType()))
@@ -97,7 +115,7 @@ class TCPTimingDevice:
 		pass
 
 	def connected(self) -> bool:
-		return self._s is not None
+		return self._s is not None and self._connected is True
 
 	def get_message_buffer(self) -> str|None:
 		if self._s is None:
@@ -142,11 +160,15 @@ class TCPTimingDevice:
 
 	def __set_reconnect_backoff(self):
 		self.__unsuccessfulConnectionAttempts += 1
-		delta = 5
+		if self.__unsuccessfulConnectionAttempts >= self.__maximumReconnectionAttempts:
+			self.__attempt_reconnect_after = None
+			return
+
+		delta = TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL
 		if self.__unsuccessfulConnectionAttempts == 3:
-			delta += 25
+			delta += (TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL * 5)
 		if self.__unsuccessfulConnectionAttempts == 5:
-			delta += 30
+			delta += (TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL * 6)
 
 		self.__attempt_reconnect_after = datetime.datetime.now() + datetime.timedelta(seconds=delta)
 
@@ -159,12 +181,24 @@ class TCPTimingDevice:
 		return self.__attempt_reconnect_after
 
 	@property
+	def ReconnectAttemptCount(self) -> int:
+		return self.__unsuccessfulConnectionAttempts
+
+	@property
 	def MaximumReconnectionAttempts(self) -> int:
 		return self.__maximumReconnectionAttempts
 
 	@MaximumReconnectionAttempts.setter
-	def MaximumReconnectionAttempts(self, value: int = 5):
+	def MaximumReconnectionAttempts(self, value: int):
 		self.__maximumReconnectionAttempts = value
 
+	@property
 	def ShouldReconnect(self) -> bool:
-		return self.__unsuccessfulConnectionAttempts < self.__maximumReconnectionAttempts
+		if self.__unsuccessfulConnectionAttempts >= self.__maximumReconnectionAttempts:
+			return False
+
+		if self.__attempt_reconnect_after is None:
+			return False
+
+		return True
+

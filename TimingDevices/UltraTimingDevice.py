@@ -5,12 +5,10 @@ import socket
 import time
 from typing import cast, Callable
 
-from Log import getLogger
-from LogQueue import LogQueue
 from TimingDevices.TimingDevice import TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceSendRecordsCommand
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 from TimingDevices.TimingDeviceExceptions import TimingDeviceNotConnectedException, UnrecognisedCommandException
 
 from TimingDevices.UltraAutodetect import AutoDetect
@@ -48,10 +46,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	__on_connect_action_start_if_stopped: bool = True
 	__on_disconnect_send_stop: bool = False
 
-	def __init__( self, log: LogQueue, host: str, port: int ):
+	def __init__( self, host: str, port: int ):
 		TimingDevice.__init__(self)
 		TCPTimingDevice.__init__(self, host, port)
-		self.logger = log
 
 	def getDeviceType(self) -> str:
 		return 'Ultra'
@@ -88,7 +85,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			if self.__on_connect_action_set_time:
 				time_response = await self.set_time()
 				if time_response.response is not None:
-					self.getLog().info(f'Time set on decoder: {time_response.response}')
+					self.getLog(child='on_connect').info(f'Time set on decoder: {time_response.response}')
 
 			if self.__on_connect_action_start_if_stopped:
 				getStatusResult = await self.get_status()
@@ -98,23 +95,24 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 
 		except Exception as e:
-			self.getLog().exception('Failed while getting decoder status', e)
+			self.getLog(child='on_connect').exception('Failed while getting decoder status', e)
 
 		return result
 
 
 	def autoconnect(self, autoDetectCallback) -> bool:
-		self.log('autoconnect', '{}'.format(_('Attempting AutoDetect...')))
+		self.getLog('autoconnect').info('Attempting AutoDetect...')
 		HOST_AUTO = AutoDetect(callback=autoDetectCallback)
 		if HOST_AUTO:
-			self.log('autoconnect', '{}: {}'.format(_('AutoDetect Ultra at'), HOST_AUTO))
+			self.getLog('autoconnect').info('{}: {}'.format(_('AutoDetect Ultra at'), HOST_AUTO))
 			self._host = HOST_AUTO
 		else:
 			time.sleep(self._delaySecs)
 		return False
 
 	def setTime(self) -> bool:
-		getLogger().warning('Using deprecated setTime method')
+		log = self.getLog('setTime')
+		log.warning('Using deprecated setTime method')
 		#-----------------------------------------------------------------------------------------------------
 		# Set the reader's time.
 		# Wait for the boundary of a second.  This is the best synchronization we are going to get.
@@ -124,24 +122,16 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			set_time_command: UltraSetTimeCommand = cast(UltraSetTimeCommand, self.get_command(TimingDeviceCommand.COMMAND_SET_TIME))
 			self.send_command(set_time_command)
 			response = set_time_command.response
-			self.log('setTime', '{}: {}'.format(_('Response to set time on decoder'), response))
-
-			# decoderMessage = set_time_command.get_command_string()
-			# self.makeCommandCall(set_time_command)
-			# buffer = self.makeSyncCall( decoderMessage, comment='set reader time' )
-			# bufSize:int = self.process_message_buffer(buffer)
-			# self.log('setTime', '{}: {} ({} on queue)'.format(_('Response to set time on decoder'), buffer, bufSize))
-			# self.wait_for_response(timeout=5, command=set_time_command)
+			log.info('{}: {}'.format(_('Response to set time on decoder'), response))
 
 			# We wait for the second boundary above and then set the offset to the response here so we know the round-trip offset.
 			self.computerTimeDiff = datetime.timedelta(seconds=0)
 		except ValueError as ve:
-			self.logEx('setTime',
-			           _('Invalid value when setting time on decoder'),
-			           ve)
+			log.exception(_('Invalid value when setting time on decoder'),
+			           exc_info=ve)
 			return False
 		except Exception as e:
-			self.logEx('setTime', 'Failed to set time on decoder', e)
+			log.exception('Failed to set time on decoder', exc_info=e)
 			return False
 		return True
 
@@ -150,14 +140,14 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		ultraStatusCommand = cast(UltraGetStatusCommand, getStatusCommand)
 		return ultraStatusCommand
 
-	def process_messages(self) -> bool:
+	def process_messages_on_queue(self) -> bool:
 		message: DecoderMessage | None = self.peek_last_message()
 		if message is None:
 			return False
 
 		while message := self.get_last_message():
 			if isinstance(message, UltraConnectConfirmationMessage):
-				self.log('process_messages', '{}: "{}"'.format(_('Connection info'), message))
+				self.getLog('process_messages').info('{}: "{}"'.format(_('Connection info'), message))
 				asyncio.run(self.on_connect(message))
 				continue
 			elif isinstance(message, UltraVoltageMessage):
@@ -173,7 +163,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		times = set()
 		chipRead: UltraChipReadMessage = message
 		if not chipRead.hasValidTag():
-			self.log('process_messages', '{}: "{}"'.format(_('Invalid tag in chip read message'), chipRead))
+			self.getLog('on_td_read').warning(_('Invalid tag in chip read message {}', chipRead))
 			return False
 		chip = chipRead.ChipCode
 		tag = f'{chip}'
@@ -229,7 +219,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 	def on_socket_timeout(self, ex: socket.timeout) -> None:
 		if (now() - self._lastVoltage).total_seconds() > 15:
-			self.log('get_messages', _('Lost heartbeat.'))
+			self.getLog('on_socket_timeout').error(_('Lost heartbeat.'))
 
 	def get_message_buffer(self) -> str:
 		return TCPTimingDevice.get_message_buffer(self)
@@ -302,11 +292,11 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	def connected(self) -> bool:
 		return TCPTimingDevice.connected(self)
 
-	def disconnect(self) -> bool:
+	async def disconnect(self, allow_reconnect: bool = False) -> bool:
 		if self.connected() and self.__on_disconnect_send_stop == True:
 			self.stop_reading()
 
-		return TCPTimingDevice.disconnect(self)
+		return await TCPTimingDevice.disconnect(self, allow_reconnect=allow_reconnect)
 
 	def reconnect(self) -> bool:
 		if self.connected():
@@ -316,7 +306,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			raise TimingDeviceNotConnectedException('Decoder not connected - do not call reconnect without first checking connect state.')
 
 	def send_command(self, command: TimingDeviceCommand):
-		if not TCPTimingDevice.connected:
+		if not TCPTimingDevice.connected(self):
 			errMsg = f'Decoder not connected, cannot send command {command}'
 			self.getLog().error(errMsg)
 			raise TimingDeviceNotConnectedException(errMsg)

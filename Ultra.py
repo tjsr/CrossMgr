@@ -22,6 +22,7 @@ from queue import Queue, Empty
 import JChip
 
 ChipReaderEvent, EVT_CHIP_READER = JChip.ChipReaderEvent, JChip.EVT_CHIP_READER
+DecoderThreadEndedEvent, EVT_DECODER_THREAD_ENDED = wx.lib.newevent.NewEvent()
 
 readerEventWindow = None
 ultraDecoder: Optional[UltraDecoder] = None
@@ -38,93 +39,78 @@ listener: Process|None = None
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
 tSmall = datetime.timedelta( seconds = 0.000001 )
 
+class WXUltraDecoder(UltraDecoder):
+	log: LogQueue = LogQueue(q, 'ultra')
+
+	def __init__(self, host: str, port: int):
+		super().__init__(host, port)
+
+	def registerListener( self, windowListener: callable ):
+		self.crossingListener = windowListener
+
+
 reNonDigit = re.compile( '[^0-9]+' )
-def Server( q: Queue, shutdownQ: Queue, HOST: str, PORT: int, _startTime ):
+def Server( HOST: str, PORT: int, _startTime ):
 	global readerEventWindow
 	global ultraDecoder
 	reconnect:bool = True
-	log: LogQueue = LogQueue(q, 'ultra')
-	ultraDecoder = UltraDecoder(log, HOST, PORT)
+	ultraDecoder = WXUltraDecoder(HOST, PORT)
 
 	def on_chip_read( tagTimes: List[Union[str, datetime.datetime]] ) -> None:
 		sendReaderEvent(tagTimes)
 		for tag, tagTime in tagTimes:
-			q.put(('data', tag, tagTime))
+			Log.getLogger('on_chip_read').warning("Need to reimplement this.")
+			# q.put(('data', tag, tagTime))
 
 	ultraDecoder.crossingListener = on_chip_read
 
 	if not readerEventWindow:
 		readerEventWindow = Utils.mainWin
-	
-	delaySecs = 3
 
-	def keepGoing():
-		nonlocal reconnect
-		try:
-			shutdownQ.get_nowait()
-			reconnect = False
-		except Empty:
-			return True
-		return reconnect
-	
-	def autoDetectCallback( m ):
-		log.q( 'autodetect', '{} {}'.format(_('Checking'), m) )
-		return keepGoing()
-
-	while keepGoing():
+	while ultraDecoder.ShouldReconnect:
 		if ultraDecoder.WaitForReconnect:
 			time.sleep(0.500)
 			continue
 		if not ultraDecoder.connect():
-			Log.getLogger(name='Ultra').warning(
-				f'Waiting until {ultraDecoder.NextReconnectTime} before trying again.')
+			if ultraDecoder.ShouldReconnect:
+				Log.getLogger(name='Ultra').warning(
+					f'Waiting until {ultraDecoder.NextReconnectTime} before trying again ({ultraDecoder.ReconnectAttemptCount}/{ultraDecoder.MaximumReconnectionAttempts}).')
+			else:
+				Log.getLogger(name='Ultra').warning('Maximum connection retries reached - not reconnecting.')
 			continue
 
-		log.q('ultra.keepGoing', '{}'.format(_('Reading data from decoder...')))
-		
-		while keepGoing():
-			try:
-				ultraDecoder.process_commands()
-				ultraDecoder.get_messages()
-				ultraDecoder.process_messages()
-			except Exception as e:
-				log.exception('ultra.keepGoing', e)
+		while ultraDecoder.connected():
+			if not ultraDecoder.process():
 				break
 
-	# Final cleanup.
-	ultraDecoder.disconnect()
-		
+	if ultraDecoder.connected():
+		ultraDecoder.disconnect()
+	Log.getLogger('Ultra').debug('Decoder read thread ended')
+
 def GetData():
 	data = []
 	while 1:
 		try:
-			data.append( q.get_nowait() )
+			# data.append( q.get_nowait() )
+			Log.getLogger().warning("Need to re-implement this.")
+			pass
 		except (Empty, AttributeError):
 			break
 	return data
 
 def StopListener():
-	global q
 	global listener
-	global shutdownQ
-	
+
 	# Terminate the server process if it is running.
 	# Add a number of shutdown commands as we may check a number of times.
-	if listener:
-		for i in range(32):
-			shutdownQ.put( 'shutdown' )
+	if listener is not None and ultraDecoder is not None:
+		ultraDecoder.disconnect()
 		listener.join()
+	postEvent = listener is not None
 	listener = None
 	
-	# Purge the queues.
-	while q:
-		try:
-			q.get_nowait()
-		except Empty:
-			q = None
-			break
-	
-	shutdownQ = None
+	if postEvent is True:
+		wx.PostEvent( readerEventWindow, DecoderThreadEndedEvent() )
 	
 def IsListening() -> bool:
 	return listener is not None
@@ -145,9 +131,7 @@ def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):
 		HOST = (HOST or Model.race.chipReaderIpAddr)
 		PORT = (PORT or Model.race.chipReaderPort)
 
-	q = Queue()
-	shutdownQ = Queue()
-	listener = Process( target = Server, args=(q, shutdownQ, HOST, PORT, startTime) )
+	listener = Process( target = Server, args=(HOST, PORT, startTime) )
 	listener.name = 'Ultra Listener'
 	listener.daemon = True
 	listener.start()
@@ -157,7 +141,6 @@ def CleanupListener():
 	global shutdownQ
 	global listener
 	if listener and listener.is_alive():
-		shutdownQ.put( 'shutdown' )
 		listener.join()
 	listener = None
 	
