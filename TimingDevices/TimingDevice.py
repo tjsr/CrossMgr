@@ -64,7 +64,7 @@ class LogQueueClass:
 		return None
 
 
-class TimingDevice(LogQueueClass):
+class TimingDevice():
 	_readonly = False
 	_log: CrossMgrLogger | None = None
 	_messageQueue: List[DecoderMessage] = None
