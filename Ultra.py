@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import time
 import datetime
@@ -24,11 +25,7 @@ import JChip
 ChipReaderEvent, EVT_CHIP_READER = JChip.ChipReaderEvent, JChip.EVT_CHIP_READER
 DecoderThreadEndedEvent, EVT_DECODER_THREAD_ENDED = wx.lib.newevent.NewEvent()
 
-readerEventWindow = None
 ultraDecoder: Optional[UltraDecoder] = None
-def sendReaderEvent( tagTimes ):
-	if tagTimes and readerEventWindow:
-		wx.PostEvent( readerEventWindow, ChipReaderEvent(tagTimes = tagTimes) )
 
 len_EOL = len(EOL)
 
@@ -41,42 +38,51 @@ tSmall = datetime.timedelta( seconds = 0.000001 )
 
 class WXUltraDecoder(UltraDecoder):
 	log: LogQueue = LogQueue(q, 'ultra')
+	_readerEventWindow: wx.Window = None
 
-	def __init__(self, host: str, port: int):
+	def __init__(self, host: str, port: int, eventWindow: wx.Window = None):
 		super().__init__(host, port)
+		self._readerEventWindow = eventWindow if eventWindow is not None else Utils.mainWin
 
-	def registerListener( self, windowListener: callable ):
+	def registerListener( self, windowListener: callable ) -> None:
 		self.crossingListener = windowListener
+
+	async def signalThreadEnded(self) -> None:
+		wx.PostEvent(self._readerEventWindow, DecoderThreadEndedEvent(
+			owner=threading.current_thread(),
+			should_restart_thread=self.ShouldReconnect)
+		)
+
+	def sendReaderEvent(self, tagTimes) -> None:
+		if tagTimes and self._readerEventWindow:
+			wx.PostEvent( self._readerEventWindow, ChipReaderEvent(tagTimes = tagTimes) )
 
 
 reNonDigit = re.compile( '[^0-9]+' )
-def Server( HOST: str, PORT: int, _startTime ):
-	global readerEventWindow
+async def Server( HOST: str, PORT: int, _startTime ):
 	global ultraDecoder
-	reconnect:bool = True
-	ultraDecoder = WXUltraDecoder(HOST, PORT)
+	ultraDecoder = WXUltraDecoder(HOST, PORT, None)
+	ultraDecoder.MaximumReconnectionAttempts = 1
 
 	def on_chip_read( tagTimes: List[Union[str, datetime.datetime]] ) -> None:
-		sendReaderEvent(tagTimes)
+		ultraDecoder.sendReaderEvent(tagTimes)
 		for tag, tagTime in tagTimes:
-			Log.getLogger('on_chip_read').warning("Need to reimplement this.")
+			Log.getLogger('on_chip_read').warning("Need to reimplement this. DATA: {tag},{tagTime}.")
 			# q.put(('data', tag, tagTime))
 
 	ultraDecoder.crossingListener = on_chip_read
-
-	if not readerEventWindow:
-		readerEventWindow = Utils.mainWin
 
 	while ultraDecoder.ShouldReconnect:
 		if ultraDecoder.WaitForReconnect:
 			time.sleep(0.500)
 			continue
 		if not ultraDecoder.connect():
+			retries = f'{ultraDecoder.ReconnectAttemptCount}/{ultraDecoder.MaximumReconnectionAttempts}'
 			if ultraDecoder.ShouldReconnect:
 				Log.getLogger(name='Ultra').warning(
-					f'Waiting until {ultraDecoder.NextReconnectTime} before trying again ({ultraDecoder.ReconnectAttemptCount}/{ultraDecoder.MaximumReconnectionAttempts}).')
+					f'Waiting until {ultraDecoder.NextReconnectTime} before trying again ({retries}).')
 			else:
-				Log.getLogger(name='Ultra').warning('Maximum connection retries reached - not reconnecting.')
+				Log.getLogger(name='Ultra').warning(f'Maximum connection retries ({retries}) reached - not reconnecting.')
 			continue
 
 		while ultraDecoder.connected():
@@ -84,8 +90,11 @@ def Server( HOST: str, PORT: int, _startTime ):
 				break
 
 	if ultraDecoder.connected():
-		ultraDecoder.disconnect()
+		await ultraDecoder.disconnect()
+
 	Log.getLogger('Ultra').debug('Decoder read thread ended')
+	threading.Thread(target=lambda: asyncio.run(ultraDecoder.signalThreadEnded())).start()
+
 
 def GetData():
 	data = []
@@ -98,22 +107,23 @@ def GetData():
 			break
 	return data
 
+async def sync_disconnect(decoder: UltraDecoder):
+	if decoder.connected():
+		await decoder.disconnect()
+
 def StopListener():
 	global listener
 
-	# Terminate the server process if it is running.
-	# Add a number of shutdown commands as we may check a number of times.
+	# The thread will terminate after the socket is disconnected.
+	# A manual disconnect command tells it to stop attempting to reconnect and will end the main loop.
 	if listener is not None and ultraDecoder is not None:
-		ultraDecoder.disconnect()
+		asyncio.run(sync_disconnect(ultraDecoder))
 		listener.join()
-	postEvent = listener is not None
 	listener = None
-	
-	if postEvent is True:
-		wx.PostEvent( readerEventWindow, DecoderThreadEndedEvent() )
-	
+
+
 def IsListening() -> bool:
-	return listener is not None
+	return listener is not None and listener.is_alive()
 
 def GetCurrentDecoder() -> UltraDecoder | None:
 	global ultraDecoder
@@ -124,18 +134,20 @@ def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):
 	global q
 	global shutdownQ
 	global listener
-	
-	StopListener()
+
+	if listener and listener.is_alive():
+		StopListener()
+		listener.join(5.0)
 
 	if Model.race:
 		HOST = (HOST or Model.race.chipReaderIpAddr)
 		PORT = (PORT or Model.race.chipReaderPort)
 
-	listener = Process( target = Server, args=(HOST, PORT, startTime) )
+	listener = Process( target = asyncio.run, args=(Server(HOST, PORT, startTime), ))
 	listener.name = 'Ultra Listener'
 	listener.daemon = True
 	listener.start()
-	
+
 @atexit.register
 def CleanupListener():
 	global shutdownQ
@@ -143,7 +155,8 @@ def CleanupListener():
 	if listener and listener.is_alive():
 		listener.join()
 	listener = None
-	
+
+
 if __name__ == '__main__':
 	def doTest():
 		ultraTestHost = '192.168.1.148' # UltraDecoder.DEFAULT_HOST
