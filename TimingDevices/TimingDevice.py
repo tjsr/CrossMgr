@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from abc import abstractmethod
 from queue import Queue
@@ -70,6 +71,15 @@ class TimingDevice():
 	_messageQueue: List[DecoderMessage] = None
 	_commandQueue: Queue[TimingDeviceCommand] = None
 
+	STATE_NONE: int = 0
+	STATE_WAIT_READY: int = 1
+	STATE_CONNECTED: int = 2
+	STATE_SENDING_COMMANDS: int = 4
+	STATE_READING_DATA: int = 8
+	STATE_PROCESSING_DATA: int = 16
+
+	_state: int = STATE_NONE
+
 	def __init__(self):
 		self._commandQueue = Queue()
 		self._messageQueue = []
@@ -98,12 +108,12 @@ class TimingDevice():
 	def get_message_buffer(self) -> str | None:
 		pass
 
-	def process_commands(self):
+	def process_queued_outgoing_commands(self):
 		while not self._commandQueue.empty():
 			command = self._commandQueue.get()
 			self.sync_send_command(command)
 
-	def get_messages(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
+	def get_incoming_messages_from_stream(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
 		# log = self.getLog(name='TimingDevice.get_messages')
 
@@ -265,6 +275,15 @@ class TimingDevice():
 			command = self.get_command(TimingDeviceCommand.COMMAND_STOP)
 			self.send_command(command)
 
+	async def _wait_until_ready(self, timeout_seconds: int = 5) -> bool:
+		# Re-write this to use a thread sleep.
+		timeoutAt = datetime.datetime.now() + datetime.timedelta(seconds=timeout_seconds)
+		while not self._state & TimingDevice.STATE_WAIT_READY:
+			if datetime.datetime.now() > timeoutAt:
+				return False
+			await asyncio.sleep(0.1)
+		return True
+
 	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
 		# TODO: We can abstract this with wait_for_response
 		# log = self.getLog(name='TimingDevice.wait_for_message')
@@ -279,7 +298,7 @@ class TimingDevice():
 		messages = []
 		attempts = 1
 		while not timeout_exceeded:
-			messages = self.get_messages(messageType)
+			messages = self.get_incoming_messages_from_stream(messageType)
 			msgCount = len(messages)
 			if msgCount == 0:
 				log.debug(f'No messages for {message_type_name} iteration on attempt {attempts} with {self.messageQueueLength}...')
@@ -315,7 +334,7 @@ class TimingDevice():
 		commandClass = command.__class__.__name__
 		responseClass = command.get_response_type()
 		while not timeout_exceeded:
-			messages = self.get_messages(responseClass)
+			messages = self.get_incoming_messages_from_stream(responseClass)
 			msgCount = len(messages)
 			if msgCount == 0:
 				log.trace(f'No response for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
@@ -342,3 +361,22 @@ class TimingDevice():
 	def on_connect(self, msg: TimingDeviceConnectMessage) -> bool:
 		pass
 
+	@abstractmethod
+	def process_messages_on_queue(self) -> None:
+		pass
+
+	def process(self) -> bool:
+		self.getLog().info(_('Reading data from decoder...'))
+
+		try:
+			self._state = self._state | TimingDevice.STATE_SENDING_COMMANDS
+			self.process_queued_outgoing_commands()
+			self._state = (self._state & ~TimingDevice.STATE_SENDING_COMMANDS) | TimingDevice.STATE_READING_DATA
+			self.get_incoming_messages_from_stream()
+			self._state = (self._state & ~TimingDevice.STATE_READING_DATA) | TimingDevice.STATE_PROCESSING_DATA
+			self.process_messages_on_queue()
+			self._state = (self._state & ~TimingDevice.STATE_PROCESSING_DATA) | TimingDevice.STATE_WAIT_READY
+			return True
+		except Exception as e:
+			self.getLog(child='process').exception('Error processing messages', e)
+		return False

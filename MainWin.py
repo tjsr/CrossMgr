@@ -27,6 +27,8 @@ import locale
 
 import DecoderReplayDialog
 import Log
+import TimingDevices.TimingDeviceWXEvents
+import Ultra
 from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 
 try:
@@ -942,7 +944,23 @@ class MainWin( wx.Frame ):
 		self.Bind(wx.EVT_CLOSE, self.onCloseWindow)
 		self.Bind(JChip.EVT_CHIP_READER, self.handleChipReaderEvent)
 		self.lastPhotoTime = now()
-		
+
+		self.Bind(TimingDevices.TimingDeviceWXEvents.EVT_TIMING_DEVICE_DISCONNECTED, self.onTimingDeviceDisconnected)
+		self.Bind(TimingDevices.TimingDeviceWXEvents.EVT_TIMING_DEVICE_CONNECTED, self.onTimingDeviceConnected)
+		self.Bind(Ultra.EVT_DECODER_THREAD_ENDED, self.onTimingDeviceThreadEnded)
+
+	def onTimingDeviceThreadEnded(self, event: Ultra.DecoderThreadEndedEvent):
+		getLogger().info( 'onDecoderThreadEnded' )
+		pass
+
+	def onTimingDeviceDisconnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceDisconnectedEvent):
+		getLogger().info( 'onDecoderDisconnected' )
+		pass
+
+	def onTimingDeviceConnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceConnectedEvent):
+		getLogger().info( 'onDecoderConnected' )
+		pass
+
 	@property
 	def chipReader( self ) -> ChipReaderType:
 		return ChipReader.chipReaderCur
@@ -1126,11 +1144,14 @@ class MainWin( wx.Frame ):
 			if cd is None and cr:
 				return True
 			elif isinstance(cd, TCPTimingDevice):
-				return cd.isConnected()
+				return cd.connected()
 		return False
 
-	def isRaceActive(self) -> bool:
+	def isRaceLoaded(self) -> bool:
 		return Model.race is not None
+
+	def isRaceRunning(self) -> bool:
+		return self.isRaceLoaded() and Model.race.isRunning()
 
 	def isMenuItemEnabled(self, item_id: int) -> bool:
 		is_enabled = True
@@ -1164,17 +1185,29 @@ class MainWin( wx.Frame ):
 			except Exception as e:
 				self.log.exception(f'Error enabling menu item {itemId}: {e}')
 
+	@property
+	def HasChipReader(self) -> bool:
+		return self.chipReader is not None and self.chipReader.chipReaderType is not None
+
+	def hasActiveDecoderThread(self) -> bool:
+		return self.HasChipReader and not self.isDecoderConnected() and not self.chipReader.IsListening()
+
+	def canStopDecoderThread(self) -> bool:
+		# Don't check 'HasChipReader' here as if the type is None but we still have a listener thread, it won't
+		# allow us to stop it.
+		return self.chipReader is not None and self.chipReader.IsListening()
+
 	def addDecoderMenuItems (self, menu: wx.Menu) -> None:
 		etdOnlyHintString: str = _("For electronic timing decoders only")
 		list: (str, callable, callable[[], bool]) = [
-			("Disconnect from decoder.", self.menuDecoderDisconnect, lambda: self.isDecoderConnected()),
-			("&Connect/reconnect to decoder.", self.menuDecoderReconnect, lambda: self.isRaceActive()),
-			("Start decoder read thread.", self.menuStartDecoderThread, lambda: self.isRaceActive()),
-			("Stop decoder read thread.", self.menuStopDecoderThread, lambda:  self.isDecoderConnected()),
-			("Send 'start' command", self.menuDecoderSendStartRead, lambda: self.isDecoderConnected()),
-			("Send 'stop' command", self.menuDecoderSendStopRead, lambda: self.isDecoderConnected()),
-			("Re-send data...", self.menuShowReplay, lambda: self.isDecoderConnected()),
-			("Stop replaying data.", self.menuDecoderStopRewind, lambda: self.isDecoderConnected()),
+			("Disconnect from decoder.", self.menuDecoderDisconnect, self.isDecoderConnected),
+			("&Connect/reconnect to decoder.", self.menuDecoderReconnect, lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
+			("Start decoder read thread.", self.menuStartDecoderThread, lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
+			("Stop decoder read thread.", self.menuStopDecoderThread, lambda:  self.canStopDecoderThread()),
+			("Send 'start' command", self.menuDecoderSendStartRead, self.isDecoderConnected),
+			("Send 'stop' command", self.menuDecoderSendStopRead, self.isDecoderConnected),
+			("Re-send data...", self.menuShowReplay, self.isDecoderConnected),
+			("Stop replaying data.", self.menuDecoderStopRewind, self.isDecoderConnected),
 		]
 		if self.__menuItemEnabledState is None:
 			self.__menuItemEnabledState: {int, Callable[[], bool]} = {}
@@ -4374,9 +4407,12 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			ChipReader.chipReaderCur.reset( race.chipReaderType )
 			ChipReader.chipReaderCur.StartListener( race.startTime )
 			GetTagNums( True )
-	
-		data = ChipReader.chipReaderCur.GetData()
-		
+
+		if ChipReader.chipReaderCur.chipReaderType == ChipReader.ChipReader.Ultra:
+			data = []
+		else:
+			data = ChipReader.chipReaderCur.GetData()
+
 		if not getattr(race, 'tagNums', None):
 			GetTagNums( True )
 		if not race.tagNums:
