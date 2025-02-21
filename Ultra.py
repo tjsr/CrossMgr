@@ -126,10 +126,10 @@ def StopListener():
 	
 	shutdownQ = None
 	
-def IsListening():
+def IsListening() -> bool:
 	return listener is not None
 
-def GetCurrentDecoder():
+def GetCurrentDecoder() -> UltraDecoder | None:
 	global ultraDecoder
 	return ultraDecoder
 
