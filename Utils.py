@@ -2,6 +2,7 @@ import sys
 import collections
 
 import FileSystemUtils
+import Log
 
 isWindows = sys.platform.startswith('win')
 
@@ -601,7 +602,7 @@ def logCall( f ):
 	
 	def new_f( *args, **kwargs ):
 		parameters = [_getstr(a) for a in args] + [ '{}={}'.format( key, _getstr(value) ) for key, value in kwargs.items() ]
-		writeLog( 'call: {}({})'.format(f.__name__, removeDiacritic(', '.join(parameters))) )
+		Log.getLogger(name=f.__name__,).entering(removeDiacritic(', '.join(parameters)))
 		return f( *args, **kwargs)
 	return new_f
 	
