@@ -1379,7 +1379,7 @@ class MainWin( wx.Frame ):
 			return False
 
 		# TODO: Fix this to be a reference to the Ultra value not a magic number
-		if not (self.chipReader.chipReaderType == 2):
+		if not (self.chipReader.chipReaderType == ChipReader.ChipReader.Ultra):
 			Utils.MessageOK(self, _("Currently only supprted for Ultra decoders"), _("No Ultra Decoder"),
 			                iconMask=wx.ICON_ERROR)
 			return False
