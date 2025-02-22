@@ -1137,13 +1137,14 @@ class MainWin( wx.Frame ):
 				numTimeInfo.add( newNum, t )
 			wx.CallAfter( self.refresh )
 
-	def addMenuItem(self, menu: wx.Menu, text: str, help: str, handler) -> wx.MenuItem:
-		# item = menu.Append( _(text), help, handler )
-		# self.Bind( wx.EVT_MENU, handler, item )
-
+	def addMenuItem(self, menu: wx.Menu, text: str, help: str, handler: callable, enableCondition: callable = None) -> wx.MenuItem:
 		item = wx.MenuItem(menu, wx.ID_ANY, text, help)
 		menu.Append(item)
 		self.Bind(wx.EVT_MENU, handler, item)
+
+		if enableCondition is not None and callable(enableCondition):
+			self.__menuItemEnabledState[item.GetId()] = enableCondition
+
 		return item
 
 	def isDecoderConnected (self) -> bool:
@@ -1175,28 +1176,26 @@ class MainWin( wx.Frame ):
 		is_enabled = check()
 		return is_enabled
 
+	def find_menuItem_from_menu(self, menu: wx.Menu, needle_id: int) -> wx.MenuItem | None:
+		for item in menu.GetMenuItems():
+			if item.GetId() == needle_id:
+				return item
+		return None
+
 	def enableOrDisableMenuItems(self, menu: wx.Menu) -> None:
 		assert menu is not None, 'Menu to re-check enable state cannot be None'
 		log = self.log.getChild('enableOrDisableMenuItems')
-		log.debug(f'Enabling or disabling menu items for menu {menu.GetTitle()}')
-		for itemId, check in self.__menuItemEnabledState.items():
+		log.trace(f'Enabling or disabling menu items for menu {menu.GetTitle()}')
+		for item_id, check in self.__menuItemEnabledState.items():
 			try:
-				if check is not None and callable(check):
-					menuItemList = menu.FindItem(itemId)
-					if menuItemList is None or len(menuItemList) == 0:
-						log.warn(f'Item {itemId} was in menu for enable check but UI control not found.')
-						continue
-
-					if not isinstance(menuItemList[0], wx.MenuItem):
-						log.warn(f'Item {itemId} was in menu for enable check but is not a wx.MenuItem ')
-						continue
-
-					menuItem: wx.MenuItem = menuItemList[0]
-					is_enabled = check()
-					self.log.getChild('isMenuItemEnabled').debug(f'MenuItem {menuItem.GetId()}/{menuItem.ItemLabelText} is enabled: {is_enabled}')
-					menuItem.Enable(enable=is_enabled)
+				is_enabled = self.isMenuItemEnabled(item_id)
+				menuItem: wx.MenuItem = self.find_menuItem_from_menu(menu, item_id)
+				if menuItem is None:
+					log.warning(f'Item {item_id} was in menu for enable check but UI control not found.')
+					continue
+				menuItem.Enable(enable=is_enabled)
 			except Exception as e:
-				log.exception(f'Error enabling menu item {itemId}', exc_info=e)
+				log.exception(f'Error enabling menu item {item_id}', exc_info=e)
 
 	@property
 	def HasChipReader(self) -> bool:
@@ -1226,11 +1225,8 @@ class MainWin( wx.Frame ):
 			self.__menuItemEnabledState: {int, Callable[[], bool]} = {}
 
 		for text, handler, enableCondition in list:
-			handlerCall = lambda *args, **kwargs: self.safeDecoderMenuCall(handler, *args, **kwargs)
-			item: wx.MenuItem = self.addMenuItem( menu, text, etdOnlyHintString, handlerCall)
-
-			if enableCondition is not None and callable(enableCondition):
-				self.__menuItemEnabledState[item.GetId()] = enableCondition
+			handlerCall = lambda event, function=handler, *args, **kwargs: self.safeDecoderMenuCall(function, event=event)
+			item: wx.MenuItem = self.addMenuItem( menu, text, etdOnlyHintString, handlerCall, enableCondition=enableCondition)
 
 	@logCall
 	def menuDNS( self, event ):
@@ -1520,6 +1516,8 @@ class MainWin( wx.Frame ):
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
 		if ultraDecoder.connected():
 			ultraDecoder.stop_rewind()
+		else:
+			self.log.warning('stop_rewind command not sent - Decoder is not connected')
 
 	def sendUltraCommand(self, command: wx.CommandEvent):
 		if not self.chipReader:
