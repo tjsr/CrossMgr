@@ -228,6 +228,7 @@ setTimeout( function() {
 class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
 	__restartTimingDeviceListener: bool = True
+	config: wx.Config
 
 	def __init__( self, parent, id = wx.ID_ANY, title='', size=(200,200) ):
 		super().__init__(parent, id, title, size=size)
