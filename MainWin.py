@@ -25,11 +25,9 @@ from collections import defaultdict
 
 import locale
 
-import DecoderReplayDialog
 import Log
 import TimingDevices.TimingDeviceWXEvents
 import Ultra
-from TimingDevices.TCCPTimingDevice import TCPTimingDevice
 from SplashScreen import ShowSplashScreen
 
 try:

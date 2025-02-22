@@ -7,7 +7,7 @@ from typing import cast, Callable
 
 from TimingDevices.TimingDevice import TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
-from TimingDevices.TCCPTimingDevice import TCPTimingDevice
+from TimingDevices.TCPTimingDevice import TCPTimingDevice
 from TimingDevices.TimingDeviceCommand import TimingDeviceCommand
 from TimingDevices.TimingDeviceExceptions import TimingDeviceNotConnectedException, UnrecognisedCommandException
 
