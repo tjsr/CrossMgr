@@ -309,15 +309,6 @@ class UIMenuDecoder(wx.Menu):
 		else:
 			self.log.warning('stop_rewind command not sent - Decoder is not connected')
 
-	def sendUltraCommand(self, command: wx.CommandEvent):
-		if not self.chipReader:
-			Utils.MessageOK(self, _('No Chip Reader'), _('No Chip Reader'), iconMask=wx.ICON_ERROR)
-			return
-		if not self.chipReader.isUltra():
-			Utils.MessageOK(self, _('Ultra Decoder Only'), _('Ultra Decoder Only'), iconMask=wx.ICON_ERROR)
-			return
-		self.chipReader.sendUltraCommand(command)
-
 	def menuJChipImport(self, event: wx.CommandEvent):
 		correct, reason = JChipSetup.CheckExcelLink()
 		explain = '{}\n\n{}'.format(
