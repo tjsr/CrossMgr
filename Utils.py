@@ -1,5 +1,6 @@
 import sys
 import collections
+from typing import Any
 
 import FileSystemUtils
 import Log
@@ -596,13 +597,13 @@ def disable_stdout_buffering():
 	# No longer necessary as if output goes to the terminal it will be flushed if it ends in newline.
 	''' sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) '''
 
-def logCall( f ):
-	def _getstr( x ):
-		return '{}'.format(x) if not isinstance(x, wx.Object) else u'<<{}>>'.format(x.__class__.__name__)
+def logCall( f: callable ) -> callable:
+	def _getstr( x: Any ):
+		return '{}'.format(f) if not isinstance(f, wx.Object) else u'<<{}>>'.format(f.__class__.__name__)
 	
 	def new_f( *args, **kwargs ):
 		parameters = [_getstr(a) for a in args] + [ '{}={}'.format( key, _getstr(value) ) for key, value in kwargs.items() ]
-		Log.getLogger(name=f.__name__,).entering(removeDiacritic(', '.join(parameters)))
+		Log.getLogger(name=f.__name__,).debug(removeDiacritic(', '.join(parameters)))
 		return f( *args, **kwargs)
 	return new_f
 	
