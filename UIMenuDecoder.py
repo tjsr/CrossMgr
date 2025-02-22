@@ -203,7 +203,7 @@ class UIMenuDecoder(wx.Menu):
 			except Exception as e:
 				log.exception(f'Error enabling menu item {item_id}', exc_info=e)
 
-	def menuJChip(self, _event: wx.CommandEvent) -> None:
+	def menuJChip(self, event: wx.CommandEvent) -> None:
 		if not Model.race:
 			Utils.MessageOK(self._parent, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"),
 			                iconMask=wx.ICON_ERROR)
@@ -253,45 +253,45 @@ class UIMenuDecoder(wx.Menu):
 			self.DecoderMenuItemError(e, function.__name__)
 
 	@logCall
-	def menuDecoderDisconnect(self, _event: wx.CommandEvent) -> None:
+	def menuDecoderDisconnect(self, event: wx.CommandEvent) -> None:
 		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
 			return
 
 		ultraDecoder.disconnect()
 
 	@logCall
-	async def menuDecoderReconnect(self, _event: wx.CommandEvent) -> None:
+	async def menuDecoderReconnect(self, event: wx.CommandEvent) -> None:
 		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
 			return
 		await ultraDecoder.reconnect()
 
 	@logCall
-	def menuStartDecoderThread(self, _event: wx.CommandEvent) -> None:
+	def menuStartDecoderThread(self, event: wx.CommandEvent) -> None:
 		# Do we actually care if it's an Ultra decoder here?
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.log.todo('Requires host, port, and start time')
 		self.chipReader.StartListener()
 
-	def menuStopDecoderThread(self, _event: wx.CommandEvent) -> None:
+	def menuStopDecoderThread(self, event: wx.CommandEvent) -> None:
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.chipReader.StopListener()
 
 	@logCall
-	def menuDecoderSendStartRead(self, _event: wx.CommandEvent) -> None:
+	def menuDecoderSendStartRead(self, event: wx.CommandEvent) -> None:
 		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
 			return
 		ultraDecoder.begin_reading()
 
 	@logCall
-	def menuDecoderSendStopRead(self, _event: wx.CommandEvent) -> None:
+	def menuDecoderSendStopRead(self, event: wx.CommandEvent) -> None:
 		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
 			return
 		ultraDecoder.stop_reading()
 
 	@logCall
-	def menuShowReplay(self, _event: wx.CommandEvent) -> None:
+	def menuShowReplay(self, event: wx.CommandEvent) -> None:
 		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
 			return
 
@@ -315,7 +315,7 @@ class UIMenuDecoder(wx.Menu):
 			elif result == DecoderReplayDialog.ID_INVALID_END:
 				self.log.error('Invalid end time')
 
-	def menuDecoderStopRewind(self, _event: wx.CommandEvent) -> None:
+	def menuDecoderStopRewind(self, event: wx.CommandEvent) -> None:
 		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
 			return
 
@@ -332,7 +332,7 @@ class UIMenuDecoder(wx.Menu):
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuAlienImport(self, _event: wx.CommandEvent) -> None:
+	def menuAlienImport(self, event: wx.CommandEvent) -> None:
 		if not self.__excel_link_check():
 			return
 
@@ -340,7 +340,7 @@ class UIMenuDecoder(wx.Menu):
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuIpicoImport(self, _event: wx.CommandEvent) -> None:
+	def menuIpicoImport(self, event: wx.CommandEvent) -> None:
 		if not self.__excel_link_check():
 			return
 
@@ -348,7 +348,7 @@ class UIMenuDecoder(wx.Menu):
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuImpinjImport(self, _event: wx.CommandEvent) -> None:
+	def menuImpinjImport(self, event: wx.CommandEvent) -> None:
 		if not self.__excel_link_check():
 			return
 
@@ -356,7 +356,7 @@ class UIMenuDecoder(wx.Menu):
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuOrionImport(self, _event: wx.CommandEvent) -> None:
+	def menuOrionImport(self, event: wx.CommandEvent) -> None:
 		if not self.__excel_link_check():
 			return
 
@@ -364,7 +364,7 @@ class UIMenuDecoder(wx.Menu):
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuRaceResultImport(self, _event: wx.CommandEvent) -> None:
+	def menuRaceResultImport(self, event: wx.CommandEvent) -> None:
 		if not self.__excel_link_check():
 			return
 
