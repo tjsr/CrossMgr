@@ -118,16 +118,17 @@ class UIMenuDecoder(wx.Menu):
 		return item
 
 	def isDecoderConnected(self) -> bool:
-		cr: ChipReader.ChipReader = self.chipReader
+		cr: ChipReaderType = self.chipReader
 		if cr is not None:
-			if not cr.IsListening():
+			if not cr.IsListening or cr.IsListening() is not True:
 				return False
 
-			cd: TimingDevice = cr.CurrentDecoder()
+			cd: TimingDevice = self._Decoder
 			if cd is None and cr:
 				return True
 			elif isinstance(cd, TCPTimingDevice):
-				return cd.connected()
+				tcp_device = cast(TCPTimingDevice, cd)
+				return tcp_device.connected()
 		return False
 
 	def isRaceLoaded(self) -> bool:
