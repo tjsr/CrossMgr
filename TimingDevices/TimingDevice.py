@@ -85,12 +85,6 @@ class TimingDevice():
 		self._commandQueue = Queue()
 		self._messageQueue = []
 
-	def _spawn_event(self, handler: callable, **kwargs: Any):
-		socket_connect_thread = Thread(target=handler, kwargs=kwargs)
-		socket_connect_thread.name = f'Ultra {handler.__name__} handler'
-		socket_connect_thread.daemon = True
-		socket_connect_thread.start()
-
 	def getLogName(self) -> str:
 		class_name = self.__class__.__name__
 		return f'TimingDevice[{class_name}]'
