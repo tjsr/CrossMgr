@@ -38,11 +38,11 @@ class UIMenuDecoder(wx.Menu):
 		super(UIMenuDecoder, self).__init__(*args, **kwargs)
 		self.chipMenu = wx.Menu()
 
-		item = AppendMenuItemBitmap(self.chipMenu, wx.ID_ANY, _("Chip Reader &Setup..."),
+		item = AppendMenuItemBitmap(self, wx.ID_ANY, _("Chip Reader &Setup..."),
 		                            _("Configure and Test the Chip Reader"), Utils.GetPngBitmap('rfid-signal.png'))
 		self.Bind(wx.EVT_MENU, self.menuJChip, item)
 
-		self.chipMenu.AppendSeparator()
+		self.AppendSeparator()
 
 		self.addDecoderMenuItems()
 		try:
@@ -50,24 +50,24 @@ class UIMenuDecoder(wx.Menu):
 		except Exception as e:
 			self.log.critical(f'Failed while enabling or disabling menu items: {e}')
 
-		self.chipMenu.AppendSeparator()
+		self.AppendSeparator()
 
-		item = self.chipMenu.Append(wx.ID_ANY, _("Import JChip File..."), _("JChip Formatted File"))
+		item = self.Append(wx.ID_ANY, _("Import JChip File..."), _("JChip Formatted File"))
 		self.Bind(wx.EVT_MENU, self.menuJChipImport, item)
 
-		item = self.chipMenu.Append(wx.ID_ANY, _("Import Impinj File..."), _("Impinj Formatted File"))
+		item = self.Append(wx.ID_ANY, _("Import Impinj File..."), _("Impinj Formatted File"))
 		self.Bind(wx.EVT_MENU, self.menuImpinjImport, item)
 
-		item = self.chipMenu.Append(wx.ID_ANY, _("Import Ipico File..."), _("Ipico Formatted File"))
+		item = self.Append(wx.ID_ANY, _("Import Ipico File..."), _("Ipico Formatted File"))
 		self.Bind(wx.EVT_MENU, self.menuIpicoImport, item)
 
-		item = self.chipMenu.Append(wx.ID_ANY, _("Import Alien File..."), _("Alien Formatted File"))
+		item = self.Append(wx.ID_ANY, _("Import Alien File..."), _("Alien Formatted File"))
 		self.Bind(wx.EVT_MENU, self.menuAlienImport, item)
 
-		item = self.chipMenu.Append(wx.ID_ANY, _("Import Orion File..."), _("Orion Formatted File"))
+		item = self.Append(wx.ID_ANY, _("Import Orion File..."), _("Orion Formatted File"))
 		self.Bind(wx.EVT_MENU, self.menuOrionImport, item)
 
-		item = self.chipMenu.Append(wx.ID_ANY, _("Import RaceResult File..."), _("RaceResult File"))
+		item = self.Append(wx.ID_ANY, _("Import RaceResult File..."), _("RaceResult File"))
 		self.Bind(wx.EVT_MENU, self.menuRaceResultImport, item)
 
 	@property
