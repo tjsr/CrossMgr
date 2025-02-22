@@ -1050,7 +1050,7 @@ class MainWin( wx.Frame ):
 		
 		return num
 
-	def menuDeleteBib( self, event ):
+	def menuDeleteBib( self, event: wx.CommandEvent ) -> None:
 		num = self.getValidNum(_('Delete Bib'))
 		if num is None:
 			return
@@ -1078,7 +1078,7 @@ class MainWin( wx.Frame ):
 			
 			self.refresh()
 		
-	def menuChangeBib( self, event ):
+	def menuChangeBib( self, event: wx.CommandEvent ) -> None:
 		num = self.getValidNum( _('Bib Number to Change') )
 		if num is None:
 			return
@@ -1451,40 +1451,39 @@ class MainWin( wx.Frame ):
 			self.DecoderMenuItemError(e, function.__name__)
 
 	@logCall
-	def menuDecoderDisconnect (self, event ) -> None:
+	def menuDecoderDisconnect (self, event: wx.CommandEvent) -> None:
 		if not self.checkDecoderIsUltra(True):
 			return
 		ultraDecoder: UltraDecoder = self.chipReader.CurrentDecoder()
 		ultraDecoder.disconnect()
 
 	@logCall
-	async def menuDecoderReconnect (self, event ):
+	async def menuDecoderReconnect (self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(True):
 			return
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
 		await ultraDecoder.reconnect()
 
 	@logCall
-	def menuStartDecoderThread( self, event ):
+	def menuStartDecoderThread(self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.chipReader.StartListener()
 
-	@logCall
-	def menuStopDecoderThread( self, event ):
+	def menuStopDecoderThread(self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.chipReader.StopListener()
 
 	@logCall
-	def menuDecoderSendStartRead( self, event ):
+	def menuDecoderSendStartRead(self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(True):
 			return
 		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
 		ultraDecoder.begin_reading()
 
 	@logCall
-	def menuDecoderSendStopRead( self, event ):
+	def menuDecoderSendStopRead(self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(True):
 			return
 
@@ -1492,7 +1491,7 @@ class MainWin( wx.Frame ):
 		ultraDecoder.stop_reading()
 
 	@logCall
-	def menuShowReplay(self, event):
+	def menuShowReplay(self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(True):
 			return
 
@@ -1517,8 +1516,7 @@ class MainWin( wx.Frame ):
 			elif result == DecoderReplayDialog.ID_INVALID_END:
 				self.log.error('Invalid end time')
 
-	@logCall
-	def menuDecoderStopRewind(self):
+	def menuDecoderStopRewind(self, event: wx.CommandEvent):
 		if not self.checkDecoderIsUltra(True):
 			return
 
@@ -1526,7 +1524,7 @@ class MainWin( wx.Frame ):
 		if ultraDecoder.connected():
 			ultraDecoder.stop_rewind()
 
-	def sendUltraCommand( self, command ):
+	def sendUltraCommand(self, command: wx.CommandEvent):
 		if not self.chipReader:
 			Utils.MessageOK( self, _('No Chip Reader'), _('No Chip Reader'), iconMask=wx.ICON_ERROR )
 			return
@@ -1535,7 +1533,7 @@ class MainWin( wx.Frame ):
 			return
 		self.chipReader.sendUltraCommand( command )
 
-	def menuJChipImport( self, event ):
+	def menuJChipImport(self, event: wx.CommandEvent):
 		correct, reason = JChipSetup.CheckExcelLink()
 		explain = '{}\n\n{}'.format(
 			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
