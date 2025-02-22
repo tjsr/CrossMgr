@@ -3,6 +3,7 @@ import datetime
 import socket
 import time
 from abc import abstractmethod
+from threading import Thread
 
 import Log
 from Log import CrossMgrLogger
@@ -48,6 +49,15 @@ class TCPTimingDevice:
 	def getDeviceType(self) -> str:
 		pass
 
+	def __spawn_event(self, handler: callable):
+		socket_connect_thread = Thread(target=handler, args=())
+		socket_connect_thread.name = f'Ultra {handler.__name__} handler'
+		socket_connect_thread.daemon = True
+		socket_connect_thread.start()
+
+	def __spawn_on_socket_connect(self):
+		self.__spawn_event(self.on_socket_connect)
+
 	def connect(self) -> bool:
 		log = self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT)
 		device = self.getDeviceType()
@@ -65,8 +75,10 @@ class TCPTimingDevice:
 			self.__unsuccessfulConnectionAttempts = 0
 			self._connected = True
 
+			# Wait for the connection to be established.
 			time.sleep(2)
-			asyncio.run(self.on_socket_connect())
+
+			self.__spawn_on_socket_connect()
 		except TimeoutError as e:
 			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
 			log.error(errDesc)
@@ -114,7 +126,7 @@ class TCPTimingDevice:
 		return False
 
 	@abstractmethod
-	def on_socket_connect(self):
+	async def on_socket_connect(self):
 		pass
 
 	def connected(self) -> bool:

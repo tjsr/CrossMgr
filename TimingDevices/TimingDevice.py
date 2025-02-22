@@ -2,8 +2,9 @@ import asyncio
 import datetime
 from abc import abstractmethod
 from queue import Queue
+from threading import Thread
 from types import TracebackType
-from typing import List, Type, Callable, Optional, cast
+from typing import List, Type, Callable, Optional, cast, Any
 
 import Log
 from Log import CrossMgrLogger
@@ -83,6 +84,12 @@ class TimingDevice():
 	def __init__(self):
 		self._commandQueue = Queue()
 		self._messageQueue = []
+
+	def _spawn_event(self, handler: callable, **kwargs: Any):
+		socket_connect_thread = Thread(target=handler, kwargs=kwargs)
+		socket_connect_thread.name = f'Ultra {handler.__name__} handler'
+		socket_connect_thread.daemon = True
+		socket_connect_thread.start()
 
 	def getLogName(self) -> str:
 		class_name = self.__class__.__name__
