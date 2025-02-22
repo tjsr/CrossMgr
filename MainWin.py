@@ -628,8 +628,9 @@ class MainWin( wx.Frame ):
 		self.bibEnter = BibEnter( self )
 
 		#-----------------------------------------------------------------------
-		self.chipMenu = UIMenuDecoder()
-		self.menuBar.Append( self.chipMenu, _("Chip&Reader") )
+		self._chipMenu = UIMenuDecoder(self)
+		self._chipMenu.setCommitCallback(self.commit)
+		self.menuBar.Append( self._chipMenu, _("Chip&Reader") )
 
 		#----------------------------------------------------------------------------------------------
 		self.backgroundJobMgr = BackgroundJobMgr( self )
