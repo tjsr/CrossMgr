@@ -1167,15 +1167,12 @@ class MainWin( wx.Frame ):
 
 	def isMenuItemEnabled(self, item_id: int) -> bool:
 		is_enabled = True
-		if not self.__menuItemEnabledState.has_key(itemId):
-			return True
 
-		check = self.__menuItemEnabledState[itemId]
+		check = self.__menuItemEnabledState[item_id]
 		if check is None or not callable(check):
 			return True
 
 		is_enabled = check()
-		self.log.getChild('isMenuItemEnabled').debug(f'Item {item_id} is enabled: {is_enabled}')
 		return is_enabled
 
 	def enableOrDisableMenuItems(self, menu: wx.Menu) -> None:
