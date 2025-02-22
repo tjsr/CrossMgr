@@ -367,7 +367,7 @@ class TimingDevice():
 		pass
 
 	def process(self) -> bool:
-		self.getLog().info(_('Reading data from decoder...'))
+		self.getLog().trace(_('Reading data from decoder...'))
 
 		try:
 			self._state = self._state | TimingDevice.STATE_SENDING_COMMANDS
