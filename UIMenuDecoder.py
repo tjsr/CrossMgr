@@ -161,8 +161,6 @@ class UIMenuDecoder(wx.Menu):
 		return self.isRaceLoaded() and Model.race.isRunning()
 
 	def isMenuItemEnabled(self, item_id: int) -> bool:
-		is_enabled = True
-
 		check = self.__menuItemEnabledState[item_id]
 		if check is None or not callable(check):
 			return True
