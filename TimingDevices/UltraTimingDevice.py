@@ -79,7 +79,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			self.getLog(child='event').warning('Connected to decoder but didn\'t get confirmation after waiting.')
 			return False
 
-	async def on_connect(self, msg: UltraConnectConfirmationMessage) -> bool:
+	async def on_connect(self, message: UltraConnectConfirmationMessage) -> bool:
 		result = True
 		try:
 			if self.__on_connect_action_set_time:
@@ -148,7 +148,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		while message := self.get_last_message():
 			if isinstance(message, UltraConnectConfirmationMessage):
 				self.getLog('process_messages').info('{}: "{}"'.format(_('Connection info'), message))
-				asyncio.run(self.on_connect(message))
+				self._spawn_event(self.on_connect, message=message)
 				continue
 			elif isinstance(message, UltraVoltageMessage):
 				self._lastVoltage = now()  # If so, reset the last heartbeat time.
