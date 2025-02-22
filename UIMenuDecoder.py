@@ -36,9 +36,9 @@ class UIMenuDecoder(wx.Menu):
 			self.__log = Log.getLogger('CrossMgr').getChild('UIMenuDecoder')
 		return self.__log
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, parent: wx.Window, *args, **kwargs):
 		super(UIMenuDecoder, self).__init__(*args, **kwargs)
-		self.chipMenu = wx.Menu()
+		self._parent = parent
 
 		item = AppendMenuItemBitmap(self, wx.ID_ANY, _("Chip Reader &Setup..."),
 		                            _("Configure and Test the Chip Reader"), Utils.GetPngBitmap('rfid-signal.png'))
@@ -169,7 +169,7 @@ class UIMenuDecoder(wx.Menu):
 
 	def menuJChip(self, _event: wx.CommandEvent) -> None:
 		if not Model.race:
-			Utils.MessageOK(self, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"),
+			Utils.MessageOK(self._parent, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"),
 			                iconMask=wx.ICON_ERROR)
 			return
 
@@ -177,7 +177,7 @@ class UIMenuDecoder(wx.Menu):
 			self._commit_callback()
 
 		if Model.race.isRunning():
-			Utils.MessageOK(self, _('Cannot perform RFID setup while race is running.'), _('Cannot Perform RFID Setup'),
+			Utils.MessageOK(self._parent, _('Cannot perform RFID setup while race is running.'), _('Cannot Perform RFID Setup'),
 			                iconMask=wx.ICON_ERROR)
 			return
 		with JChipSetup.JChipSetupDialog(self) as dlg:
@@ -185,26 +185,29 @@ class UIMenuDecoder(wx.Menu):
 
 	def checkDecoderIsUltra(self, requires_current: bool = True) -> Optional[UltraDecoder]:
 		if self.chipReader is None:
-			Utils.MessageOK(self, _("No Chip Reader"), _("No Chip Reader"), iconMask=wx.ICON_ERROR)
-			return False
+			Utils.MessageOK(self._parent, _("No Chip Reader"), _("No Chip Reader"), iconMask=wx.ICON_ERROR)
+			return None
 
-		# TODO: Fix this to be a reference to the Ultra value not a magic number
-		if not (self.chipReader.chipReaderType == ChipReader.ChipReader.Ultra):
-			Utils.MessageOK(self, _("Currently only supprted for Ultra decoders"), _("No Ultra Decoder"),
+		if not isinstance(self.chipReader, ChipReader):
+			return None
+
+		cr: ChipReader = cast(ChipReader, self.chipReader)
+		if not (cr.chipReaderType == ChipReader.Ultra):
+			Utils.MessageOK(self, _("Currently only supported for Ultra decoders"), _("No Ultra Decoder"),
 			                iconMask=wx.ICON_ERROR)
-			return False
+			return None
 
-		ultraDecoder: UltraDecoder | None = self.chipReader.CurrentDecoder()
+		ultraDecoder: UltraDecoder | None = cr.CurrentDecoder()
 		if requires_current and ultraDecoder is None:
-			Utils.MessageOK(self, _("No Ultra decoder thread currently running."), _("No Ultra Decoder"),
+			Utils.MessageOK(self._parent, _("No Ultra decoder thread currently running."), _("No Ultra Decoder"),
 			                iconMask=wx.ICON_ERROR)
-			return False
+			return None
 
-		return True
+		return ultraDecoder
 
 	def DecoderMenuItemError(self, e: Exception, function_name: str) -> None:
-		logging.critical('Error calling decoder action: %s', exc_info=e)
-		Utils.MessageOK(self, "Critical error interacting with decoder.  See log.", _("Error in {function_name}"),
+		self.log.critical('Error calling decoder action: %s', exc_info=e)
+		Utils.MessageOK(self._parent, "Critical error interacting with decoder.  See log.", _(f"Error in {function_name}"),
 		                iconMask=wx.ICON_ERROR)
 
 	def safeDecoderMenuCall(self, function: CommandEventCallback, *args, **kwargs) -> None:
