@@ -4380,7 +4380,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		if self.processNumTimes():
 			self.refresh()
 			if Model.race and Model.race.ftpUploadDuringRace:
-				realTimeFtpPublish.publishEntry()		
+				realTimeFtpPublish.publishEntry()
 	
 	def processJChipListener( self, refreshNow=False ):
 		race = Model.race
@@ -4621,7 +4621,7 @@ def MainLoop():
 	#tbicon.SetIcon( icon, "CrossMgr" )
 
 	if args.verbose:
-		wx.CallLater( 500, ShowSplashScreen, ShowTipAtStartup )
+		wx.CallLater(500, ShowSplashScreen, ShowTipAtStartup)
 	
 	mainWin.forecastHistory.setSash()
 	
