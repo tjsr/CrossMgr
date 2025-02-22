@@ -36,6 +36,32 @@ class UIMenuDecoder(wx.Menu):
 			self.__log = Log.getLogger('CrossMgr').getChild('UIMenuDecoder')
 		return self.__log
 
+	@property
+	def _Decoder(self) -> TimingDevice:
+		if self.chipReader is None:
+			return None
+		if not isinstance(self.chipReader, ChipReader):
+			return None
+
+		cr: ChipReader = cast(ChipReader, self.chipReader)
+		return cr.CurrentDecoder() if cr.CurrentDecoder is not None and cr.chipReaderType == ChipReader.Ultra else None
+
+	@property
+	def HasChipReader(self) -> bool:
+		if self.chipReader is not None:
+			return False
+
+		if not isinstance(self.chipReader, ChipReader):
+			return False
+
+		if cast(ChipReader, self.chipReader).chipReaderType is None:
+			return False
+
+		return True
+
+	def setCommitCallback(self, callback: Callable[[], None]) -> None:
+		self._commit_callback = callback
+
 	def __init__(self, parent: wx.Window, *args, **kwargs):
 		super(UIMenuDecoder, self).__init__(*args, **kwargs)
 		self._parent = parent
@@ -72,9 +98,6 @@ class UIMenuDecoder(wx.Menu):
 		item = self.Append(wx.ID_ANY, _("Import RaceResult File..."), _("RaceResult File"))
 		self.Bind(wx.EVT_MENU, self.menuRaceResultImport, item)
 
-	@property
-	def HasChipReader(self) -> bool:
-		return self.chipReader is not None and self.chipReader.chipReaderType is not None
 
 	def hasActiveDecoderThread(self) -> bool:
 		return self.HasChipReader and not self.isDecoderConnected() and not self.chipReader.IsListening()
