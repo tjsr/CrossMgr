@@ -24,6 +24,7 @@ CommandEventCallback = Callable[[wx.CommandEvent, Any, Any], None]
 class UIMenuDecoder(wx.Menu):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr').getChild('UIMenuDecoder')
 	__menuItemEnabledState: {int, Callable[[], bool]} = {}
+	_commit_callback: Callable[[], None] | None = None
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
@@ -170,7 +171,10 @@ class UIMenuDecoder(wx.Menu):
 			Utils.MessageOK(self, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"),
 			                iconMask=wx.ICON_ERROR)
 			return
-		self.commit()
+
+		if self._commit_callback is not None:
+			self._commit_callback()
+
 		if Model.race.isRunning():
 			Utils.MessageOK(self, _('Cannot perform RFID setup while race is running.'), _('Cannot Perform RFID Setup'),
 			                iconMask=wx.ICON_ERROR)
