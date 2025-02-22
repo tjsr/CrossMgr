@@ -254,14 +254,16 @@ class UIMenuDecoder(wx.Menu):
 
 	@logCall
 	def menuDecoderDisconnect(self, event: wx.CommandEvent) -> None:
-		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
 			return
 
 		ultraDecoder.disconnect()
 
 	@logCall
 	async def menuDecoderReconnect(self, event: wx.CommandEvent) -> None:
-		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
 			return
 		await ultraDecoder.reconnect()
 
@@ -280,19 +282,22 @@ class UIMenuDecoder(wx.Menu):
 
 	@logCall
 	def menuDecoderSendStartRead(self, event: wx.CommandEvent) -> None:
-		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
 			return
 		ultraDecoder.begin_reading()
 
 	@logCall
 	def menuDecoderSendStopRead(self, event: wx.CommandEvent) -> None:
-		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
 			return
 		ultraDecoder.stop_reading()
 
 	@logCall
 	def menuShowReplay(self, event: wx.CommandEvent) -> None:
-		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
 			return
 
 		with DecoderReplayDialog.DecoderReplayDialog(self) as dlg:
@@ -316,7 +321,8 @@ class UIMenuDecoder(wx.Menu):
 				self.log.error('Invalid end time')
 
 	def menuDecoderStopRewind(self, event: wx.CommandEvent) -> None:
-		if ultraDecoder := self.checkDecoderIsUltra(True) is None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
 			return
 
 		if ultraDecoder.connected():
