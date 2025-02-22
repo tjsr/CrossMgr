@@ -17,6 +17,7 @@ from ChipReader import ChipReaderType
 from TimingDevices import TimingDevice
 from TimingDevices.TCPTimingDevice import TCPTimingDevice
 from TimingDevices.UltraTimingDevice import UltraDecoder
+from UIMenuUtils import AppendMenuItemBitmap
 
 
 class UIMenuDecoder(wx.Menu):
