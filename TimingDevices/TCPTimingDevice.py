@@ -1,13 +1,12 @@
-import asyncio
 import datetime
 import socket
 import time
 from abc import abstractmethod
-from threading import Thread
 
 import Log
 from Log import CrossMgrLogger
 from SocketUtils import socketReadDelimited, socketSendMessage
+from TimingDevices import ThreadUtils
 from TimingDevices.TimingDevice import TimingDeviceConnectMessage
 
 
@@ -49,14 +48,8 @@ class TCPTimingDevice:
 	def getDeviceType(self) -> str:
 		pass
 
-	def __spawn_event(self, handler: callable):
-		socket_connect_thread = Thread(target=handler, args=())
-		socket_connect_thread.name = f'Ultra {handler.__name__} handler'
-		socket_connect_thread.daemon = True
-		socket_connect_thread.start()
-
 	def __spawn_on_socket_connect(self):
-		self.__spawn_event(self.on_socket_connect)
+		ThreadUtils.spawn_event(handler=self.on_socket_connect)
 
 	def connect(self) -> bool:
 		log = self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT)

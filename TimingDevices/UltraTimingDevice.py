@@ -1,10 +1,10 @@
-import asyncio
 import datetime
 import inspect
 import socket
 import time
 from typing import cast, Callable
 
+from TimingDevices import ThreadUtils
 from TimingDevices.TimingDevice import TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCPTimingDevice import TCPTimingDevice
@@ -148,7 +148,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		while message := self.get_last_message():
 			if isinstance(message, UltraConnectConfirmationMessage):
 				self.getLog('process_messages').info('{}: "{}"'.format(_('Connection info'), message))
-				self._spawn_event(self.on_connect, message=message)
+				ThreadUtils.spawn_event(handler=self.on_connect, message=message)
 				continue
 			elif isinstance(message, UltraVoltageMessage):
 				self._lastVoltage = now()  # If so, reset the last heartbeat time.
