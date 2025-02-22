@@ -129,7 +129,7 @@ class UIMenuDecoder(wx.Menu):
 			("&Connect/reconnect to decoder.", self.menuDecoderReconnect,
 			 lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
 			("Start decoder read thread.", self.menuStartDecoderThread,
-			 lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
+			 lambda: self.isRaceLoaded() and not self.hasActiveDecoderThread()),
 			("Stop decoder read thread.", self.menuStopDecoderThread, self.canStopDecoderThread),
 			("Send 'start' command", self.menuDecoderSendStartRead, self.isDecoderConnected),
 			("Send 'stop' command", self.menuDecoderSendStopRead, self.isDecoderConnected),
