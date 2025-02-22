@@ -98,6 +98,20 @@ class UIMenuDecoder(wx.Menu):
 		item = self.Append(wx.ID_ANY, _("Import RaceResult File..."), _("RaceResult File"))
 		self.Bind(wx.EVT_MENU, self.menuRaceResultImport, item)
 
+	def __excel_link_check(self) -> bool:
+		correct, reason = JChipSetup.CheckExcelLink()
+		explain = '{}\n\n{}'.format(
+			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
+			_('See documentation for details.')
+		)
+		if not correct:
+			Utils.MessageOK(self._parent, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
+			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+			return False
+		return True
+
+	def __has_listening_chip_reader(self) -> bool:
+		return self.chipReader is not None and self.chipReader.IsListening()
 
 	def hasActiveDecoderThread(self) -> bool:
 		return self.HasChipReader and not self.isDecoderConnected() and not self.chipReader.IsListening()
@@ -309,90 +323,48 @@ class UIMenuDecoder(wx.Menu):
 		else:
 			self.log.warning('stop_rewind command not sent - Decoder is not connected')
 
-	def menuJChipImport(self, event: wx.CommandEvent):
-		correct, reason = JChipSetup.CheckExcelLink()
-		explain = '{}\n\n{}'.format(
-			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
-			_('See documentation for details.')
-		)
-		if not correct:
-			Utils.MessageOK(self, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
-			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+	def menuJChipImport(self, event: wx.CommandEvent) -> None:
+		if not self.__excel_link_check():
 			return
 
 		with JChipImport.JChipImportDialog(self) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuAlienImport(self, event):
-		correct, reason = JChipSetup.CheckExcelLink()
-		explain = '{}\n\n{}'.format(
-			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
-			_('See documentation for details.')
-		)
-		if not correct:
-			Utils.MessageOK(self, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
-			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+	def menuAlienImport(self, _event: wx.CommandEvent) -> None:
+		if not self.__excel_link_check():
 			return
 
 		with AlienImport.AlienImportDialog(self) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuIpicoImport(self, event):
-		correct, reason = JChipSetup.CheckExcelLink()
-		explain = '{}\n\n{}'.format(
-			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
-			_('See documentation for details.')
-		)
-		if not correct:
-			Utils.MessageOK(self, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
-			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+	def menuIpicoImport(self, _event: wx.CommandEvent) -> None:
+		if not self.__excel_link_check():
 			return
 
 		with IpicoImport.IpicoImportDialog(self) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuImpinjImport(self, event):
-		correct, reason = JChipSetup.CheckExcelLink()
-		explain = '{}\n\n{}'.format(
-			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
-			_('See documentation for details.')
-		)
-		if not correct:
-			Utils.MessageOK(self, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
-			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+	def menuImpinjImport(self, _event: wx.CommandEvent) -> None:
+		if not self.__excel_link_check():
 			return
 
 		with ImpinjImport.ImpinjImportDialog(self) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuOrionImport(self, event):
-		correct, reason = JChipSetup.CheckExcelLink()
-		explain = '{}\n\n{}'.format(
-			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
-			_('See documentation for details.')
-		)
-		if not correct:
-			Utils.MessageOK(self, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
-			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+	def menuOrionImport(self, _event: wx.CommandEvent) -> None:
+		if not self.__excel_link_check():
 			return
 
 		with OrionImport.OrionImportDialog(self) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
-	def menuRaceResultImport(self, event):
-		correct, reason = JChipSetup.CheckExcelLink()
-		explain = '{}\n\n{}'.format(
-			_('You must have a valid Excel sheet with associated tags and Bib numbers.'),
-			_('See documentation for details.')
-		)
-		if not correct:
-			Utils.MessageOK(self, '{}\n\n    {}\n\n{}'.format(_('Problems with Excel sheet.'), reason, explain),
-			                title=_('Excel Link Problem'), iconMask=wx.ICON_ERROR)
+	def menuRaceResultImport(self, _event: wx.CommandEvent) -> None:
+		if not self.__excel_link_check():
 			return
 
 		with RaceResultImport.RaceResultImportDialog(self) as dlg:
