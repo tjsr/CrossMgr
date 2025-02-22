@@ -3,7 +3,7 @@ from typing import Callable, cast, Any, Optional
 import wx
 
 import AlienImport
-import ChipReader
+import DecoderReplayDialog
 import ImpinjImport
 import IpicoImport
 import JChipImport
@@ -13,7 +13,8 @@ import Model
 import OrionImport
 import RaceResultImport
 import Utils
-from ChipReader import ChipReaderType
+from Utils import logCall
+from ChipReader import ChipReaderType, chipReaderCur, ChipReader
 from TimingDevices import TimingDevice
 from TimingDevices.TCPTimingDevice import TCPTimingDevice
 from TimingDevices.UltraTimingDevice import UltraDecoder
@@ -28,7 +29,7 @@ class UIMenuDecoder(wx.Menu):
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
-		return ChipReader.chipReaderCur
+		return chipReaderCur
 
 	@property
 	def log ( self ) -> Log.CrossMgrLogger:
@@ -119,7 +120,7 @@ class UIMenuDecoder(wx.Menu):
 	def canStopDecoderThread(self) -> bool:
 		# Don't check 'HasChipReader' here as if the type is None but we still have a listener thread, it won't
 		# allow us to stop it.
-		return self.chipReader is not None and self.chipReader.IsListening()
+		return self.__has_listening_chip_reader()
 
 	def addDecoderMenuItems(self) -> None:
 		etdOnlyHintString: str = _("For electronic timing decoders only")
