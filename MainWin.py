@@ -891,17 +891,17 @@ class MainWin( wx.Frame ):
 		self.__restartTimingDeviceListener = event.should_restart_thread
 
 		if max_attempts == 0 or owner.is_alive():
-			log.warning(f'Decoder read thread ending was signalled but is still alive.')
+			self.log.warning(f'Decoder read thread ending was signalled but is still alive.')
 
-		Log.getLogger().info( 'onDecoderThreadEnded' )
 		self.enableOrDisableMenuItems(self.chipMenu)
+		self.log.exiting( 'onTimingDeviceThreadEnded' )
 
 	def onTimingDeviceDisconnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceDisconnectedEvent):
-		Log.getLogger().info( 'onDecoderDisconnected' )
+		self.log.entering( 'onTimingDeviceDisconnected' )
 		self.enableOrDisableMenuItems(self.chipMenu)
 
 	def onTimingDeviceConnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceConnectedEvent):
-		Log.getLogger().info( 'onDecoderConnected' )
+		self.log.entering( 'onTimingDeviceConnected' )
 		self.enableOrDisableMenuItems(self.chipMenu)
 
 	@property
