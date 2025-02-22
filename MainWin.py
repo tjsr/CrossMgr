@@ -29,6 +29,8 @@ import Log
 import TimingDevices.TimingDeviceWXEvents
 import Ultra
 from SplashScreen import ShowSplashScreen
+from TipProvider import ShowTipAtStartup
+from UIMenuUtils import AppendMenuItemBitmap
 
 try:
 	localDateFormat = locale.nl_langinfo( locale.D_FMT )
@@ -133,70 +135,6 @@ def loggingThreadStart( self, *args, **kwargs ):
 	print( '----------------------------------' )
 threading.Thread.start = types.MethodType(loggingThreadStart, None, threading.Thread)
 '''
-#----------------------------------------------------------------------------------
-
-#----------------------------------------------------------------------------------
-
-class MyTipProvider( adv.TipProvider ):
-	def __init__( self, fname, tipNo = None ):
-		try:
-			with open(fname, encoding='utf8') as f:
-				tipStr = f.read()
-		except Exception:
-			tipStr = ''
-			
-		self.tips = [t.strip() for t in tipStr.split('\n')]
-		self.tips = [t for t in self.tips if t and not t.startswith('#')]
-		self.iTips = list( range(len(self.tips)) )
-		random.shuffle( self.iTips )
-		
-		self.tipNo = tipNo if tipNo is not None else (int(round(time.time() * 1000)) * 13) % (len(self.tips) - 1)
-		super().__init__( self.tipNo )
-			
-	def GetCurrentTip( self ):
-		if self.tipNo < 0 or self.tipNo >= len(self.tips):
-			self.tipNo = 0
-		return self.iTips[self.tipNo]
-		
-	def GetTip( self ):
-		if not self.tips:
-			return _('No tips available.')
-		tip = self.tips[self.GetCurrentTip()].replace(r'\n','\n').replace(r'\t','    ')
-		self.tipNo += 1
-		return tip
-		
-	def PreprocessTip( self, tip ):
-		return tip
-		
-	def DeleteFirstTip( self ):
-		if self.tips:
-			self.tips.pop(0)
-		
-	def __len__( self ):
-		return len(self.tips)
-		
-	@property
-	def CurrentTip( self ):
-		return self.GetCurrentTip()
-		
-	@property
-	def Tip( self ):
-		return self.GetTip()
-
-def ShowTipAtStartup():
-	mainWin = Utils.getMainWin()
-	if mainWin and not mainWin.config.ReadBool('showTipAtStartup', True):
-		return
-	
-	tipFile = os.path.join(Utils.getImageFolder(), "tips.txt")
-	try:
-		provider = MyTipProvider( tipFile )
-		showTipAtStartup = wx.adv.ShowTip( None, provider, True )
-		if mainWin:
-			mainWin.config.WriteBool('showTipAtStartup', showTipAtStartup)
-			mainWin.config.Flush()
-	except Exception as e:
-		pass
 
 class SimulateDialog(wx.Dialog):
 	ID_MASS_START = 0
@@ -286,12 +224,7 @@ setTimeout( function() {
 '''
 
 #----------------------------------------------------------------------------------
-def AppendMenuItemBitmap( menu, id, name, help, bitmap ):
-	mi = wx.MenuItem( menu, id, name, help )
-	mi.SetBitmap( bitmap )
-	menu.Append( mi )
-	return mi
-		
+
 class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
 	__restartTimingDeviceListener: bool = True
@@ -339,19 +272,19 @@ class MainWin( wx.Frame ):
 		#-----------------------------------------------------------------------
 		self.fileMenu = wx.Menu()
 
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_NEW, _("&New..."), _("Create a new race"), Utils.GetPngBitmap('document-new.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_NEW, _("&New..."), _("Create a new race"), Utils.GetPngBitmap('document-new.png'))
 		self.Bind(wx.EVT_MENU, self.menuNew, item )
 
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_ANY, _("New Nex&t..."), _("Create a new race starting from the current race"), Utils.GetPngBitmap('document-new-next.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_ANY, _("New Nex&t..."), _("Create a new race starting from the current race"), Utils.GetPngBitmap('document-new-next.png'))
 		self.Bind(wx.EVT_MENU, self.menuNewNext, item )
 
 		self.fileMenu.AppendSeparator()
 		
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_ANY, _("New from &RaceDB Excel..."), _("Create a new race from RaceDB Excel output"), Utils.GetPngBitmap('database-add.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_ANY, _("New from &RaceDB Excel..."), _("Create a new race from RaceDB Excel output"), Utils.GetPngBitmap('database-add.png'))
 		self.Bind(wx.EVT_MENU, self.menuNewRaceDB, item )
 
 		self.fileMenu.AppendSeparator()
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_OPEN, _("&Open..."), _("Open a race"), Utils.GetPngBitmap('document-open.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_OPEN, _("&Open..."), _("Open a race"), Utils.GetPngBitmap('document-open.png'))
 		self.Bind(wx.EVT_MENU, self.menuOpen, item )
 
 		item = self.fileMenu.Append( wx.ID_ANY, _("Open N&ext..."), _("Open the next race starting from the current race") )
@@ -366,8 +299,8 @@ class MainWin( wx.Frame ):
 		
 		self.fileMenu.AppendSeparator()
 		
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_ANY, _("&Restore from Original Input..."), _("Restore from Original Input"),
-			Utils.GetPngBitmap('document-revert.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_ANY, _("&Restore from Original Input..."), _("Restore from Original Input"),
+		                            Utils.GetPngBitmap('document-revert.png'))
 		self.Bind(wx.EVT_MENU, self.menuRestoreFromInput, item )
 
 		self.fileMenu.AppendSeparator()
@@ -380,11 +313,11 @@ class MainWin( wx.Frame ):
 		
 		self.fileMenu.AppendSeparator()
 		
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_ANY, _('&Close Race'), _('Close this race without exiting CrossMgr'),
-			Utils.GetPngBitmap('document-close.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_ANY, _('&Close Race'), _('Close this race without exiting CrossMgr'),
+		                            Utils.GetPngBitmap('document-close.png'))
 		self.Bind(wx.EVT_MENU, self.menuCloseRace, item )
 		
-		item = AppendMenuItemBitmap( self.fileMenu, wx.ID_EXIT, _("E&xit"), _("Exit CrossMgr"), Utils.GetPngBitmap('exit.png') )
+		item = AppendMenuItemBitmap(self.fileMenu, wx.ID_EXIT, _("E&xit"), _("Exit CrossMgr"), Utils.GetPngBitmap('exit.png'))
 		self.Bind(wx.EVT_MENU, self.menuExit, item )
 		
 		self.Bind(wx.EVT_MENU_RANGE, self.menuFileHistory, id=wx.ID_FILE1, id2=wx.ID_FILE9)
@@ -394,30 +327,30 @@ class MainWin( wx.Frame ):
 		#-----------------------------------------------------------------------
 		self.publishMenu = wx.Menu()
 		
-		item = AppendMenuItemBitmap( self.publishMenu, wx.ID_ANY, _("Page &Setup..."), _("Setup the print page"), Utils.GetPngBitmap('page-setup.png') )
+		item = AppendMenuItemBitmap(self.publishMenu, wx.ID_ANY, _("Page &Setup..."), _("Setup the print page"), Utils.GetPngBitmap('page-setup.png'))
 		self.Bind(wx.EVT_MENU, self.menuPageSetup, item )
 
-		item = AppendMenuItemBitmap( self.publishMenu, wx.ID_ANY, _("P&review Print Results..."), _("Preview the printed results on screen"),
-								Utils.GetPngBitmap('print-preview.png') )
+		item = AppendMenuItemBitmap(self.publishMenu, wx.ID_ANY, _("P&review Print Results..."), _("Preview the printed results on screen"),
+		                            Utils.GetPngBitmap('print-preview.png'))
 		self.Bind(wx.EVT_MENU, self.menuPrintPreview, item )
 
 		self.publishMenu.AppendSeparator()
 		
-		item = AppendMenuItemBitmap( self.publishMenu, wx.ID_PRINT, _("&Print Results..."), _("Print the results to a printer"),
-								Utils.GetPngBitmap('Printer.png') )
+		item = AppendMenuItemBitmap(self.publishMenu, wx.ID_PRINT, _("&Print Results..."), _("Print the results to a printer"),
+		                            Utils.GetPngBitmap('Printer.png'))
 		self.Bind(wx.EVT_MENU, self.menuPrint, id=wx.ID_PRINT )
 
-		item = AppendMenuItemBitmap( self.publishMenu, wx.ID_ANY, _("Print P&odium Results..."), _("Print the top position results to a printer"),
-								Utils.GetPngBitmap('Podium.png') )
+		item = AppendMenuItemBitmap(self.publishMenu, wx.ID_ANY, _("Print P&odium Results..."), _("Print the top position results to a printer"),
+		                            Utils.GetPngBitmap('Podium.png'))
 		self.Bind(wx.EVT_MENU, self.menuPrintPodium, item )
 
-		item = AppendMenuItemBitmap( self.publishMenu, wx.ID_ANY, _("Print C&ategories..."), _("Print Categories"), Utils.GetPngBitmap('categories.png') )
+		item = AppendMenuItemBitmap(self.publishMenu, wx.ID_ANY, _("Print C&ategories..."), _("Print Categories"), Utils.GetPngBitmap('categories.png'))
 		self.Bind(wx.EVT_MENU, self.menuPrintCategories, item )
 
 		self.publishMenu.AppendSeparator()
 		
-		item = AppendMenuItemBitmap( self.publishMenu, wx.ID_ANY,
-							_("&Batch Publish Files..."), _("Publish Multiple Results File Formats"), Utils.GetPngBitmap('batch_process_icon.png') )
+		item = AppendMenuItemBitmap(self.publishMenu, wx.ID_ANY,
+		                            _("&Batch Publish Files..."), _("Publish Multiple Results File Formats"), Utils.GetPngBitmap('batch_process_icon.png'))
 		self.Bind(wx.EVT_MENU, self.menuPublishBatch, item )
 		
 		'''
@@ -548,8 +481,8 @@ class MainWin( wx.Frame ):
 		#-----------------------------------------------------------------------
 		self.dataMgmtMenu = wx.Menu()
 		
-		item = AppendMenuItemBitmap( self.dataMgmtMenu, wx.ID_ANY, _("&Link to External Excel Data..."), _("Link to information in an Excel spreadsheet"),
-			Utils.GetPngBitmap('excel-icon.png') )
+		item = AppendMenuItemBitmap(self.dataMgmtMenu, wx.ID_ANY, _("&Link to External Excel Data..."), _("Link to information in an Excel spreadsheet"),
+		                            Utils.GetPngBitmap('excel-icon.png'))
 		self.Bind(wx.EVT_MENU, self.menuLinkExcel, item )
 		
 		self.dataMgmtMenu.AppendSeparator()
@@ -565,7 +498,7 @@ class MainWin( wx.Frame ):
 		
 		#-----------------------------------------------------------------------
 		item = AppendMenuItemBitmap(self.dataMgmtMenu, wx.ID_ANY, _("&Import Time Trial Start Times..."), _("Import Time Trial Start Times"),
-			Utils.GetPngBitmap('clock-add.png') )
+		                            Utils.GetPngBitmap('clock-add.png'))
 		self.Bind(wx.EVT_MENU, self.menuImportTTStartTimes, item )
 		
 		'''
