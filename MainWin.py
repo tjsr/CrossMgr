@@ -14,6 +14,7 @@ import datetime
 import operator
 import platform
 import webbrowser
+from threading import Thread
 
 import wx
 import wx.adv as adv
@@ -923,7 +924,7 @@ class MainWin( wx.Frame ):
 		self.Bind(Ultra.EVT_DECODER_THREAD_ENDED, self.onTimingDeviceThreadEnded)
 
 	def onTimingDeviceThreadEnded(self, event: Ultra.DecoderThreadEndedEvent):
-		owner: threading.Thread = event.owner
+		owner: Thread = event.owner
 		max_attempts = 30
 		while owner.is_alive() and max_attempts > 0:
 			owner.join(0.1)
