@@ -1,6 +1,7 @@
 import os
 import random
 import time
+from typing import Type
 
 import wx
 from wx import adv as adv
@@ -8,10 +9,10 @@ from wx import adv as adv
 import Utils
 
 
-class MyTipProvider( adv.TipProvider ):
-	def __init__( self, fname, tipNo = None ):
+class CrossMgrTipProvider(adv.TipProvider):
+	def __init__(self, tips_filename: int | str | bytes | os.PathLike[str] | os.PathLike[bytes], tipNo = None):
 		try:
-			with open(fname, encoding='utf8') as f:
+			with open(tips_filename, encoding='utf8') as f:
 				tipStr = f.read()
 		except Exception:
 			tipStr = ''
@@ -24,34 +25,34 @@ class MyTipProvider( adv.TipProvider ):
 		self.tipNo = tipNo if tipNo is not None else (int(round(time.time() * 1000)) * 13) % (len(self.tips) - 1)
 		super().__init__( self.tipNo )
 
-	def GetCurrentTip( self ):
+	def GetCurrentTip( self ) -> Type[adv.TipProvider.GetCurrentTip]:
 		if self.tipNo < 0 or self.tipNo >= len(self.tips):
 			self.tipNo = 0
 		return self.iTips[self.tipNo]
 
-	def GetTip( self ):
+	def GetTip( self ) -> Type[adv.TipProvider.GetTip]:
 		if not self.tips:
 			return _('No tips available.')
 		tip = self.tips[self.GetCurrentTip()].replace(r'\n','\n').replace(r'\t','    ')
 		self.tipNo += 1
 		return tip
 
-	def PreprocessTip( self, tip ):
+	def PreprocessTip( self, tip: str ) -> str:
 		return tip
 
-	def DeleteFirstTip( self ):
+	def DeleteFirstTip( self ) -> None:
 		if self.tips:
 			self.tips.pop(0)
 
-	def __len__( self ):
+	def __len__( self ) -> int:
 		return len(self.tips)
 
 	@property
-	def CurrentTip( self ):
+	def CurrentTip( self ) -> Type[GetCurrentTip]:
 		return self.GetCurrentTip()
 
 	@property
-	def Tip( self ):
+	def Tip( self ) -> Type[GetTip]:
 		return self.GetTip()
 
 
@@ -62,7 +63,7 @@ def ShowTipAtStartup():
 
 	tipFile = os.path.join(Utils.getImageFolder(), "tips.txt")
 	try:
-		provider = MyTipProvider(tipFile)
+		provider = CrossMgrTipProvider(tipFile)
 		showTipAtStartup = wx.adv.ShowTip( None, provider, True )
 		if mainWin:
 			mainWin.config.WriteBool('showTipAtStartup', showTipAtStartup)
