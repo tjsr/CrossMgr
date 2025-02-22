@@ -826,16 +826,16 @@ class MainWin( wx.Frame ):
 		if max_attempts == 0 or owner.is_alive():
 			self.log.warning(f'Decoder read thread ending was signalled but is still alive.')
 
-		self.enableOrDisableMenuItems(self.chipMenu)
+		self._chipMenu.enableOrDisableMenuItems()
 		self.log.exiting( 'onTimingDeviceThreadEnded' )
 
 	def onTimingDeviceDisconnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceDisconnectedEvent):
 		self.log.entering( 'onTimingDeviceDisconnected' )
-		self.enableOrDisableMenuItems(self.chipMenu)
+		self._chipMenu.enableOrDisableMenuItems()
 
 	def onTimingDeviceConnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceConnectedEvent):
 		self.log.entering( 'onTimingDeviceConnected' )
-		self.enableOrDisableMenuItems(self.chipMenu)
+		self._chipMenu.enableOrDisableMenuItems()
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
