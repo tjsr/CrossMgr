@@ -31,6 +31,7 @@ import Ultra
 from SplashScreen import ShowSplashScreen
 from TipProvider import ShowTipAtStartup
 from UIMenuUtils import AppendMenuItemBitmap
+from UIMenuDecoder import UIMenuDecoder
 
 try:
 	localDateFormat = locale.nl_langinfo( locale.D_FMT )
