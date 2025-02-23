@@ -4011,7 +4011,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 
 			self.__process_tag_data(tag, dt)
 
-	def processJChipListener( self, refreshNow=False ):
+	def processJChipListener( self, refreshNow: bool=False ) -> bool:
 		race = Model.race
 		if not race:
 			return
