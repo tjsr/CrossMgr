@@ -3977,7 +3977,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			if Model.race and Model.race.ftpUploadDuringRace:
 				realTimeFtpPublish.publishEntry()
 
-	def __process_tag_data(tag: str, dt: datetime) -> None:
+	def __process_tag_data(tag: str, dt: datetime.datetime) -> None:
 		# Ignore unrecorded reads that happened before the restart time.
 		if race.rfidRestartTime and dt <= race.rfidRestartTime:
 			return
