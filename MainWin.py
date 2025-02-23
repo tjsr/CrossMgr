@@ -121,6 +121,7 @@ import Flags
 import WebServer
 import ImageIO
 from ModuleUnpickler import ModuleUnpickler
+from typing import Union
 
 now = datetime.datetime.now
 
