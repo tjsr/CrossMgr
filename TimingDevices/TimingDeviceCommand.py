@@ -116,8 +116,20 @@ class TimingDeviceCommand(Generic[CommandResponseType], ABC):
 
 
 class TimingDeviceSetTimeCommand(TimingDeviceCommand):
-	def __init__(self, _command_str: str, response_type: Type[CommandResponseType], sync: bool = False):
-		super().__init__(_command_str, response_type, sync)
+	_time: datetime.datetime
+
+	@property
+	def Time(self) -> datetime.datetime:
+		return self._time
+
+	def __init__(self,
+			command_str: str,
+			response_type: Type[CommandResponseType],
+			timeToSet: datetime.datetime = datetime.datetime.now(),
+			sync: bool = False):
+		assert timeToSet.tzinfo is not None, 'Setting a time on a device requires the timezone be specified.'
+		super().__init__(command_str, response_type, sync)
+		self._time = timeToSet
 
 	@abstractmethod
 	def get_command_string(self) -> str:

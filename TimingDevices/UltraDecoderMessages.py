@@ -6,15 +6,10 @@ from typing import Optional, cast
 
 from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, DecoderTimeMessage
+from TimingDevices.UltraTimeUtils import UltraTimeUtils
 
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
-EPOCH_TIME = datetime.datetime(1980, 1, 1)
 
-def ultra_epoch_to_datetime(epoch: int) -> datetime.datetime:
-	if epoch < 0:
-		raise ValueError(f'Epoch value {epoch} is invalid')
-
-	return EPOCH_TIME + datetime.timedelta(seconds=epoch)
 
 class UltraDecoderMessage(DecoderMessage):
 	_UltraId: int | None # Integer value. See section 3.1
@@ -71,7 +66,7 @@ class UltraConnectConfirmationMessage(UltraDecoderMessage):
 				if num > 3 or num < 2:
 					return None
 
-				lastTimeDate = datetime.datetime.fromtimestamp(EPOCH_TIME.timestamp() + int(parts[1]))
+				lastTimeDate = UltraTimeUtils.ultra_epoch_to_datetime(int(parts[1]))
 
 				CommandCode = parts[2] if num == 3 else None
 
@@ -262,7 +257,7 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 		epoch_date = None
 		if epoch_component != '':
 			epoch = int(epoch_component)
-			epoch_date = ultra_epoch_to_datetime(epoch)
+			epoch_date = UltraTimeUtils.ultra_epoch_to_datetime(epoch)
 
 		return epoch_date
 

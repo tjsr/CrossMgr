@@ -8,8 +8,8 @@ class TestUltraConnectConfirmationMessage(unittest.TestCase):
 		result = UltraConnectConfirmationMessage.parse(message)
 		self.assertIsNotNone(result)
 		self.assertEqual(result.UltraId, 0)
-		expectedDateTime = datetime.datetime(2025, 2, 6, 11, 3, 55)
-		self.assertEqual(result.lastTimeSent, expectedDateTime)
+		expectedDateTime = datetime.datetime(2025, 2, 6, 11, 3, 55, tzinfo=datetime.timezone.utc)
+		self.assertEqual(expectedDateTime, result.lastTimeSent)
 
 	def test_parse_invalid_message_format(self):
 		message = "InvalidMessageFormat"
@@ -24,8 +24,8 @@ class TestUltraConnectConfirmationMessage(unittest.TestCase):
 	def test_parse_without_update_char(self):
 		message = "Connected,1423307035"
 		result = UltraConnectConfirmationMessage.parse(message)
-		expectedDateTime = datetime.datetime(2025, 2, 6, 11, 3, 55)
-		self.assertEqual(result.lastTimeSent, expectedDateTime)
+		expectedDateTime = datetime.datetime(2025, 2, 6, 11, 3, 55, tzinfo=datetime.timezone.utc)
+		self.assertEqual(expectedDateTime, result.lastTimeSent)
 
 if __name__ == '__main__':
 	unittest.main()

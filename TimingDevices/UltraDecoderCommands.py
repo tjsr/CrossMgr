@@ -44,7 +44,7 @@ class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage)
 
 
 class UltraGetStatusCommandResponse(UltraDecoderStatusMessage):
-	def match_message(self, message: DecoderMessage) -> 'UltraGetStatusCommandResponse':
+	def match_message(self, message: DecoderMessage) -> Optional['UltraGetStatusCommandResponse']:
 		if UltraGetStatusCommandResponse.matches(message.Data):
 			return UltraGetStatusCommandResponse.parse(message.Data)
 
@@ -80,11 +80,9 @@ class UltraGetStatusCommand(TimingDeviceCommand):
 
 
 class UltraSetTimeCommand(TimingDeviceSetTimeCommand, TimingDeviceCommand):
-	_time: datetime.datetime
 	def __init__(self, timeToSet: datetime.datetime = datetime.datetime.now()):
 		# TODO: Fix response_type cast
-		TimingDeviceSetTimeCommand.__init__(self, 't', response_type=UltraDecoderTimeMessage, sync=True)
-		self._time = timeToSet
+		TimingDeviceSetTimeCommand.__init__(self, 't', response_type=UltraDecoderTimeMessage, sync=True, timeToSet=timeToSet)
 
 	def match_response(self, message: UltraDecoderMessage) -> Optional[UltraSetTimeCommandResponse]:
 		if not isinstance(message, UltraDecoderTimeMessage):
@@ -92,12 +90,8 @@ class UltraSetTimeCommand(TimingDeviceSetTimeCommand, TimingDeviceCommand):
 		return cast(UltraSetTimeCommandResponse, message)
 
 	def get_command_string(self) -> str:
-		decoderMessage = 't {}'.format(self._time.strftime('%H:%M:%S %d-%m-%Y'))
+		decoderMessage = 't {}'.format(self.Time.strftime('%H:%M:%S %d-%m-%Y'))
 		return decoderMessage
-
-	@property
-	def Time(self) -> datetime.datetime:
-		return self._time
 
 
 class UltraCommandException(TimingDeviceCommandException):
