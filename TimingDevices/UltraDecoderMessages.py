@@ -211,7 +211,7 @@ class UltraChipReadMessage(UltraDecoderMessage):
 
 	@property
 	def Time(self) -> datetime.datetime:
-		return EPOCH_TIME + datetime.timedelta(seconds=self.Seconds, milliseconds=self.Milliseconds)
+		return UltraTimeUtils.ultra_epoch_to_datetime(ultra_epoch=self.Seconds, ultra_msec=self.Milliseconds)
 
 	@property
 	def ChipCode(self) -> int:
