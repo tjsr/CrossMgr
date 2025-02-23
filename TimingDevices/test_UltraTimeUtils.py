@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from unittest import TestCase
 from zoneinfo import ZoneInfo
 
-from TimingDevices.UltraTimeUtils import UltraTimeUtils
+from TimingDevices.UltraTimeUtils import UltraTimeUtils, InvalidTimeZoneError
 
 zone_utc = ZoneInfo('UTC')
 zone_melbourne = ZoneInfo('Australia/Victoria')
@@ -76,14 +76,23 @@ class TestUltraTimeUtils_datetime_to_ultra_epoch(TestCase):
 		self.assertEqual(melb_epoch, 315493200.000)
 		self.assertRaises(ValueError, UltraTimeUtils.datetime_to_ultra_epoch, t1980)
 
+	def test_refuse_1980_melbourne_epoch_ultra(self):
+		t1980 = datetime.fromtimestamp(315532800.000, tz=zone_melbourne)
+		self.assertRaises(InvalidTimeZoneError, UltraTimeUtils.datetime_to_ultra_epoch, t1980)
+
+		t1980ms = datetime.fromtimestamp(315532800.515, tz=zone_melbourne)
+		self.assertRaises(InvalidTimeZoneError, UltraTimeUtils.datetime_to_ultra_epoch, t1980ms)
+
 	def test_convert_1980_melbourne_epoch_ultra(self):
 		t1980 = datetime.fromtimestamp(315532800.000, tz=zone_melbourne)
-		output = UltraTimeUtils.datetime_to_ultra_epoch(t1980)
-		self.assertEqual(output, (0, 0))
+		t1980_utc = t1980.astimezone(zone_utc)
+		output = UltraTimeUtils.datetime_to_ultra_epoch(t1980_utc)
+		self.assertEqual((0, 0), output)
 
-		t1980 = datetime.fromtimestamp(315532800.515, tz=zone_melbourne)
-		output = UltraTimeUtils.datetime_to_ultra_epoch(t1980)
-		self.assertEqual(output, (0, 515))
+		t1980ms = datetime.fromtimestamp(315532800.515, tz=zone_melbourne)
+		t1980ms_utc = t1980ms.astimezone(zone_utc)
+		ms_output = UltraTimeUtils.datetime_to_ultra_epoch(t1980ms_utc)
+		self.assertEqual((0, 515), ms_output)
 
 	def test_convert_epoch_after_1980(self):
 		for utc in [zone_utc, timezone.utc]:
@@ -154,12 +163,17 @@ class TestUltraTimeUtils_ultra_to_unix_epoch(TestCase):
 
 
 class TestUltraTimeUtils_ultra_epoch_to_datetime(TestCase):
+	_epoch_utc = datetime.fromisoformat('2025-02-16T10:50:02.779+00:00')
+	_ultra_epoch = 1424170202
+	_ultra_msec = 779
+
+	def setUp(self):
+		self._testOutput = UltraTimeUtils.ultra_epoch_to_datetime(self._ultra_epoch, self._ultra_msec)
+
+	def test_ultra_to_datetime_is_utc(self):
+		self.assertEqual(timezone.utc, self._testOutput.tzinfo)
+
 	def test_convert_ultra_epoch_to_datetime(self):
-		ultra_epoch = 1424170202
-		ultra_msec = 779
-		output = UltraTimeUtils.ultra_epoch_to_datetime(ultra_epoch, ultra_msec)
-
-		epoch_utc = datetime.fromisoformat('2025-02-16T10:50:02.779+00:00')
-
-		self.assertEqual(output, epoch_utc)
+		expected_datetime = datetime.fromisoformat('2025-02-16T10:50:02.779+00:00')
+		self.assertEqual(expected_datetime, self._testOutput)
 

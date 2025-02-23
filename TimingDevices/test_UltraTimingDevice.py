@@ -11,11 +11,11 @@ class TestUltraTimingDevice(unittest.TestCase):
 	def setUp(self):
 		mock_log = Mock()
 		# Set up any necessary test data or state
-		self.device = UltraDecoder(mock_log, 'test', 0)
+		self.device = UltraDecoder('test', 0)
 
 	def test_get_status_command(self):
 		command = self.device.get_command(TimingDeviceCommand.COMMAND_STATUS)
-		self.assertEqual(command.get_command_string(), '?')
+		self.assertEqual('?', command.get_command_string())
 
 if __name__ == '__main__':
 	unittest.main()
