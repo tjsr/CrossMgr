@@ -843,7 +843,7 @@ class MainWin( wx.Frame ):
 
 	def onTransponderEvent(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceTransponderEvent):
 		self.log.entering( 'onTransponderEvent' )
-		crossing: DecoderCrossingMessage = event.message
+		crossing: TimingDevices.DecoderMessages.DecoderCrossingMessage = event.message
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
