@@ -3979,6 +3979,8 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 				realTimeFtpPublish.publishEntry()
 
 	def __process_tag_data(self, tag: str, dt: datetime.datetime) -> None:
+		assert Model.race is not None, 'Race must be active to process tag data - check before calling.'
+		race = Model.race
 		# Ignore unrecorded reads that happened before the restart time.
 		if race.rfidRestartTime and dt <= race.rfidRestartTime:
 			return
@@ -4013,9 +4015,11 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			self.__process_tag_data(tag, dt)
 
 	def processJChipListener( self, refreshNow: bool=False ) -> bool:
+		# TODO: This method only ever has returns for False - why?  I tnever returns true.
+		# Even the final return is False, rather than True.
 		race = Model.race
 		if not race:
-			return
+			return False
 			
 		if not race or not race.enableJChipIntegration:
 			if ChipReader.chipReaderCur.IsListening():
