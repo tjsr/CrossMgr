@@ -2,11 +2,13 @@ import asyncio
 import sys
 import time
 import datetime
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Callable
 
 import Log
 from ByteUtils import EOL
 from LogQueue import LogQueue
+from TimingDevices.DecoderMessages import DecoderCrossingMessage
+from TimingDevices.TimingDeviceWXEvents import TimingDeviceTransponderEvent
 
 from TimingDevices.UltraTimingDevice import UltraDecoder
 
@@ -44,7 +46,7 @@ class WXUltraDecoder(UltraDecoder):
 		super().__init__(host, port)
 		self._readerEventWindow = eventWindow if eventWindow is not None else Utils.mainWin
 
-	def registerListener( self, windowListener: callable ) -> None:
+	def registerListener( self, windowListener: Callable[[List[Union[str, datetime.datetime]]], None] ) -> None:
 		self.crossingListener = windowListener
 
 	async def signalThreadEnded(self) -> None:
@@ -56,6 +58,9 @@ class WXUltraDecoder(UltraDecoder):
 	def sendReaderEvent(self, tagTimes) -> None:
 		if tagTimes and self._readerEventWindow:
 			wx.PostEvent( self._readerEventWindow, ChipReaderEvent(tagTimes = tagTimes) )
+
+	def transponderEvent(self, message: DecoderCrossingMessage) -> None:
+		wx.PostEvent( self._readerEventWindow, TimingDeviceTransponderEvent(message=message) )
 
 
 reNonDigit = re.compile( '[^0-9]+' )

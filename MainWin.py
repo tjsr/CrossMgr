@@ -815,6 +815,7 @@ class MainWin( wx.Frame ):
 
 		self.Bind(TimingDevices.TimingDeviceWXEvents.EVT_TIMING_DEVICE_DISCONNECTED, self.onTimingDeviceDisconnected)
 		self.Bind(TimingDevices.TimingDeviceWXEvents.EVT_TIMING_DEVICE_CONNECTED, self.onTimingDeviceConnected)
+		self.Bind(TimingDevices.TimingDeviceWXEvents.EVT_TRANSPONDER, self.onTransponderEvent)
 		self.Bind(Ultra.EVT_DECODER_THREAD_ENDED, self.onTimingDeviceThreadEnded)
 
 	def onTimingDeviceThreadEnded(self, event: Ultra.DecoderThreadEndedEvent):
@@ -839,6 +840,10 @@ class MainWin( wx.Frame ):
 	def onTimingDeviceConnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceConnectedEvent):
 		self.log.entering( 'onTimingDeviceConnected' )
 		self._chipMenu.enableOrDisableMenuItems()
+
+	def onTransponderEvent(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceTransponderEvent):
+		self.log.entering( 'onTransponderEvent' )
+		crossing: DecoderCrossingMessage = event.message
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
