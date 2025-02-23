@@ -14,7 +14,8 @@ import OrionImport
 import RaceResultImport
 import Utils
 from Utils import logCall
-from ChipReader import ChipReaderType, chipReaderCur, ChipReader
+from ChipReader import ChipReaderType, ChipReader
+import ChipReader as ChipReaderModule
 from TimingDevices import TimingDevice
 from TimingDevices.TCPTimingDevice import TCPTimingDevice
 from TimingDevices.UltraTimingDevice import UltraDecoder
@@ -29,7 +30,7 @@ class UIMenuDecoder(wx.Menu):
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
-		return chipReaderCur
+		return ChipReaderModule.chipReaderCur
 
 	@property
 	def log ( self ) -> Log.CrossMgrLogger:
