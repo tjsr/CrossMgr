@@ -26,6 +26,7 @@ class ChipReaderType:
 
 class ChipReader(ChipReaderType, ABC):
 	CurrentDecoder: (Callable[[], TimingDevice|None]) | None
+	GetData: Callable[[], list[str, str, datetime]] | None
 	JChip, RaceResult, Ultra, WebReader, MyLaps = tuple( range(5) )	# Add new options at the end.
 	Choices = (_('JChip/Impinj/Alien'), _('RaceResult'), _('Ultra'), _('WebReader'), _('MyLaps'))
 
