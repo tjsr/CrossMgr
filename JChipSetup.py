@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 import re
 import socket
@@ -401,28 +402,42 @@ class JChipSetupDialog( wx.Dialog ):
 	
 	def appendMsg( self, s ):
 		self.testList.AppendText( s + '\n' )
-	
+
+	@staticmethod
+	def get_timestamp_from_datetime(dt: datetime) -> str:
+		assert isinstance(dt, datetime)
+
+		ts = dt.isoformat(' ')
+		if len(ts) == 8:
+			ts += '.00'
+		else:
+			ts = ts[:-2]
+
+		return ts
+
+	def processCallbackData(self, d: [str, str, datetime] ):
+		self.receivedCount += 1
+		assert isinstance(d[1], str)
+		assert isinstance(d[2], datetime)
+
+		ts = self.get_timestamp_from_datetime(d[2])
+
+		try:
+			num = '{}'.format(Model.race.tagNums[d[1]])
+		except (AttributeError, ValueError, KeyError):
+			totalTags = len(Model.race.tagNums)
+			num = 'not found from {} tags'.format(totalTags)
+		lastTag = d[1]
+
+		self.appendMsg('{}: tag={}, time={}, Bib={}'.format(self.receivedCount, d[1], ts, num))
+		return lastTag
+
 	def onTimerCallback( self, stat ):
 		data = ChipReader.chipReaderCur.GetData()
 		lastTag = None
 		for d in data:
 			if d[0] == 'data':
-				self.receivedCount += 1
-				assert isinstance(d[1], str)
-
-				ts = d[2].isoformat(' ')
-				if len(ts) == 8:
-					ts += '.00'
-				else:
-					ts = ts[:-2]
-				try:
-					num = '{}'.format(Model.race.tagNums[d[1]])
-				except (AttributeError, ValueError, KeyError):
-					totalTags = len(Model.race.tagNums)
-					num = 'not found from {} tags'.format(totalTags)
-				lastTag = d[1]
-
-				self.appendMsg( '{}: tag={}, time={}, Bib={}'.format(self.receivedCount, d[1], ts, num) )
+				self.processCallbackData(d)
 			elif d[0] == 'connected':
 				self.appendMsg( '*******************************************' )
 				self.appendMsg( '{}: {}'.format(d[0], ', '.join('{}'.format(s) for s in d[1:]) ) )
