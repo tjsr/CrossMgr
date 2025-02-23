@@ -4037,7 +4037,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		if not race.tagNums:
 			return False
 
-		self.__process_tag_data(data)
+		self.__process_chipreader_data(data)
 
 		# Ensure that we don't update too often if riders arrive in a bunch.
 		if not self.callLaterProcessRfidRefresh:
