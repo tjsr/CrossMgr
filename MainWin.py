@@ -3971,7 +3971,41 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			self.refresh()
 			if Model.race and Model.race.ftpUploadDuringRace:
 				realTimeFtpPublish.publishEntry()
-	
+
+	def __process_tag_data(tag: str, dt: datetime) -> None:
+		# Ignore unrecorded reads that happened before the restart time.
+		if race.rfidRestartTime and dt <= race.rfidRestartTime:
+			return
+
+		try:
+			num = race.tagNums[tag]
+		except KeyError:
+			if race.isRunning() and race.startTime <= dt:
+				race.addUnmatchedTag(tag, (dt - race.startTime).total_seconds())
+			return
+		except (TypeError, ValueError):
+			race.missingTags.add(tag)
+			return
+
+		# Only process times after the start of the race.
+		if race.isRunning() and race.startTime <= dt:
+			# Always process times for mass start races and when timeTrialNoRFIDStart unset.
+			if not race.isTimeTrial or not race.timeTrialNoRFIDStart:
+				self.numTimes.append((num, (dt - race.startTime).total_seconds()))
+			else:
+				# Only process the time if the rider has already started
+				rider = race.getRider(num)
+				if rider.firstTime is not None:
+					self.numTimes.append((num, (dt - race.startTime).total_seconds()))
+
+	def __process_chipreader_data(data: list[union[[str, str, datetime.datetime], [str, ...]]]) -> None:
+		for d in data:
+			if d[0] != 'data':
+				continue
+			tag, dt = d[1], d[2]
+
+			self.__process_tag_data(tag, dt)
+
 	def processJChipListener( self, refreshNow=False ):
 		race = Model.race
 		if not race:
@@ -3996,37 +4030,9 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			GetTagNums( True )
 		if not race.tagNums:
 			return False
-		
-		for d in data:
-			if d[0] != 'data':
-				continue
-			tag, dt = d[1], d[2]
-			
-			# Ignore unrecorded reads that happened before the restart time.
-			if race.rfidRestartTime and dt <= race.rfidRestartTime:
-				continue
-			
-			try:
-				num = race.tagNums[tag]
-			except KeyError:
-				if race.isRunning() and race.startTime <= dt:
-					race.addUnmatchedTag( tag, (dt - race.startTime).total_seconds() )
-				continue
-			except (TypeError, ValueError):
-				race.missingTags.add( tag )
-				continue
-				
-			# Only process times after the start of the race.
-			if race.isRunning() and race.startTime <= dt:
-				# Always process times for mass start races and when timeTrialNoRFIDStart unset.
-				if not race.isTimeTrial or not race.timeTrialNoRFIDStart:
-					self.numTimes.append( (num, (dt - race.startTime).total_seconds()) )
-				else:
-					#Only process the time if the rider has already started
-					rider = race.getRider( num )
-					if rider.firstTime is not None:
-						self.numTimes.append( (num, (dt - race.startTime).total_seconds()) )
-		
+
+		self.__process_tag_data(data)
+
 		# Ensure that we don't update too often if riders arrive in a bunch.
 		if not self.callLaterProcessRfidRefresh:
 			class ProcessRfidRefresh( wx.Timer ):
