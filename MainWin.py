@@ -4003,7 +4003,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 				if rider.firstTime is not None:
 					self.numTimes.append((num, (dt - race.startTime).total_seconds()))
 
-	def __process_chipreader_data(data: list[union[[str, str, datetime.datetime], [str, ...]]]) -> None:
+	def __process_chipreader_data(data: list[Union[tuple[str, str, datetime.datetime], tuple[str, ...]]]) -> None:
 		for d in data:
 			if d[0] != 'data':
 				continue
