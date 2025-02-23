@@ -72,7 +72,7 @@ async def Server( HOST: str, PORT: int, _startTime ):
 	def on_chip_read( tagTimes: List[Union[str, datetime.datetime]] ) -> None:
 		ultraDecoder.sendReaderEvent(tagTimes)
 		for tag, tagTime in tagTimes:
-			Log.getLogger('on_chip_read').warning("Need to reimplement this. DATA: {tag},{tagTime}.")
+			Log.getLogger('on_chip_read').warning(f'Need to reimplement this. DATA: {tag},{tagTime}.')
 			# q.put(('data', tag, tagTime))
 
 	ultraDecoder.crossingListener = on_chip_read
