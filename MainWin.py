@@ -3977,7 +3977,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			if Model.race and Model.race.ftpUploadDuringRace:
 				realTimeFtpPublish.publishEntry()
 
-	def __process_tag_data(tag: str, dt: datetime.datetime) -> None:
+	def __process_tag_data(self, tag: str, dt: datetime.datetime) -> None:
 		# Ignore unrecorded reads that happened before the restart time.
 		if race.rfidRestartTime and dt <= race.rfidRestartTime:
 			return
@@ -4003,7 +4003,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 				if rider.firstTime is not None:
 					self.numTimes.append((num, (dt - race.startTime).total_seconds()))
 
-	def __process_chipreader_data(data: list[Union[tuple[str, str, datetime.datetime], tuple[str, ...]]]) -> None:
+	def __process_chipreader_data(self, data: list[Union[tuple[str, str, datetime.datetime], tuple[str, ...]]]) -> None:
 		for d in data:
 			if d[0] != 'data':
 				continue
