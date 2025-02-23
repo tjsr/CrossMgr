@@ -5,7 +5,8 @@ from logging import Logger
 from typing import Optional, cast
 
 from Log import getLogger
-from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, DecoderTimeMessage
+from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, DecoderTimeMessage, \
+	DecoderCrossingMessage
 from TimingDevices.UltraTimeUtils import UltraTimeUtils
 
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
@@ -149,7 +150,7 @@ class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
 
 
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
-class UltraChipReadMessage(UltraDecoderMessage):
+class UltraChipReadMessage(UltraDecoderMessage, DecoderCrossingMessage):
 	# Retain this field order
 	Zero: int  # Zero (unused at present)
 	_ChipCode: int  # Could be the chip code decimal or hexadecimal value, depending on current setting in Ultra (see section 3.8)

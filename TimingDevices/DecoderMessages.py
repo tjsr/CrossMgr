@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from datetime import datetime
 from typing import Type
 
@@ -82,3 +82,18 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 	def match_message(self, received: DecoderMessage) -> DecoderMessage:
 		return received
 
+
+class DecoderCrossingMessage(DecoderMessage, ABC):
+	_crossingId: int
+
+	@property
+	def CrossingId(self) -> int:
+		return self._crossingId
+
+	def __init__(self, crossingId: int, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._crossingId = crossingId
+
+	@abstractmethod
+	def match_message(self, received: DecoderMessage) -> DecoderMessage:
+		return received
