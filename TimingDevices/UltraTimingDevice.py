@@ -83,7 +83,10 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		result = True
 		try:
 			if self.__on_connect_action_set_time:
-				time_response = await self.set_time()
+				# Ultra devices require the time be given in UTC.
+				time_now_local = datetime.datetime.now()
+				time_now_utc = time_now_local.astimezone(datetime.timezone.utc)
+				time_response = await self.set_time(time = time_now_utc)
 				if time_response.response is not None:
 					self.getLog(child='on_connect').info(f'Time set on decoder: {time_response.response}')
 
