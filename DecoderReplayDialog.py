@@ -49,14 +49,7 @@ class DateTimeControlPair(wx.EvtHandler):
 
 	@property
 	def DateTime(self) -> datetime.datetime:
-		#
-		# date = self._dateEdit.GetValue()
-		# seconds = self._timeEdit.GetSeconds()
 		return self._time
-
-		# if seconds is None:
-		# 	modified_time = self.get_updated_time(seconds)
-
 
 	def get_updated_time(self, seconds: float) -> datetime.datetime:
 		microseconds = int((seconds - int(seconds)) * 1000000)
@@ -73,7 +66,7 @@ class DateTimeControlPair(wx.EvtHandler):
 		if not isinstance(eventObject, HighPrecisionTimeEdit):
 			self.fire_datetime_invalid()
 			return
-		updatedValue = event.String
+		updatedValue = event.GetString()
 
 		timeEditor: HighPrecisionTimeEdit = eventObject
 		wx.CallAfter(timeEditor.Validate)
@@ -122,29 +115,65 @@ class DateTimeControlPair(wx.EvtHandler):
 		wx.PostEvent(self, dateTimeChanged)
 
 
-ID_INVALID_END = wx.NewId()
-ID_INVALID_START = wx.NewId()
+ID_INVALID_END = wx.NewIdRef(count=1)
+ID_INVALID_START = wx.NewIdRef(count=1)
 
 class DecoderReplayDialog(wx.Dialog):
 	log = logging.getLogger('CrossMgr.DecoderReplayDialog')
 	_gridSizer: wx.GridBagSizer
+	_isUtc: bool = False
+	_utc_checkbox: wx.CheckBox = None
+
+	CONTROL_BORDER_SIZE:int = 4
+
+	@property
+	def StartTime(self) -> datetime.datetime:
+		return self.__local_or_utc_time(self._startField.DateTime)
+
+	@property
+	def EndTime(self) -> datetime.datetime:
+		return self.__local_or_utc_time(self._endField.DateTime)
+
+	@property
+	def IsUtc(self) -> bool:
+		return self._isUtc
+
+	@staticmethod
+	def __first_hour_before(hour: int = None, start_times: [int,] = (8, 10, 12, 14, 16)) -> int:
+		if hour is None:
+			hour = datetime.datetime.now().hour
+
+		for start_time in start_times:
+			if start_time >= hour:
+				return start_time
+		return start_times[0]
+
+	def __get_default_time_window(self, minutes: int = 120) -> (datetime.datetime, datetime.datetime):
+		start_time_hour = self.__first_hour_before()
+		start_time = datetime.datetime.now().replace(hour=start_time_hour, minute=0, second=0, microsecond=0, tzinfo=self.__get_selected_tz())
+		end_time = start_time + datetime.timedelta(minutes=minutes)
+
+		return start_time, end_time
 
 	def __init__(self, parent: wx.Window = None, id = wx.ID_ANY):
 		super().__init__(parent=parent, id=id, title=_("Resend data from decoder"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
 		self._boxSizer = wx.BoxSizer(wx.VERTICAL)
 		self._gridSizer = wx.GridBagSizer(vgap=4, hgap=4)
-		border = 4
+		border = self.CONTROL_BORDER_SIZE
 
-		startTime = datetime.datetime.fromisoformat("2025-02-03 18:58:00")
-		endTime = datetime.datetime.fromisoformat("2025-02-03 22:00:00")
-		self._startField = self.addDateTimeField("Start Time", startTime, 0)
-		self._endField = self.addDateTimeField("End Time", endTime, 1)
+		_timeZone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
+
+		start_time, end_time = self.__get_default_time_window()
+		self._startField = self.addDateTimeField(_("Start Time"), start_time, 0)
+		self._endField = self.addDateTimeField(_("End Time"), end_time, 1)
 		self._startField.Bind(EVT_DATETIME_CHANGE, self.onSetStartDateTime)
 		self._endField.Bind(EVT_DATETIME_CHANGE, self.onSetEndDateTime)
 
 		self._boxSizer.Add(self._gridSizer, 1, wx.EXPAND | wx.ALL, border)
 
 		# btnSizer = self.CreateStdDialogButtonSizer( wx.OK|wx.CANCEL )
+		self.__create_utc_checkbox()
+
 		btnSizer = self.CreateButtonSizer( wx.OK|wx.CANCEL )
 
 		self.Bind( wx.EVT_BUTTON, self.onOK, id=wx.ID_OK )
@@ -155,6 +184,43 @@ class DecoderReplayDialog(wx.Dialog):
 		self._gridSizer.Fit(self)
 		self._boxSizer.Fit(self)
 		self.SetSizer(self._boxSizer)
+
+	def __create_utc_checkbox(self, border: int = CONTROL_BORDER_SIZE) -> wx.CheckBox:
+		tz = self.__get_system_tz()
+		tz_name = tz.tzname(None)
+
+		# The size of the dialog will expand to fit the checkbox text here.
+		utc_checkbox = wx.CheckBox(self, label=f'UTC Time instead of local time\n({tz_name})')
+		utc_checkbox.SetValue(self._isUtc)
+		self._boxSizer.Add(utc_checkbox, 0, wx.CENTER | wx.WRAPSIZER_DEFAULT_FLAGS, border)
+		self.Bind(wx.EVT_CHECKBOX, self.__on_utc_checkbox, utc_checkbox)
+
+		self._utc_checkbox = utc_checkbox
+		return self._utc_checkbox
+
+	def __get_selected_tz(self) -> datetime.tzinfo:
+		if self.IsUtc:
+			return datetime.timezone.utc
+		else:
+			return self.__get_system_tz()
+
+	def __local_or_utc_time(self, dt: datetime.datetime, isUtc: bool = None) -> datetime.datetime:
+		if isUtc is True:
+			tz = datetime.timezone.utc
+		else:
+			tz = self.__get_selected_tz()
+
+		return datetime.datetime.fromtimestamp(dt.timestamp(), tz)
+
+	def __date_from_iso(self, value: str, isUtc: bool = None) -> datetime.datetime:
+		if isUtc is None:
+			isUtc = self.IsUtc
+		# Append 'Z' if it's a UTC time, else ISO-8601 parses as local time when not specified *except on Apple*.
+		isoTzFlag = 'Z' if isUtc else ''
+		return datetime.datetime.fromisoformat(value + isoTzFlag)
+
+	def __on_utc_checkbox(self, event: wx.CommandEvent) -> None:
+		self._isUtc = self._utc_checkbox.IsChecked()
 
 	def addDateTimeField(self, labelText: str, time: datetime.datetime, row: int) -> DateTimeControlPair:
 		dateTimePair = DateTimeControlPair(self, labelText, time)
@@ -172,8 +238,6 @@ class DecoderReplayDialog(wx.Dialog):
 		self.log.debug('Date changed to %s', event.datetime)
 
 	def onOK(self, event):
-		start = self._startField.DateTime
-		end = self._endField.DateTime
 		if self._startField.DateTime is None:
 			self.EndModal(ID_INVALID_START)
 		elif self._endField.DateTime is None:
@@ -185,13 +249,9 @@ class DecoderReplayDialog(wx.Dialog):
 	def onCancel(self, event):
 		self.EndModal(wx.ID_CANCEL)
 
-	@property
-	def StartTime(self) -> datetime.datetime:
-		return self._startField.DateTime
-
-	@property
-	def EndTime(self) -> datetime.datetime:
-		return self._endField.DateTime
+	@staticmethod
+	def __get_system_tz() -> datetime.tzinfo:
+		return datetime.datetime.now().astimezone().tzinfo
 
 global mainWin
 
@@ -207,5 +267,7 @@ if __name__ == '__main__':
 	mainWin = wx.Frame(None, title="CrossMan", size=(600, 400))
 	mainWin.Show()
 	with DecoderReplayDialog() as dlg:
-		dlg.ShowModal()
+		res = dlg.ShowModal()
+		if res == wx.ID_OK:
+			print(dlg.StartTime, dlg.EndTime)
 
