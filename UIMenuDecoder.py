@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Callable, cast, Any, Optional
 
 import wx
@@ -130,7 +131,7 @@ class UIMenuDecoder(wx.Menu):
 			("&Connect/reconnect to decoder.", self.menuDecoderReconnect,
 			 lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
 			("Start decoder read thread.", self.menuStartDecoderThread,
-			 lambda: self.isRaceLoaded() and not self.hasActiveDecoderThread()),
+			 lambda: self.isRaceRunning() and not self.hasActiveDecoderThread()),
 			("Stop decoder read thread.", self.menuStopDecoderThread, self.canStopDecoderThread),
 			("Send 'start' command", self.menuDecoderSendStartRead, self.isDecoderConnected),
 			("Send 'stop' command", self.menuDecoderSendStopRead, self.isDecoderConnected),
@@ -170,7 +171,8 @@ class UIMenuDecoder(wx.Menu):
 				return tcp_device.connected()
 		return False
 
-	def isRaceLoaded(self) -> bool:
+	@staticmethod
+	def isRaceLoaded() -> bool:
 		return Model.race is not None
 
 	def isRaceRunning(self) -> bool:
@@ -217,7 +219,7 @@ class UIMenuDecoder(wx.Menu):
 			Utils.MessageOK(self._parent, _('Cannot perform RFID setup while race is running.'), _('Cannot Perform RFID Setup'),
 			                iconMask=wx.ICON_ERROR)
 			return
-		with JChipSetup.JChipSetupDialog(self) as dlg:
+		with JChipSetup.JChipSetupDialog(self._parent) as dlg:
 			dlg.ShowModal()
 
 	def checkDecoderIsUltra(self, requires_current: bool = True) -> Optional[UltraDecoder]:
@@ -229,11 +231,20 @@ class UIMenuDecoder(wx.Menu):
 			return None
 
 		cr: ChipReader = cast(ChipReader, self.chipReader)
+		if cr.chipReaderType is None and Model.getRace().chipReaderType is not None:
+			self.log.warning('Chip reader type for chip reader is not set but a value is set on model. Resetting.')
+			cr.reset(Model.getRace().chipReaderType)
+
 		if not (cr.chipReaderType == ChipReader.Ultra):
 			Utils.MessageOK(self, _("Currently only supported for Ultra decoders"), _("No Ultra Decoder"),
 			                iconMask=wx.ICON_ERROR)
 			return None
 
+		# requires_current here means that we need to have a current decoder thread running.
+		# Where requires_current is false, it just needs to be configured as being an Ultra decoder,
+		# but doesn't require an active thread.
+		if Model.getRace().chipReaderType is None:
+			self.log.warning('Chip reader type for race config is not set on model.')
 		ultraDecoder: UltraDecoder | None = cr.CurrentDecoder()
 		if requires_current and ultraDecoder is None:
 			Utils.MessageOK(self._parent, _("No Ultra decoder thread currently running."), _("No Ultra Decoder"),
@@ -254,12 +265,12 @@ class UIMenuDecoder(wx.Menu):
 			self.DecoderMenuItemError(e, function.__name__)
 
 	@logCall
-	def menuDecoderDisconnect(self, event: wx.CommandEvent) -> None:
+	async def menuDecoderDisconnect(self, event: wx.CommandEvent) -> None:
 		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
 		if ultraDecoder is None:
 			return
 
-		ultraDecoder.disconnect()
+		await ultraDecoder.disconnect()
 
 	@logCall
 	async def menuDecoderReconnect(self, event: wx.CommandEvent) -> None:
@@ -270,11 +281,39 @@ class UIMenuDecoder(wx.Menu):
 
 	@logCall
 	def menuStartDecoderThread(self, event: wx.CommandEvent) -> None:
+		if not self.isRaceRunning():
+			Utils.MessageOK(self._parent, _("Race must be active and running to start a decoder thread."),
+			_("No Active race"), iconMask=wx.ICON_ERROR)
+
 		# Do we actually care if it's an Ultra decoder here?
 		if not self.checkDecoderIsUltra(False):
 			return
 		self.log.todo('Requires host, port, and start time')
-		self.chipReader.StartListener()
+
+		error_message = None
+		if Model.getRace() is None:
+			error_message = "No active race"
+
+		if Model.race.chipReaderIpAddr is None or Model.race.chipReaderIpAddr.strip() == '':
+			error_message = "Chip reader host not valid"
+
+		if Model.race.chipReaderPort is None or Model.race.chipReaderPort <= 0:
+			error_message = "Chip reader port not valid"
+
+		if error_message is not None:
+			Utils.MessageOK(self._parent, _(f'{error_message} - can not start decoder thread'),
+			                _(f"Error starting decoder"),
+			                iconMask=wx.ICON_ERROR)
+			return
+
+		try:
+			self.chipReader.StartListener(time=datetime.now(), host=Model.race.chipReaderIpAddr.strip(), port=Model.race.chipReaderPort)
+		except Exception as e:
+			readerType = (cast(self.chipReader, ChipReader)).chipReaderType
+			if readerType is not None:
+				readerType = f'{ChipReader.Choices[readerType]} ({readerType})'
+			self.log.exception(f'Exception while trying to start chipReader listener: type={readerType}', exc_info=e)
+			self.DecoderMenuItemError(e, __name__)
 
 	def menuStopDecoderThread(self, event: wx.CommandEvent) -> None:
 		if not self.checkDecoderIsUltra(False):
@@ -301,7 +340,7 @@ class UIMenuDecoder(wx.Menu):
 		if ultraDecoder is None:
 			return
 
-		with DecoderReplayDialog.DecoderReplayDialog(self) as dlg:
+		with DecoderReplayDialog.DecoderReplayDialog(parent=self._parent) as dlg:
 			result = dlg.ShowModal()
 			if result == wx.ID_OK:
 				start = dlg.StartTime
