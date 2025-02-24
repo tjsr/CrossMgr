@@ -171,8 +171,7 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 	# Derived fields
 	ChipCodeAsHexValue: bool
 
-	@property
-	def TransponderId(self) -> TransponderIdType:
+	def _getTransponderId(self) -> TransponderIdType:
 		return self._ChipCode
 
 	@property
@@ -215,7 +214,8 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 		return output
 
 	def __init__(self, ultraId: int, chipCode: int):
-		super().__init__(ultraId)
+		UltraDecoderMessage.__init__(self, ultraId)
+		TransponderCrossingMessage.__init__(self)
 		self._ChipCode = chipCode
 
 	def _getTime(self) -> datetime.datetime:

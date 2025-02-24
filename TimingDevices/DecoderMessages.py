@@ -83,6 +83,9 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 		return received
 
 
+last_crossing_id: int = 0
+
+
 class DecoderCrossingMessage(DecoderMessage, ABC):
 	_crossingId: int
 
@@ -98,7 +101,13 @@ class DecoderCrossingMessage(DecoderMessage, ABC):
 	def Time(self) -> datetime:
 		return self._getTime()
 
-	def __init__(self, crossingId: int, *args, **kwargs):
+	@staticmethod
+	def generate_crossing_id() -> int:
+		global last_crossing_id
+		last_crossing_id = last_crossing_id + 1
+		return last_crossing_id
+
+	def __init__(self, crossingId: int = generate_crossing_id(), *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._crossingId = crossingId
 
@@ -118,5 +127,5 @@ class TransponderCrossingMessage(Generic[TransponderIdType], DecoderCrossingMess
 	def TransponderId(self) -> TransponderIdType:
 		return self._getTransponderId()
 
-	def __init__(self, crossingId: int, txValueAsString: bool = False, *args, **kwargs):
+	def __init__(self, crossingId: int = None, txValueAsString: bool = False, *args, **kwargs):
 		super().__init__(crossingId, *args, **kwargs)
