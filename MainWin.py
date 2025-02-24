@@ -864,6 +864,9 @@ class MainWin( wx.Frame ):
 		if Model.getRace() and Model.getRace().isRunning():
 			self.log.info(f'Processing messaged transponder event: {tx_string}')
 			self.__process_tag_data(crossing.TransponderId, crossing.Time)
+
+			self.__ensureSetupRfidRefreshProcess()
+			self.__handleRfidRefresh(True)
 		else:
 			self.log.info(f'Skipped processing {tx_string} because event is not running.')
 
