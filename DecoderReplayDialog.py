@@ -129,7 +129,7 @@ class DecoderReplayDialog(wx.Dialog):
 	log = logging.getLogger('CrossMgr.DecoderReplayDialog')
 	_gridSizer: wx.GridBagSizer
 
-	def __init__(self, parent = None, id = wx.ID_ANY):
+	def __init__(self, parent: wx.Window = None, id = wx.ID_ANY):
 		super().__init__(parent=parent, id=id, title=_("Resend data from decoder"), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
 		self._boxSizer = wx.BoxSizer(wx.VERTICAL)
 		self._gridSizer = wx.GridBagSizer(vgap=4, hgap=4)
