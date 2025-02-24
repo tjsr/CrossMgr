@@ -885,7 +885,8 @@ class MainWin( wx.Frame ):
 		if not getattr(race, 'tagNums', None):
 			GetTagNums()
 		if not race.tagNums:
-			return
+			return False
+		return True
 
 	def handleChipReaderEvent( self, event: JChip.ChipReaderEvent ) -> None:
 		race = Model.race
