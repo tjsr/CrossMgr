@@ -66,6 +66,7 @@ class WXUltraDecoder(UltraDecoder):
 reNonDigit = re.compile( '[^0-9]+' )
 async def Server( HOST: str, PORT: int, _startTime ):
 	global ultraDecoder
+	Log.getLogger('Ultra').info('Starting Ultra decoder thread.')
 	ultraDecoder = WXUltraDecoder(HOST, PORT, None)
 	ultraDecoder.MaximumReconnectionAttempts = 1
 
