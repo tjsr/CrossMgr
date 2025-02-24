@@ -1098,6 +1098,7 @@ class NumTimeInfo:
 		return self.info.get( num, {} )
 		
 class Race:
+	MAX_UNMATCHED_TAGS: int = 2000
 	finisherStatusList = [Rider.Finisher, Rider.Pulled]
 	finisherStatusSet = set( finisherStatusList )
 	
@@ -2640,14 +2641,14 @@ class Race:
 		if categoryAttribute:
 			setattr( self, categoryAttribute, iSelection )
 	
-	def addUnmatchedTag( self, tag, t ):
+	def addUnmatchedTag( self, tag: str, elapsed_time_seconds: float ) -> None:
 		try:
-			if len(self.unmatchedTags[tag]) < 2000:
-				self.unmatchedTags[tag].append( t )
+			if len(self.unmatchedTags[tag]) < self.MAX_UNMATCHED_TAGS:
+				self.unmatchedTags[tag].append( elapsed_time_seconds )
 		except KeyError:
-			self.unmatchedTags[tag] = [t]
+			self.unmatchedTags[tag] = [elapsed_time_seconds]
 		except (AttributeError, TypeError):
-			self.unmatchedTags = {tag: [t]}
+			self.unmatchedTags = {tag: [elapsed_time_seconds]}
 		
 	def getRawData( self ):
 		''' Return all data in the model.  If edited, return the edit details. '''
