@@ -27,6 +27,7 @@ import locale
 
 import Log
 import TimingDevices.TimingDeviceWXEvents
+from TimingDevices.DecoderMessages import DecoderCrossingMessage
 import Ultra
 from SplashScreen import ShowSplashScreen
 from TipProvider import ShowTipAtStartup
@@ -227,6 +228,18 @@ setTimeout( function() {
 
 #----------------------------------------------------------------------------------
 
+class ProcessRfidRefresh(wx.Timer):
+	_mainWin: 'MainWin'
+	def __init__(self, mainWin: 'MainWin', *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self._mainWin = mainWin
+
+	def Notify(self):
+		self._mainWin.processRfidRefresh()
+
+
+#----------------------------------------------------------------------------------
+
 class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
 	__restartTimingDeviceListener: bool = True
@@ -237,8 +250,8 @@ class MainWin( wx.Frame ):
 
 		Utils.setMainWin( self )
 		
-		self.callLaterProcessRfidRefresh = None	# Used for delayed updates after chip reads.
-		self.numTimes = []
+		self._callLaterProcessRfidRefresh = None	# Used for delayed updates after chip reads.
+		self.numTimes:list[tuple[int, datetime.datetime]] = []
 		
 		self.nonBusyRefresh = NonBusyCall( self.refresh, min_millis=1500, max_millis=7500 )
 
@@ -844,7 +857,15 @@ class MainWin( wx.Frame ):
 
 	def onTransponderEvent(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceTransponderEvent):
 		self.log.entering( 'onTransponderEvent' )
-		crossing: TimingDevices.DecoderMessages.DecoderCrossingMessage = event.message
+		crossing: TimingDevices.DecoderMessages.TransponderCrossingMessage = event.message
+
+		tx_string: str = f'{crossing.TransponderId}@{crossing.Time}'
+
+		if Model.getRace() and Model.getRace().isRunning():
+			self.log.info(f'Processing messaged transponder event: {tx_string}')
+			self.__process_tag_data(crossing.TransponderId, crossing.Time)
+		else:
+			self.log.info(f'Skipped processing {tx_string} because event is not running.')
 
 	@property
 	def chipReader( self ) -> ChipReaderType:
@@ -855,16 +876,22 @@ class MainWin( wx.Frame ):
 		if self.__log is None:
 			self.__log = Log.GetLogger('CrossMgr.MainWin')
 		return self.__log
-		
-	def handleChipReaderEvent( self, event ):
-		race = Model.race
-		if not race or not race.isRunning() or not race.enableUSBCamera:
-			return
+
+	@staticmethod
+	def _verify_or_get_race_tagNums(race) -> bool:
 		if not getattr(race, 'tagNums', None):
 			GetTagNums()
 		if not race.tagNums:
 			return
-		
+
+	def handleChipReaderEvent( self, event: JChip.ChipReaderEvent ) -> None:
+		race = Model.race
+		assert event.tagTimes is not None
+		if not race or not race.isRunning() or not race.enableUSBCamera:
+			return
+		if self._verify_or_get_race_tagNums(race) == False:
+			return
+
 		requests = []
 		for tag, dt in event.tagTimes:
 			if race.startTime > dt:
@@ -962,7 +989,7 @@ class MainWin( wx.Frame ):
 				return
 			if not race.getCategory(newNum) and Utils.MessageOKCancel( self,
 					'{} {}:\n\n{}\n{}'.format(_("New Bib"), newNum,
-						_("The new Bib number does not match a Category."),
+			_("The new Bib number does not match a Category."),
 						_("Add this Bib number to a Category later, or press Cancel to select a different number."),
 						),
 					_("No Matching Category") ):
@@ -3989,7 +4016,8 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			num = race.tagNums[tag]
 		except KeyError:
 			if race.isRunning() and race.startTime <= dt:
-				race.addUnmatchedTag(tag, (dt - race.startTime).total_seconds())
+				elapsed_time = dt - race.startTime
+				race.addUnmatchedTag(tag, elapsed_time.total_seconds())
 			return
 		except (TypeError, ValueError):
 			race.missingTags.add(tag)
@@ -4013,6 +4041,29 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			tag, dt = d[1], d[2]
 
 			self.__process_tag_data(tag, dt)
+
+	def __ensureSetupRfidRefreshProcess(self) -> None:
+		if not self._callLaterProcessRfidRefresh:
+			self._callLaterProcessRfidRefresh = ProcessRfidRefresh(mainWin=self)
+
+	def __handleRfidRefresh(self, refreshNow: bool) -> None:
+		#delayIntervals = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+		delayIntervals = (0.1, 0.25, 0.5, 0.75, 1.0)
+		if not self._callLaterProcessRfidRefresh.IsRunning():
+			# Start the timer for the first interval.
+			self.clprIndex = 0
+			self.clprTime = now() + datetime.timedelta( seconds=delayIntervals[0] )
+			if refreshNow or not self._callLaterProcessRfidRefresh.Start(int(delayIntervals[0] * 1000.0), True):
+				self.processRfidRefresh()
+		elif (		(self.clprTime - now()).total_seconds() > delayIntervals[self.clprIndex] * 0.75 and
+					self.clprIndex < len(delayIntervals)-1 ):
+			# If we get another read within the last 25% of the interval, increase the update to the next interval.
+			self._callLaterProcessRfidRefresh.Stop()
+			self.clprIndex += 1
+			self.clprTime += datetime.timedelta( seconds = delayIntervals[self.clprIndex] - delayIntervals[self.clprIndex-1] )
+			delayToGo = max( 10, int((self.clprTime - now()).total_seconds() * 1000.0) )
+			if refreshNow or not self._callLaterProcessRfidRefresh.Start(delayToGo, True):
+				self.processRfidRefresh()
 
 	def processJChipListener( self, refreshNow: bool=False ) -> bool:
 		# TODO: This method only ever has returns for False - why?  I tnever returns true.
@@ -4042,34 +4093,10 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 			return False
 
 		self.__process_chipreader_data(data)
-
 		# Ensure that we don't update too often if riders arrive in a bunch.
-		if not self.callLaterProcessRfidRefresh:
-			class ProcessRfidRefresh( wx.Timer ):
-				def __init__( self, *args, **kwargs ):
-					self.mainWin = kwargs.pop('mainWin')
-					super().__init__(*args, **kwargs)
-				def Notify( self ):
-					self.mainWin.processRfidRefresh()
-			self.callLaterProcessRfidRefresh = ProcessRfidRefresh( mainWin=self )
-		
-		#delayIntervals = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
-		delayIntervals = (0.1, 0.25, 0.5, 0.75, 1.0)
-		if not self.callLaterProcessRfidRefresh.IsRunning():
-			# Start the timer for the first interval.
-			self.clprIndex = 0
-			self.clprTime = now() + datetime.timedelta( seconds=delayIntervals[0] )
-			if refreshNow or not self.callLaterProcessRfidRefresh.Start( int(delayIntervals[0]*1000.0), True ):
-				self.processRfidRefresh()
-		elif (		(self.clprTime - now()).total_seconds() > delayIntervals[self.clprIndex] * 0.75 and
-					self.clprIndex < len(delayIntervals)-1 ):
-			# If we get another read within the last 25% of the interval, increase the update to the next interval.
-			self.callLaterProcessRfidRefresh.Stop()
-			self.clprIndex += 1
-			self.clprTime += datetime.timedelta( seconds = delayIntervals[self.clprIndex] - delayIntervals[self.clprIndex-1] )
-			delayToGo = max( 10, int((self.clprTime - now()).total_seconds() * 1000.0) )
-			if refreshNow or not self.callLaterProcessRfidRefresh.Start( delayToGo, True ):
-				self.processRfidRefresh()
+		self.__ensureSetupRfidRefreshProcess()
+		self.__handleRfidRefresh(refreshNow)
+
 		return False	# Never signal for an update.
 
 	def updateRaceClock( self, event = None ):

@@ -6,7 +6,7 @@ from typing import Optional, cast
 
 from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, DecoderTimeMessage, \
-	DecoderCrossingMessage
+	DecoderCrossingMessage, TransponderCrossingMessage, TransponderIdType
 from TimingDevices.UltraTimeUtils import UltraTimeUtils
 
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
@@ -150,7 +150,7 @@ class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
 
 
 # Definitions from https://rfidtiming.com/Software/UltraManual.pdf Pg41
-class UltraChipReadMessage(UltraDecoderMessage, DecoderCrossingMessage):
+class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|int]):
 	# Retain this field order
 	Zero: int  # Zero (unused at present)
 	_ChipCode: int  # Could be the chip code decimal or hexadecimal value, depending on current setting in Ultra (see section 3.8)
@@ -170,6 +170,14 @@ class UltraChipReadMessage(UltraDecoderMessage, DecoderCrossingMessage):
 
 	# Derived fields
 	ChipCodeAsHexValue: bool
+
+	@property
+	def TransponderId(self) -> TransponderIdType:
+		return self._ChipCode
+
+	@property
+	def Time(self) -> datetime.datetime:
+		return UltraTimeUtils.ultra_epoch_to_datetime(ultra_epoch=self.Seconds, ultra_msec=self.Milliseconds)
 
 	@staticmethod
 	def chipNumberFromString(chipStr: str) -> int:
@@ -210,8 +218,7 @@ class UltraChipReadMessage(UltraDecoderMessage, DecoderCrossingMessage):
 		super().__init__(ultraId)
 		self._ChipCode = chipCode
 
-	@property
-	def Time(self) -> datetime.datetime:
+	def _getTime(self) -> datetime.datetime:
 		return UltraTimeUtils.ultra_epoch_to_datetime(ultra_epoch=self.Seconds, ultra_msec=self.Milliseconds)
 
 	@property
@@ -311,8 +318,8 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 
 
 class UltraSetTimeCommandResponse(UltraDecoderTimeMessage):
-	def __init__(self, message: UltraDecoderTimeMessage):
-		super().__init__(message=message)
+	def __init__(self, ultraId: int, message: UltraDecoderTimeMessage):
+		super().__init__(ultraId=ultraId, message=message)
 		self._message = message
 
 	@property
