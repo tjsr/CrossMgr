@@ -50,6 +50,7 @@ param (
 $environ = "env"
 $script:pythongood = $false
 
+. .\Scripts\inno-setup.ps1
 . .\Scripts\utils.ps1
 . .\Scripts\versions.ps1
 . .\Scripts\gitutils.ps1
@@ -290,47 +291,9 @@ OutputBaseFilename=$newinstallname
 OutputDir=$releasepath
 "
 	Set-Content -Path "$builddir\inno_setup.txt" -Value "$setup"
-	# Scan the registry for innosetup 6.x
-	$apps=(Get-ChildItem HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | % { Get-ItemProperty $_.PsPath } | Select DisplayName, InstallLocation | Sort-Object Displayname -Descending)
-	foreach ($app in $apps)
-	{
-		if ($app.DisplayName -like 'Inno Setup version 6*')
-		{
-			$innolocaton = $app.InstallLocation
-			break
-		}
-	}
-	if (![string]::IsNullOrEmpty($innolocaton) -and (Test-Path -Path $innolocaton))
-	{
-		Write-Host "InnoSetup 6 installed $innolocaton (registry)"
-	}
-	elseif (Test-Path -Path 'C:\Program Files (x86)\Inno Setup 6')
-	{
-		$innolocaton = 'C:\Program Files (x86)\Inno Setup 6\'
-		Write-Host "InnoSetup 6 installed $innolocaton (directory)"
-	}
-	elseif (Test-Path -Path 'C:\Program Files\Inno Setup 6')
-	{
-		$innolocaton = 'C:\Program Files\Inno Setup 6\'
-		Write-Host "InnoSetup 6 installed $innolocaton (directory)"
-	}
-	elseif (Test-Path -Path 'D:\Program Files (x86)\Inno Setup 6')
-	{
-		$innolocaton = 'D:\Program Files (x86)\Inno Setup 6\'
-		Write-Host "InnoSetup 6 installed $innolocaton (directory)"
-	}
-	elseif (Test-Path -Path 'D:\Program Files\Inno Setup 6')
-	{
-		$innolocaton = 'D:\Program Files\Inno Setup 6\'
-		Write-Host "InnoSetup 6 installed $innolocaton (directory)"
-	}
-	else
-	{
-		Write-Host "Cant find Inno Setup 6.x! Is it installed? Aborting...."
-		exit 1
-	}
-	
-	$inno = "${innolocaton}ISCC.exe"
+
+	$inno = CheckInnoSetupAvailable
+
 	Write-Host "$inno"  "${builddir}\${program}.iss"
 	
 	$iss = "${builddir}\${program}.iss"
@@ -749,6 +712,7 @@ if ($everything -eq $false)
 }
 else
 {
+	$_inno = CheckInnoSetupAvailable
 	BuildAll($programs)
 }
 if ($virus -eq $true)
