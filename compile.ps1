@@ -50,6 +50,7 @@ param (
 $environ = "env"
 $script:pythongood = $false
 
+. .\Scripts\utils.ps1
 # Check the python version. Current only 3.10.x.
 function CheckPythonVersion
 {
@@ -75,15 +76,6 @@ function CheckPythonVersion
 		$script:pythongood = $true
 	}
 	
-}
-function GetBuildDir($program)
-{
-	$builddir = '.'
-	if ($program -ne 'CrossMgr')
-	{
-		$builddir = $program
-	}
-	return $builddir
 }
 
 function CheckEnvActive
