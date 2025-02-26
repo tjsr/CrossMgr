@@ -221,7 +221,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		# 	continue
 
 	def on_socket_timeout(self, ex: socket.timeout) -> None:
-		if (now() - self._lastVoltage).total_seconds() > 15:
+		if self._lastVoltage is None:
+			self.getLog('on_socket_timeout').error(_('No heartbeat received.'))
+		elif (now() - self._lastVoltage).total_seconds() > 15:
 			self.getLog('on_socket_timeout').error(_('Lost heartbeat.'))
 
 	def get_message_buffer(self) -> str:
