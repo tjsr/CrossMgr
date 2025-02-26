@@ -316,6 +316,48 @@ envSetup() {
 	fi
 }
 
+IsDevelopmentBranch() {
+  if [ ! -n "$GITHUB_REF" ]; then
+    echo "Can't get GITHUB_REF"
+    exit 1
+  fi
+
+  local GIT_TYPE=$(echo $GITHUB_REF | awk -F '/' '{print $2'})
+  if [ "$GIT_TYPE" != "heads" ]; then
+    return 0
+  fi
+
+  local GIT_TAG=$(echo $GITHUB_REF | awk -F '/' '{print $3'})
+
+  if [[ -z "$GIT_TAG" ]]; then
+    return 0
+  fi
+  if [[ "$GIT_TAG" == "dev" ]]; then
+    return 1
+  fi
+  if [[ "$GIT_TAG" == develop/* ]]; then
+    return 1
+  fi
+  if [[ "$GIT_TAG" == fix/* ]]; then
+    return 1
+  fi
+  return 0
+}
+
+CheckBranch() {
+  if IsDevelopmentBranch "$GITHUB_REF"; then
+    APPVERNAME="AppVerName=\"$program $VERSION-beta-$SHORTSHA\""
+    VERSION="$VERSION-beta-$SHORTSHA"
+  fi
+
+  if [ -z "$APPVERNAME" ]; then
+    echo "APPVERNAME is empty! [$APPVERNAME] Aborting..."
+    exit 1
+  fi
+
+  return 0
+}
+
 updateversion() {
 	if [ -z "$PROGRAMS" ]; then
 		echo "Updateversion: no programs defined!!"
@@ -336,7 +378,7 @@ updateversion() {
                 echo "Refusing to build an untagged master build. Release builds on a tag only!"
                 exit 1
             fi
-			if [ "$GIT_TYPE" == "heads" -a "$GIT_TAG" == "dev" ]; then
+			if IsDevelopmentBranch "$GITHUB_REF"; then
 				APPVERNAME="AppVerName=\"$program $VERSION-beta-$SHORTSHA\""
 				VERSION="$VERSION-beta-$SHORTSHA"
 			fi
@@ -502,6 +544,8 @@ $0 -a -A
 EOF
 	exit
 }
+
+CheckBranch
 
 gotarg=0
 while getopts "hcitaveiCdPBASkomzlTfyqswVZUr" option
