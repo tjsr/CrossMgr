@@ -93,8 +93,15 @@ class DateTimeControlPair(wx.EvtHandler):
 			return
 		picker: DatePickerCtrl = eventObject
 		updatedDate = picker.GetValue()
-		assert isinstance(updatedDate, datetime.date)
-		modified_time = self._time.replace(year=updatedDate.year, month=updatedDate.month, day=updatedDate.day)
+		if not isinstance(updatedDate, wx.DateTime):
+			self.log.warning('Date returned from event was not a wx.DateTime object')
+			self.fire_datetime_invalid()
+			return
+		modified_time = self._time.replace(
+			year=updatedDate.GetYear(),
+			month=updatedDate.GetMonth(),
+			day=updatedDate.GetDay()
+		)
 
 		if self._timeEdit.Validate():
 			self._time = modified_time
