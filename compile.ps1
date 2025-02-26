@@ -50,7 +50,7 @@ param (
 $environ = "env"
 $script:pythongood = $false
 
-# Check the python version. Current only 3.10.x.
+# Check the python version. Current only 3.13.x.
 function CheckPythonVersion
 {
 	if ($script:pythongood -eq $false)
@@ -66,9 +66,9 @@ function CheckPythonVersion
 		Remove-Item 'pyver.txt'
 		$version = $pythonver.Split(' ')[1]
 		$minor = $version.Split('.')[1]
-		if ($minor -lt '10')
+		if ($minor -lt '13')
 		{
-			Write-Host "Python 3.10.x required, and you have ", $version, "installed. Aborting..."
+			Write-Host "Python 3.13.x required, and you have ", $version, "installed. Aborting..."
 			exit 1
 		}
 		Write-Host "Found Python ", $version
