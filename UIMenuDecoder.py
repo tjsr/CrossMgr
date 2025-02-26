@@ -307,7 +307,7 @@ class UIMenuDecoder(wx.Menu):
 			return
 
 		try:
-			self.chipReader.StartListener(time=datetime.now(), host=Model.race.chipReaderIpAddr.strip(), port=Model.race.chipReaderPort)
+			self.chipReader.StartListener(startTime=datetime.now(), host=Model.race.chipReaderIpAddr.strip(), port=Model.race.chipReaderPort)
 		except Exception as e:
 			readerType = (cast(self.chipReader, ChipReader)).chipReaderType
 			if readerType is not None:

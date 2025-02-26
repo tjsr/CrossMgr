@@ -13,7 +13,7 @@ class ChipReaderType:
 	IsListening: Callable[[], bool] | None
 
 	@abstractmethod
-	def StartListener( self, time: datetime, host: str, port: int, test: bool | None = None ) -> None:
+	def StartListener( self, startTime: datetime, host: str, port: int, test: bool | None = None ) -> None:
 		pass
 
 	@abstractmethod
