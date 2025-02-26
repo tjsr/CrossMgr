@@ -1,6 +1,8 @@
 import sys
 import collections
 
+import FileSystemUtils
+
 isWindows = sys.platform.startswith('win')
 
 #------------------------------------------------------------------------
@@ -8,6 +10,7 @@ isWindows = sys.platform.startswith('win')
 #
 import wx
 import os
+from Log import getLogger
 
 import wx.lib.agw.genericmessagedialog
 
@@ -512,25 +515,12 @@ def ordinal( value ):
 		'en': lambda v: "{}{}".format(v, ['th','st','nd','rd','th','th','th','th','th','th'][v%10]) if (v % 100)//10 != 1 else "{}{}".format(value, "th"),
 	}.get( lang[:2], lambda v: '{}.\u00B0'.format(v) )( value )	# Default: show with a degree sign.
 
-def getHomeDir( appName='CrossMgr' ):
-	sp = wx.StandardPaths.Get()
-	homedir = sp.GetUserDataDir()
-	try:
-		if os.path.basename(homedir) == '.{}'.format(appName):
-			homedir = os.path.join( os.path.dirname(homedir), '.{}App'.format(appName) )
-	except Exception:
-		pass
-	if not os.path.exists(homedir):
-		os.makedirs( homedir )
-	return homedir
+def getHomeDir( appName='CrossMgr' ) -> str:
+	return FileSystemUtils.getHomeDir( appName )
 
-def getDocumentsDir():
-	sp = wx.StandardPaths.Get()
-	dd = sp.GetDocumentsDir()
-	if not os.path.exists(dd):
-		os.makedirs( dd )
-	return dd
-	
+def getDocumentsDir() -> str:
+	return FileSystemUtils.getDocumentsDir()
+
 #------------------------------------------------------------------------
 def positiveFloatLocale( v ):
 	if isinstance( v, float ):
@@ -591,21 +581,9 @@ def approximateMatch( s1, s2 ):
 #------------------------------------------------------------------------
 PlatformName = platform.system()
 AppVer = 'v' + AppVerName.split(' ')[1]
-def writeLog( message ):
-	try:
-		dt = datetime.datetime.now()
-		dt = dt.replace( microsecond = 0 )
-		msg = '{} ({} {}) {}{}'.format(
-			dt.isoformat(),
-			AppVer,
-			PlatformName,
-			message,
-			'\n' if not message or message[-1] != '\n' else '',
-		)
-		sys.stdout.write( removeDiacritic(msg) )
-		sys.stdout.flush()
-	except IOError:
-		pass
+def writeLog( message:str ) -> None:
+	log = getLogger()
+	log.info(message.strip() if message else '')
 
 def disable_stdout_buffering():
 	# No longer necessary as if output goes to the terminal it will be flushed if it ends in newline.
@@ -621,14 +599,9 @@ def logCall( f ):
 		return f( *args, **kwargs)
 	return new_f
 	
-def logException( e, exc_info ):
-	eType, eValue, eTraceback = exc_info
-	ex = traceback.format_exception( eType, eValue, eTraceback )
-	writeLog( '**** Begin Exception ****' )
-	for d in ex:
-		for line in d.split( '\n' ):
-			writeLog( line )
-	writeLog( '**** End Exception ****' )
+def logException( e: Exception, exc_info ) -> None:
+	log = getLogger()
+	log.exception( e )
 
 #------------------------------------------------------------------------
 mainWin = None

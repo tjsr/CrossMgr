@@ -1,0 +1,16 @@
+version: 1
+
+handlers:
+  debugfile:
+    '()': ext://Log.owned_file_handler
+    formatter: method
+    filename: 'logs/crossmgr-debug.log'
+    mode: a
+    encoding: utf-8
+
+loggers:
+  UltraDecoder.parse:
+    level: WARNING
+  root:
+    level: DEBUG
+    handlers: [console, file, debugfile]

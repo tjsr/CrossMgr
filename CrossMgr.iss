@@ -23,6 +23,7 @@ Name: "desktopicon"; Description: "Create a &desktop icon";
 [Files]
 Source: "*.*"; DestDir: "{app}"; Flags: recursesubdirs
 Source: "CrossMgrTutorial.pdf"; DestDir: "{app}";
+Source: "logging.yml"; DestDir: "{app}";
 
 [Icons]
 Name: "{group}\CrossMgr"; Filename: "{app}\CrossMgr.exe"
