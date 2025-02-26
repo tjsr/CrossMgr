@@ -8,6 +8,8 @@ from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceS
 	TimingDeviceStopResendRecords, TimingDeviceCommandException, TimingDeviceSendRecordsCommand
 from TimingDevices.UltraDecoderMessages import UltraCommandResponse, UltraDecoderStatusMessage, UltraDecoderTimeMessage, \
 	UltraDecoderMessage
+from TimingDevices.UltraTimeUtils import UltraTimeUtils
+
 
 class UltraSetTimeCommandResponse(UltraCommandResponse, UltraDecoderTimeMessage):
 	def match_message(self, message: 'UltraDecoderMessage') -> Optional[UltraDecoderTimeMessage]:
@@ -139,9 +141,8 @@ class UltraSendRecordsCommand(TimingDeviceSendRecordsCommand):
 
 	def get_command_string(self) -> str:
 		if self._from_date_time is not None:
-			t1980 = datetime.datetime(1980, 1, 1).timestamp()
-			from_epoch = int(self._from_date_time.timestamp() - t1980)
-			to_epoch = int(self._to_date_time.timestamp() if self._to_date_time is not None else datetime.datetime.now().timestamp() - t1980)
+			from_epoch:int = UltraTimeUtils.datetime_to_ultra_epoch(self._from_date_time)
+			to_epoch: int = UltraTimeUtils.datetime_to_ultra_epoch(self._to_date_time if self._to_date_time is not None else datetime.datetime.now())
 
 			return f'800{from_epoch}\0x0D{to_epoch}'
 		elif self._from_record is not None:
