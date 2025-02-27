@@ -46,6 +46,10 @@ class TCPTimingDevice:
 	def setLog(self, log: CrossMgrLogger) -> None:
 		self._log = log
 
+	@property
+	def __tcplog(self) -> CrossMgrLogger:
+		return self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT)
+
 	@abstractmethod
 	def getDeviceType(self) -> str:
 		pass
@@ -53,8 +57,20 @@ class TCPTimingDevice:
 	def __spawn_on_socket_connect(self):
 		ThreadUtils.spawn_event(handler=self.on_socket_connect)
 
+	@property
+	def description(self) -> str:
+		return f'{self.getDeviceType()} decoder at {self._host}:{self._port}'
+
+	def __acquire(self, timeout:float = None) -> bool:
+		if timeout is None:
+			timeout = self._timeoutSecs
+		if not self.__lock.acquire(True, timeout):
+			self.__tcplog.error(_('Failed to acquire lock for {} after {} seconds').format(self.description, timeout))
+			return False
+		return True
+
 	def connect(self) -> bool:
-		log = self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT)
+		log = self.__tcplog
 		device = self.getDeviceType()
 		# TODO: wrap with _ for internationalisation
 		description = f'{device} decoder at {self._host}:{self._port}'
@@ -62,7 +78,7 @@ class TCPTimingDevice:
 		# -----------------------------------------------------------------------------------------------------
 		msg = _('Attempting to connect to {}').format(description)
 		log.info(msg)
-		self.__lock.acquire()
+		self.__acquire()
 		try:
 			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self._s.settimeout(self._timeoutSecs)
@@ -101,6 +117,7 @@ class TCPTimingDevice:
 	async def disconnect(self, allow_reconnect: bool = False) -> bool:
 		await self._wait_until_ready()
 
+		self.__acquire()
 		self.__unsuccessfulConnectionAttempts = 0
 		if allow_reconnect is True:
 			self.__attempt_reconnect_after = datetime.datetime.now() + datetime.timedelta(seconds=TCPTimingDevice.CONNECTION_RETRY_TIME_INTERVAL)
@@ -108,7 +125,6 @@ class TCPTimingDevice:
 			self.__unsuccessfulConnectionAttempts = 0
 			self.__attempt_reconnect_after = None
 
-		self.__lock.acquire()
 		if self._s is not None:
 			try:
 				self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT).info(_('Disconnecting from {}').format(self.getDeviceType()))
@@ -131,10 +147,15 @@ class TCPTimingDevice:
 		pass
 
 	def connected(self) -> bool:
-		return self._s is not None and self._connected is True
+		self.__acquire()
+		try:
+			return self._s is not None and self._connected is True
+		finally:
+			self.__lock.release()
+		return False
 
 	def get_message_buffer(self) -> str|None:
-		self.__lock.acquire()
+		self.__acquire()
 		if self._s is None:
 			return ''
 		try:
@@ -159,7 +180,9 @@ class TCPTimingDevice:
 		# cmd = payload.split(';', 1)[0]
 		log = self.getLog(child='output')
 		log.info(payload)
-		self.__lock.acquire()
+		if not self.__acquire():
+			self.__tcplog.error(f'Failed acquiring lock for {self.description} trying to send data.')
+			return
 		try:
 			socketSendMessage(self._s, payload)
 		except Exception as e:
