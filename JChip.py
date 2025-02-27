@@ -377,8 +377,7 @@ def StopListener():
 	
 	shutdownQ = None
 		
-def StartListener( startTime = datetime.datetime.now(),
-					HOST = DEFAULT_HOST, PORT = DEFAULT_PORT, test=False ):
+def StartListener(startTime=datetime.datetime.now(), host: str=DEFAULT_HOST, port: int=DEFAULT_PORT, test: bool=False) -> None:
 	global q
 	global shutdownQ
 	global listener
@@ -389,7 +388,7 @@ def StartListener( startTime = datetime.datetime.now(),
 	
 	q = Queue()
 	shutdownQ = Queue()
-	listener = Process( target = Server, args=(q, shutdownQ, HOST, PORT, startTime) )
+	listener = Process(target = Server, args=(q, shutdownQ, host, port, startTime))
 	listener.name = 'JChip Listener'
 	listener.daemon = True
 	listener.start()

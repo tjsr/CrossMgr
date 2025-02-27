@@ -389,8 +389,8 @@ class JChipSetupDialog( wx.Dialog ):
 			self.testJChip.SetLabel( 'Stop RFID Test' )
 			self.testJChip.SetBackgroundColour( wx.Colour(255,128,128) )
 			self.testJChip.SetValue( True )
-			
-			ChipReader.chipReaderCur.StartListener( test=True )
+
+			ChipReader.chipReaderCur.StartListener(test=True)
 			
 			self.appendMsg( 'listening for RFID connection...' )
 			

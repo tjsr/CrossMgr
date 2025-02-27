@@ -390,7 +390,7 @@ def StopListener():
 def IsListening():
 	return listener is not None
 
-def StartListener( startTime=datetime.datetime.now(), comPort=1, HOST=None, PORT=None, test=False ): # HOST, PORT not used.
+def StartListener(startTime: datetime.datetime=datetime.datetime.now(), comPort: int=1, host: str=None, port:int=None, test: bool=False) -> None: # HOST, PORT not used.
 	global q
 	global shutdownQ
 	global listener
@@ -419,7 +419,7 @@ def CleanupListener():
 if __name__ == '__main__':
 	def doTest():
 		try:
-			StartListener( comPort=1 )
+			StartListener(comPort=1)
 			count = 0
 			while 1:
 				time.sleep( 1 )

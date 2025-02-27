@@ -391,7 +391,7 @@ def StopListener():
 def IsListening():
 	return listener is not None
 
-def StartListener( startTime=datetime.datetime.now(), HOST=None, PORT=None, test=False ):
+def StartListener(startTime: datetime.datetime = datetime.datetime.now(), host: str=None, port: int=None, test=False) -> None:
 	global q
 	global shutdownQ
 	global listener
@@ -399,12 +399,12 @@ def StartListener( startTime=datetime.datetime.now(), HOST=None, PORT=None, test
 	StopListener()
 	
 	if Model.race:
-		HOST = (HOST or Model.race.chipReaderIpAddr)
-		PORT = (PORT or Model.race.chipReaderPort)
+		host = (host or Model.race.chipReaderIpAddr)
+		port = (port or Model.race.chipReaderPort)
 	
 	q = Queue()
 	shutdownQ = Queue()
-	listener = Process( target = Server, args=(q, shutdownQ, HOST, PORT, startTime) )
+	listener = Process(target = Server, args=(q, shutdownQ, host, port, startTime))
 	listener.name = 'RaceResult Listener'
 	listener.daemon = True
 	listener.start()
@@ -421,7 +421,7 @@ def CleanupListener():
 if __name__ == '__main__':
 	def doTest():
 		try:
-			StartListener( HOST='127.0.0.1', PORT=DEFAULT_PORT )
+			StartListener(host='127.0.0.1', port=DEFAULT_PORT)
 			count = 0
 			while 1:
 				time.sleep( 1 )

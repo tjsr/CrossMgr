@@ -136,7 +136,7 @@ def GetCurrentDecoder() -> UltraDecoder | None:
 	return ultraDecoder
 
 
-def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):
+def StartListener(startTime: datetime.datetime=now(), host: str=None, port: int=None, test: bool=False) -> None:
 	global q
 	global shutdownQ
 	global listener
@@ -146,10 +146,10 @@ def StartListener( startTime=now(), HOST=None, PORT=None, test=False ):
 		listener.join(5.0)
 
 	if Model.race:
-		HOST = (HOST or Model.race.chipReaderIpAddr)
-		PORT = (PORT or Model.race.chipReaderPort)
+		host = (host or Model.race.chipReaderIpAddr)
+		port = (port or Model.race.chipReaderPort)
 
-	listener = Process( target = asyncio.run, args=(Server(HOST, PORT, startTime), ))
+	listener = Process(target = asyncio.run, args=(Server(host, port, startTime),))
 	listener.name = 'Ultra Listener'
 	listener.daemon = True
 	listener.start()
@@ -167,7 +167,7 @@ if __name__ == '__main__':
 	def doTest():
 		ultraTestHost = '192.168.1.148' # UltraDecoder.DEFAULT_HOST
 		try:
-			StartListener( HOST=ultraTestHost, PORT=UltraDecoder.DEFAULT_PORT )
+			StartListener(host=ultraTestHost, port=UltraDecoder.DEFAULT_PORT)
 			count = 0
 			cols = 1
 			while 1:

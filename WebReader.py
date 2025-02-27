@@ -1,10 +1,12 @@
+import datetime
+
 import wx
 import Utils
 import Model
 
 # Simple reader control functions as the messages come from the web server.
 
-def StartListener( startTime=None, HOST=None, PORT=None, test=False ):
+def StartListener(startTime: datetime.datetime=None, host: str=None, port: int=None, test: bool=False) -> None:
 	# Messages come from the web server, so, nothing to do here.
 	pass
 	

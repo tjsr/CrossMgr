@@ -4083,7 +4083,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 
 		if not ChipReader.chipReaderCur.IsListening() and self.__restartTimingDeviceListener is True:
 			ChipReader.chipReaderCur.reset( race.chipReaderType )
-			ChipReader.chipReaderCur.StartListener( race.startTime )
+			ChipReader.chipReaderCur.StartListener(race.startTime)
 			GetTagNums( True )
 
 		if ChipReader.chipReaderCur.chipReaderType == ChipReader.ChipReader.Ultra:
