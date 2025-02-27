@@ -5,6 +5,7 @@ from typing import Type, TypeVar, Generic
 
 class DecoderMessage:
 	_data: str | None
+	pushed_back_count: int = 0
 
 	def __init__(self, *args, **kwargs):
 		self._data = None
