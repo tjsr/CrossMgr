@@ -1,5 +1,6 @@
 import datetime
 import socket
+import threading
 import time
 from abc import abstractmethod
 
@@ -25,6 +26,7 @@ class TCPTimingDevice:
 	__unsuccessfulConnectionAttempts: int = 0
 	__maximumReconnectionAttempts: int = 5
 	__attempt_reconnect_after: datetime.datetime | None = datetime.datetime.fromtimestamp(0)
+	__lock: threading.Lock = threading.Lock()
 
 	def __init__(self, host: str, port: int ):
 		self._host = host
@@ -60,6 +62,7 @@ class TCPTimingDevice:
 		# -----------------------------------------------------------------------------------------------------
 		msg = _('Attempting to connect to {}').format(description)
 		log.info(msg)
+		self.__lock.acquire()
 		try:
 			self._s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self._s.settimeout(self._timeoutSecs)
@@ -85,6 +88,8 @@ class TCPTimingDevice:
 			self._connected = False
 			self.__set_reconnect_backoff()
 			return False
+		finally:
+			self.__lock.release()
 
 		log.info(_('Successfully connected to {}').format(description))
 		return True
@@ -103,6 +108,7 @@ class TCPTimingDevice:
 			self.__unsuccessfulConnectionAttempts = 0
 			self.__attempt_reconnect_after = None
 
+		self.__lock.acquire()
 		if self._s is not None:
 			try:
 				self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT).info(_('Disconnecting from {}').format(self.getDeviceType()))
@@ -115,6 +121,8 @@ class TCPTimingDevice:
 				self._s = None
 				self._connected = False
 				pass
+			finally:
+				self.__lock.release()
 		self._connected = False
 		return False
 
@@ -126,6 +134,7 @@ class TCPTimingDevice:
 		return self._s is not None and self._connected is True
 
 	def get_message_buffer(self) -> str|None:
+		self.__lock.acquire()
 		if self._s is None:
 			return ''
 		try:
@@ -133,6 +142,8 @@ class TCPTimingDevice:
 			return buffer
 		except socket.timeout as ex:
 			self.on_socket_timeout(ex)
+		finally:
+			self.__lock.release()
 
 		return None
 
@@ -148,11 +159,14 @@ class TCPTimingDevice:
 		# cmd = payload.split(';', 1)[0]
 		log = self.getLog(child='output')
 		log.info(payload)
+		self.__lock.acquire()
 		try:
 			socketSendMessage(self._s, payload)
 		except Exception as e:
 			log.exception(msg='{}: {}'.format(payload, _('Failed sending data')), exc_info=e)
 			raise e
+		finally:
+			self.__lock.release()
 
 	@property
 	def UnsuccessfulConnectionAttempts(self) -> int:
