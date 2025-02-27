@@ -100,9 +100,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 				if response is not None and response.readStatus == False:
 					self.begin_reading()
 
-
 		except Exception as e:
-			self.getLog(child='on_connect').exception('Failed while getting decoder status', e)
+			self.getLog(child='on_connect').exception('Failed while getting decoder status', exc_info=e)
 
 		return result
 
