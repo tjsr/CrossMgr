@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, cast, Any, Optional
 
 import wx
@@ -350,7 +350,21 @@ class UIMenuDecoder(wx.Menu):
 					self.log.error('Invalid start or end time')
 					return
 
-				self.log.info('Requesting replay from decoder of %s to %s', start, end)
+				if start.tzinfo is not None and start.tzinfo != timezone.utc:
+					local_start = start
+					start = start.astimezone(timezone.utc)
+					start_str = f'{start}/{local_start} ({local_start.tzinfo})'
+				else:
+					start_str = f'{start}'
+
+				if end.tzinfo is not None and end.tzinfo != timezone.utc:
+					local_end = end
+					end = end.astimezone(timezone.utc)
+					end_str = f'{end}/{local_end} ({local_end.tzinfo})'
+				else:
+					end_str = f'{end}'
+
+				self.log.info(f'Requesting replay from decoder of {start_str} to {end_str}')
 				try:
 					ultraDecoder.send_records_from_time(start_time=start, end_time=end)
 				except Exception as e:
