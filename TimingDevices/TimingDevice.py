@@ -288,14 +288,17 @@ class TimingDevice():
 	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
 		# TODO: We can abstract this with wait_for_response
 		# log = self.getLog(name='TimingDevice.wait_for_message')
-		log = self.getLog()
+		log = self.getLog(child='wait_for_message')
 		message_type_name = messageType.__name__
 		log.debug(f'Waiting for a matching {message_type_name} message before continuing...')
 
-		current_time = datetime.datetime.now()
 		start_time = datetime.datetime.now()
+		current_time = datetime.datetime.now()
+		time_diff = current_time - start_time
+		log.debug(f'Start: {start_time}')
+		log.debug(f'Current time: {current_time}. Time diff: {time_diff} / {time_diff.seconds}')
 
-		timeout_exceeded = (current_time - start_time).seconds > timeout
+		timeout_exceeded = time_diff.seconds > timeout
 		messages = []
 		attempts = 1
 		while not timeout_exceeded:
@@ -312,7 +315,8 @@ class TimingDevice():
 					return message
 			attempts += 1
 			current_time = datetime.datetime.now()
-			timeout_exceeded = (current_time - start_time).seconds > timeout
+			time_diff = current_time - start_time
+			timeout_exceeded = time_diff.seconds > timeout
 
 		messageCount = len(messages)
 		total_messages = self.messageQueueLength
@@ -325,12 +329,16 @@ class TimingDevice():
 	def wait_for_response(self, timeout: int, command: TimingDeviceCommand) -> Optional[DecoderMessage]:
 		if not command.providesResponse:
 			raise TimingDeviceCommandException(f'Command {command.__class__} does not provide a response')
-		current_time = datetime.datetime.now()
+		log = self.getLog(child='wait_for_response')
 		start_time = datetime.datetime.now()
+		current_time = datetime.datetime.now()
 
-		timeout_exceeded = (current_time - start_time).seconds > timeout
+		time_diff = current_time - start_time
+		log.debug(f'Start: {start_time}')
+		log.debug(f'Current time: {current_time}. Time diff: {time_diff} / {time_diff.seconds}')
+
+		timeout_exceeded = time_diff.seconds > timeout
 		messages = []
-		log = self.getLog()
 		attempts = 1
 		commandClass = command.__class__.__name__
 		responseClass = command.get_response_type()
@@ -350,7 +358,8 @@ class TimingDevice():
 					return message
 			attempts += 1
 			current_time = datetime.datetime.now()
-			timeout_exceeded = (current_time - start_time).seconds > timeout
+			time_diff = current_time - start_time
+			timeout_exceeded = time_diff.seconds > timeout
 
 		total_messages = self.messageQueueLength
 		messageCount = len(messages)
