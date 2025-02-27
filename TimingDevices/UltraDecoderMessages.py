@@ -236,7 +236,7 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 
 
 class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
-	MESSAGE_FORMAT = r'^(\d{2}:\d{2}:\d{2} \d{2}-\d{2}-\d{4})(\s\(-?\d+\))?$'
+	MESSAGE_FORMAT = r'^(\d{1,2}:\d{2}:\d{2} \d{1,2}-\d{1,2}-\d{4})(\s\(-?\d+\))?$'
 	DATETIME_FORMAT = "%H:%M:%S %d-%m-%Y"
 
 	@staticmethod
@@ -293,6 +293,9 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 			log.warning('No message buffer provided when trying to parse Ultra Set Time response')
 			return None
 
+		if not UltraDecoderTimeMessage.matches(messageBuf):
+			return None
+
 		parts = re.match(UltraDecoderTimeMessage.MESSAGE_FORMAT, messageBuf)
 		if parts is None:
 			return None
@@ -308,6 +311,7 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 
 		try:
 			parsed_time = datetime.datetime.strptime(time_component, "%H:%M:%S %d-%m-%Y")
+			parsed_time = parsed_time.replace(tzinfo=datetime.timezone.utc)
 			UltraDecoderTimeMessage.log_message_state(log, parsed_time, epoch_date, invalid_epoch)
 
 			return UltraDecoderTimeMessage(0, parsed_time, is_invalid=invalid_epoch)
