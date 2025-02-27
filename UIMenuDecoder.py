@@ -308,10 +308,13 @@ class UIMenuDecoder(wx.Menu):
 			                iconMask=wx.ICON_ERROR)
 			return
 
+		if self.chipReader is None:
+			self.log.warning('Chip reader has not been created - need to recreate.')
+
 		try:
 			self.chipReader.StartListener(startTime=datetime.now(), host=Model.race.chipReaderIpAddr.strip(), port=Model.race.chipReaderPort)
 		except Exception as e:
-			readerType = (cast(self.chipReader, ChipReader)).chipReaderType
+			readerType = (cast(ChipReader, self.chipReader)).chipReaderType
 			if readerType is not None:
 				readerType = f'{ChipReader.Choices[readerType]} ({readerType})'
 			self.log.exception(f'Exception while trying to start chipReader listener: type={readerType}', exc_info=e)
