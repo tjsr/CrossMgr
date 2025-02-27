@@ -1,3 +1,5 @@
+from typing import Callable
+
 import wx
 import os
 import math
@@ -11,8 +13,10 @@ from ReadSignOnSheet import GetTagNums
 from Undo		import undo
 from HighPrecisionTimeEdit import HighPrecisionTimeEdit
 
-def DoChipImport(	fname, parseTagTime, startTime = None,
-					clearExistingData = True, timeAdjustment = None ):
+ParseTagTimeFn = Callable[[str, int, list[str]], tuple[str, datetime.datetime]]
+
+def DoChipImport(	fname: str, parseTagTime: ParseTagTimeFn, startTime: datetime.time = None,
+					clearExistingData: bool = True, timeAdjustment: datetime.timedelta = None ) -> list[str] | None:
 	
 	errors = []
 
@@ -20,7 +24,7 @@ def DoChipImport(	fname, parseTagTime, startTime = None,
 	if race and race.isRunning():
 		Utils.MessageOK( Utils.getMainWin(), '\n\n'.join( [_('Cannot Import into a Running Race.'), _('Wait until you have a complete data set, then import the full data into a New race.')] ),
 						title = _('Cannot Import into Running Race'), iconMask = wx.ICON_ERROR )
-		return
+		return None
 
 	# If startTime is None, the first time will be taken as the start time.
 	# All first time's for each rider will then be ignored.
@@ -111,7 +115,7 @@ def DoChipImport(	fname, parseTagTime, startTime = None,
 
 #------------------------------------------------------------------------------------------------
 class ChipImportDialog( wx.Dialog ):
-	def __init__( self, chipName, parseTagTime, parent, id = wx.ID_ANY, fileSuffix = 'txt' ):
+	def __init__( self, chipName: str, parseTagTime: ParseTagTimeFn, parent: wx.Window, id = wx.ID_ANY, fileSuffix = 'txt' ):
 		super().__init__( parent, id, '{} {}'.format(chipName, _('Import')),
 						style=wx.DEFAULT_DIALOG_STYLE|wx.TAB_TRAVERSAL )
 		

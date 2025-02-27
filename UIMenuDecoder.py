@@ -374,7 +374,7 @@ class UIMenuDecoder(wx.Menu):
 		if not self.__excel_link_check():
 			return
 
-		with JChipImport.JChipImportDialog(self) as dlg:
+		with JChipImport.JChipImportDialog(self._parent) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
@@ -382,7 +382,7 @@ class UIMenuDecoder(wx.Menu):
 		if not self.__excel_link_check():
 			return
 
-		with AlienImport.AlienImportDialog(self) as dlg:
+		with AlienImport.AlienImportDialog(self._parent) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
@@ -390,7 +390,7 @@ class UIMenuDecoder(wx.Menu):
 		if not self.__excel_link_check():
 			return
 
-		with IpicoImport.IpicoImportDialog(self) as dlg:
+		with IpicoImport.IpicoImportDialog(self._parent) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
@@ -398,7 +398,7 @@ class UIMenuDecoder(wx.Menu):
 		if not self.__excel_link_check():
 			return
 
-		with ImpinjImport.ImpinjImportDialog(self) as dlg:
+		with ImpinjImport.ImpinjImportDialog(self._parent) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
@@ -406,7 +406,7 @@ class UIMenuDecoder(wx.Menu):
 		if not self.__excel_link_check():
 			return
 
-		with OrionImport.OrionImportDialog(self) as dlg:
+		with OrionImport.OrionImportDialog(self._parent) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 
@@ -414,7 +414,7 @@ class UIMenuDecoder(wx.Menu):
 		if not self.__excel_link_check():
 			return
 
-		with RaceResultImport.RaceResultImportDialog(self) as dlg:
+		with RaceResultImport.RaceResultImportDialog(self._parent) as dlg:
 			dlg.ShowModal()
 		wx.CallAfter(self.refresh)
 

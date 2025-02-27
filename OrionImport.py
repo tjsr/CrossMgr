@@ -26,7 +26,7 @@ def parseTagTime( line, lineNo, errors ):
 		
 	return tag, t
 	
-def OrionImportDialog( parent, id = wx.ID_ANY ):
+def OrionImportDialog( parent: wx.Window, id: int = wx.ID_ANY ) -> ChipImportDialog:
 	return ChipImportDialog( 'Orion', parseTagTime, parent, id )
 		
 if __name__ == '__main__':

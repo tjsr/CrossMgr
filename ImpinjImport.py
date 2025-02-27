@@ -65,7 +65,7 @@ def parseTagTime( line, lineNo, errors ):
 	
 	return tag, t
 
-def ImpinjImportDialog( parent, id = wx.ID_ANY ):
+def ImpinjImportDialog( parent: wx.Window, id: int = wx.ID_ANY ) -> ChipImportDialog:
 	return ChipImportDialog( 'Impinj', parseTagTime, parent, id )
 		
 if __name__ == '__main__':

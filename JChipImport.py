@@ -25,7 +25,7 @@ def parseTagTime( line, lineNo, errors ):
 	
 	return tag, t
 	
-def JChipImportDialog( parent, id = wx.ID_ANY ):
+def JChipImportDialog( parent: wx.Window, id: int = wx.ID_ANY ):
 	return ChipImportDialog( 'JChip', parseTagTime, parent, id )
 
 if __name__ == '__main__':

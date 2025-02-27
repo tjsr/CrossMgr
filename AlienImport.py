@@ -22,7 +22,7 @@ def parseTagTime( line, lineNo, errors ):
 		errors.append( '{} {}: {}'.format(_('line'), lineNo, _('unrecognised input')) )
 		return None, None
 
-def AlienImportDialog( parent, id = wx.ID_ANY ):
+def AlienImportDialog( parent: wx.Window, id: int = wx.ID_ANY ) -> ChipImportDialog:
 	return ChipImportDialog( 'Alien', parseTagTime, parent, id )
 		
 if __name__ == '__main__':

@@ -48,7 +48,7 @@ def parseTagTime( line, lineNo, errors ):
 	
 	return tag, t
 
-def IpicoImportDialog( parent, id = wx.ID_ANY ):
+def IpicoImportDialog( parent: wx.Window, id: int = wx.ID_ANY ) -> ChipImportDialog:
 	return ChipImportDialog( 'Ipico', parseTagTime, parent, id, fileSuffix = 'rtf' )
 		
 if __name__ == '__main__':
