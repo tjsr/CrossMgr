@@ -312,7 +312,7 @@ class TimingDevice():
 			messages = self.get_incoming_messages_from_stream(messageType)
 			msgCount = len(messages)
 			if msgCount == 0:
-				log.debug(f'No messages for {message_type_name} iteration on attempt {attempts} with {self.messageQueueLength}...')
+				log.debug(f'No messages for {message_type_name} iteration on attempt {attempts} with {self.messageQueueLength} on queue...')
 			else:
 				log.debug(f'Got {msgCount} messages for {message_type_name} iteration on attempt {attempts}...')
 
