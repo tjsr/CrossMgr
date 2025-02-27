@@ -168,7 +168,7 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		times = set()
 		chipRead: UltraChipReadMessage = message
 		if not chipRead.hasValidTag():
-			self.getLog('on_td_read').warning(_('Invalid tag in chip read message {}', chipRead))
+			self.getLog('on_td_read').warning(_('Invalid tag in chip read message') + ' ' + chipRead)
 			return False
 		chip = chipRead.ChipCode
 		tag = f'{chip}'
@@ -204,23 +204,13 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		# times.add( t )
 		# tagTimes.append( (tag, t) )
 
-		self.process_crossings(tagTimes)
+		if self._crossing_listener is not None:
+			if not callable(self._crossing_listener):
+				self.getLog().error(_('Crossing listener is not callable.'))
+			else:
+				self._crossing_listener(tagTimes)
 
 		return True
-
-	def process_crossings(self, tagTimes: [(str, datetime.datetime)]) -> None:
-		self._crossing_listener(tagTimes)
-
-		# if msg := UltraConnectInfoMessage.parse( bufMessage ):
-		# 	self.log('get_messages', '{}: "{}"'.format(_('Last data sent'), bufMessage))
-		# 	messages.append(msg)
-		# 	continue
-		#
-		# # Check for a heartbeat.
-		# if msg := UltraVoltageMessage.parse( bufMessage ):
-		# 	# log.q( 'heartbeat.keepGoing', '{}: "{}"'.format(_('heartbeat'), message) )
-		# 	self._lastVoltage = now()	# If so, reset the last heartbeat time.
-		# 	continue
 
 	def on_socket_timeout(self, ex: socket.timeout) -> None:
 		if self._lastVoltage is None:
