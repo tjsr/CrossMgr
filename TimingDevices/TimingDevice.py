@@ -198,7 +198,7 @@ class TimingDevice():
 	async def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceSetTimeCommand:
 		setTimeCommand = self.create_command(TimingDeviceCommand.COMMAND_SET_TIME, time)
 		success = self.send_command(setTimeCommand)
-		if success and setTimeCommand.response is not None:
+		if success == True and setTimeCommand.response is not None:
 			setTimeCommand.Success = success
 		return cast(UltraSetTimeCommand, setTimeCommand)
 
