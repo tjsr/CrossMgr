@@ -4,7 +4,6 @@ import socket
 import time
 from typing import cast, Callable
 
-from TimingDevices import ThreadUtils
 from TimingDevices.TimingDevice import TimingDevice, CrossingListenerCallableType
 from TimingDevices.DecoderMessages import DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.TCPTimingDevice import TCPTimingDevice
@@ -15,7 +14,7 @@ from TimingDevices.UltraAutodetect import AutoDetect
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand, UltraGetStatusCommand, UltraSendRecordsCommand, \
 	UltraStopResendRecords
 from TimingDevices.UltraDecoderMessages import UltraConnectConfirmationMessage, \
-	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage, UltraDecoderTimeMessage
+	UltraVoltageMessage, UltraChipReadMessage, UltraDecoderStatusMessage, UltraDecoderTimeMessage, UltraSettingsMessage
 
 now = datetime.datetime.now
 
@@ -25,13 +24,16 @@ tSmall = datetime.timedelta( seconds = 0.000001 )
 
 class UltraDecoder(TimingDevice, TCPTimingDevice):
 	COMMAND_STOP_REWIND = 'stop_rewind'
+	COMMAND_GET_SETTINGS = 'get_settings'
 	commands = {
 		TimingDeviceCommand.COMMAND_START: TimingDeviceCommand('R', response_type=None, sync=False),
 		TimingDeviceCommand.COMMAND_STOP: TimingDeviceCommand('S', response_type=None, sync=False),
-		TimingDeviceCommand.COMMAND_STATUS: UltraGetStatusCommand(),
+		TimingDeviceCommand.COMMAND_STATUS: UltraGetStatusCommand,
 		TimingDeviceCommand.COMMAND_SET_TIME: UltraSetTimeCommand,
+		TimingDeviceCommand.COMMAND_GET_TIME: TimingDeviceCommand('r', response_type=UltraDecoderTimeMessage, sync=True),
 		TimingDeviceCommand.COMMAND_SEND_RECORDS: UltraSendRecordsCommand,
-		COMMAND_STOP_REWIND: UltraStopResendRecords()
+		COMMAND_STOP_REWIND: UltraStopResendRecords,
+		COMMAND_GET_SETTINGS: TimingDeviceCommand('U', response_type=None, sync=False)
 	}
 
 
@@ -253,6 +255,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 				return msg
 			elif (msg := UltraDecoderTimeMessage.parse(messageBuf)) is not None:
 				return msg
+			elif (msg := UltraSettingsMessage.parse(messageBuf)) is not None:
+				return msg
 			elif (msg := UltraChipReadMessage.parse(messageBuf)) is not None:
 				# traceback.print_stack()
 				return msg
@@ -293,6 +297,11 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 	def send_data(self, payload: str):
 		TCPTimingDevice.send_data(self, payload)
+
+	def get_settings( self ) -> TimingDeviceCommand:
+		getSettingsCommand = self.create_command(UltraDecoder.COMMAND_GET_SETTINGS)
+		self.send_command(getSettingsCommand)
+		return getSettingsCommand
 
 	def connected(self) -> bool:
 		return TCPTimingDevice.connected(self)

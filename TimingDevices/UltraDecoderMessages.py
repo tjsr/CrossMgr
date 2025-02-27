@@ -1,6 +1,6 @@
 import datetime
 import re
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from logging import Logger
 from typing import Optional, cast
 
@@ -330,3 +330,70 @@ class UltraSetTimeCommandResponse(UltraDecoderTimeMessage):
 		if not isinstance(message, UltraDecoderTimeMessage):
 			return None
 		return UltraSetTimeCommandResponse.parse(message.Data)
+
+
+class UltraSettingsMessage(UltraDecoderMessage):
+	SETTING_GPRS_ON: bytes = 0x01
+	SETTING_GPRS_SERVER_IP: bytes = 0x02
+	SETTING_GPRS_SERVER_PORT: bytes = 0x03
+	SETTING_APN_NAME: bytes = 0x04
+	SETTING_APN_USER: bytes = 0x05
+	SETTING_APN_PASSWORD: bytes = 0x06
+	SETTING_REGULATORY_REGION: bytes = 0x07
+	SETTING_COMMUNICATION_PROTOCOL: bytes = 0x08
+	SETTING_CHIP_OUTPUT_TYPE: bytes = 0x09
+	SETTING_READER1_ANT1_STATUS: bytes = 0x0C
+	SETTING_READER1_ANT2_STATUS: bytes = 0x0D
+	SETTING_READER1_ANT3_STATUS: bytes = 0x0E
+	SETTING_READER1_ANT4_STATUS: bytes = 0x0F
+	SETTING_READER2_ANT1_STATUS: bytes = 0x10
+	SETTING_READER2_ANT2_STATUS: bytes = 0x11
+	SETTING_READER2_ANT3_STATUS: bytes = 0x12
+	SETTING_READER2_ANT4_STATUS: bytes = 0x13
+	SETTING_READER1_MODE: bytes = 0x14
+	SETTING_READER2_MODE: bytes = 0x15
+	SETTING_READER1_SESSION: bytes = 0x16
+	SETTING_READER2_SESSION: bytes = 0x17
+	SETTING_READER1_POWER: bytes = 0x18
+	SETTING_READER2_POWER: bytes = 0x19
+	SETTING_READER1_IP_ADDRESS: bytes = 0x1A
+	SETTING_READER2_IP_ADDRESS: bytes = 0x1B
+	SETTING_GATING_MODE: bytes = 0x1D
+	SETTING_GATING_INTERVAL: bytes = 0x1E
+	SETTING_CHANNEL_NUMBER: bytes = 0x1F
+	SETTING_BEEPER_VOLUME: bytes = 0x21
+	SETTING_AUTO_SET_FROM_GPS_TIME: bytes = 0x22
+	SETTING_TIME_ZONE: bytes = 0x23
+	SETTING_DATA_SENDING: bytes = 0x24
+	SETTING_ULTRA_ID: bytes = 0x25
+	SETTING_READER1_ANT4_BACKUP: bytes = 0x26
+	SETTING_READER2_ANT4_BACKUP: bytes = 0x27
+	SETTING_BEEP_WHEN: bytes = 0x28
+	SETTING_UPLOAD_URL: bytes = 0x29
+	SETTING_GATEWAY: bytes = 0x2A
+	SETTING_DNS_SERVER: bytes = 0x2B
+	SAVE_SETTINGS: bytes = 0xFF
+
+
+	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
+		if not isinstance(message, UltraSettingsMessage):
+			return None
+		return UltraSettingsMessage.parse(message.Data)
+
+	MESSAGE_FORMAT = r'^U(.)(.*)$'
+	setting: str = None
+
+	@staticmethod
+	def matches(messageBuf: str) -> bool:
+		return re.match(UltraSettingsMessage.MESSAGE_FORMAT, messageBuf) is not None
+
+	@staticmethod
+	def parse(messageBuf: str) -> Optional['UltraSettingsMessage']:
+		if messageBuf is None:
+			return None
+		if re.match(UltraSettingsMessage.MESSAGE_FORMAT, messageBuf) is not None:
+			settings = messageBuf[2:]
+
+			return UltraSettingsMessage(0)
+		return None
+
