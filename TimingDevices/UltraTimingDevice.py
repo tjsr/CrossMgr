@@ -151,11 +151,12 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		if message is None:
 			return False
 
+		delay_messages: list[DecoderMessage] = []
+
 		while message := self.get_last_message():
 			if isinstance(message, UltraConnectConfirmationMessage):
 				self.getLog('process_messages').info('{}: "{}"'.format(_('Got \'Connected\' message, not processing yet...'), message))
-				# TODO: AWait here?
-				self._push_back_message(message)
+				delay_messages.append(message)
 				continue
 			elif isinstance(message, UltraVoltageMessage):
 				self._lastVoltage = now()  # If so, reset the last heartbeat time.
@@ -163,6 +164,12 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			elif isinstance(message, UltraChipReadMessage):
 				self.on_td_read(message)
 				continue
+
+		while len(delay_messages) > 0:
+			message = delay_messages.pop()
+			# TODO: await here?
+			self._push_back_message(message)
+
 		return True
 
 	def on_td_read(self, message: UltraChipReadMessage) -> bool:
