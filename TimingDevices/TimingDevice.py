@@ -1,8 +1,8 @@
 import asyncio
 import datetime
+import time
 from abc import abstractmethod
 from queue import Queue
-from threading import Thread
 from types import TracebackType
 from typing import List, Type, Callable, Optional, cast, Any
 
@@ -78,6 +78,8 @@ class TimingDevice():
 	STATE_SENDING_COMMANDS: int = 4
 	STATE_READING_DATA: int = 8
 	STATE_PROCESSING_DATA: int = 16
+
+	__MESSAGE_PUSHBACK_SLEEP_TIME: float = 0.150
 
 	_state: int = STATE_NONE
 
@@ -393,5 +395,12 @@ class TimingDevice():
 			self._state = (self._state & ~TimingDevice.STATE_PROCESSING_DATA) | TimingDevice.STATE_WAIT_READY
 			return True
 		except Exception as e:
-			self.getLog(child='process').exception('Error processing messages', e)
+			self.getLog(child='process').exception(msg='Error processing messages', exc_info=e)
 		return False
+
+	def _push_back_message(self, message: DecoderMessage):
+		if message.pushed_back_count < 5:
+			message.pushed_back_count += 1
+			self.add_message(message)
+			time.sleep(self.__MESSAGE_PUSHBACK_SLEEP_TIME)
+

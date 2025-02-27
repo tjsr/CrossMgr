@@ -75,6 +75,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 		connectMessage = cast(UltraConnectConfirmationMessage, self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage))
 		if connectMessage is not None:
 			self._messageQueue.remove(connectMessage)
+			# Undecided if the best way is to spawn this or await it.
+			# ThreadUtils.spawn_event(handler=self.on_connect, message=connectMessage)
 			confirmed = await self.on_connect(connectMessage)
 			return confirmed
 		else:
@@ -152,8 +154,9 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 
 		while message := self.get_last_message():
 			if isinstance(message, UltraConnectConfirmationMessage):
-				self.getLog('process_messages').info('{}: "{}"'.format(_('Connection info'), message))
-				ThreadUtils.spawn_event(handler=self.on_connect, message=message)
+				self.getLog('process_messages').info('{}: "{}"'.format(_('Got \'Connected\' message, not processing yet...'), message))
+				# TODO: AWait here?
+				self._push_back_message(message)
 				continue
 			elif isinstance(message, UltraVoltageMessage):
 				self._lastVoltage = now()  # If so, reset the last heartbeat time.
