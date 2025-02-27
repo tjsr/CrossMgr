@@ -206,6 +206,11 @@ class TimingDevice():
 		return sendRecordsCommand
 
 	def send_records_from_time(self, start_time: datetime.datetime, end_time: datetime.datetime) -> TimingDeviceSendRecordsCommand:
+		if start_time.tzinfo is not datetime.timezone.utc:
+			raise ValueError('Start time must be in UTC')
+		if end_time.tzinfo is not datetime.timezone.utc:
+			raise ValueError('End time must be in UTC')
+
 		sendRecordsCommand = self.create_command(TimingDeviceCommand.COMMAND_SEND_RECORDS, start_time=start_time, end_time=end_time)
 		self.send_command(sendRecordsCommand)
 		return cast(TimingDeviceSendRecordsCommand, sendRecordsCommand)
