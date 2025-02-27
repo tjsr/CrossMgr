@@ -177,3 +177,10 @@ class TestUltraTimeUtils_ultra_epoch_to_datetime(TestCase):
 		expected_datetime = datetime.fromisoformat('2025-02-16T10:50:02.779+00:00')
 		self.assertEqual(expected_datetime, self._testOutput)
 
+	def test_convert_int_ultra_epoch_to_datetime(self):
+		# 0, 2214603339, 3066017305, 176, 1, -59, 0, 1, 1, 0000000000000000, 0, 410146
+		# DATA: 2214603339,
+		# .
+		expected_datetime = datetime.fromisoformat('2077-02-26T07:28:25.176000+00:00')
+		self.assertEqual(expected_datetime, UltraTimeUtils.ultra_epoch_to_datetime(3066017305, 176))
+
