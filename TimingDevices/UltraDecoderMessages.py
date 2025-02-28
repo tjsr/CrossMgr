@@ -43,14 +43,18 @@ class UltraCommandResponse(UltraDecoderMessage):
 
 class UltraConnectConfirmationMessage(UltraDecoderMessage):
 	MESSAGE_FORMAT = r'^Connected,\d+(,[U|N])?$'
+	_lastTimeSent: datetime.datetime
+	_hasUpdates: bool
+
 	def __init__(self, lastTimeSent: datetime.datetime, hasUpdates: bool):
 		super().__init__(0)
 		self._lastTimeSent = lastTimeSent
 		self._hasUpdates = hasUpdates
 
-	@abstractmethod
 	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraConnectConfirmationMessage']:
-		pass
+		if re.match(self.MESSAGE_FORMAT, message.Data) is not None:
+			return cast(UltraConnectConfirmationMessage, message)
+		return None
 
 	@staticmethod
 	def parse(message: str) -> Optional['UltraConnectConfirmationMessage']:
