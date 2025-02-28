@@ -222,7 +222,9 @@ class TimingDevice:
 		self.send_command(getTimeCommand)
 		return getTimeCommand
 
-	async def set_time(self, time: datetime.datetime = datetime.datetime.now()) -> TimingDeviceSetTimeCommand:
+	async def set_time(self, time: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)) -> TimingDeviceSetTimeCommand:
+		if time.tzinfo is not datetime.timezone.utc:
+			raise ValueError('Time must be in UTC')
 		setTimeCommand = self.create_command(TimingDeviceCommand.COMMAND_SET_TIME, time)
 		success = self.send_command(setTimeCommand)
 		if success == True and setTimeCommand.response is not None:
