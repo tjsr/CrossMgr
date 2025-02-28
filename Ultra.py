@@ -64,10 +64,13 @@ class WXUltraDecoder(UltraDecoder):
 
 
 reNonDigit = re.compile( '[^0-9]+' )
-async def Server( HOST: str, PORT: int, _startTime ):
+async def Server( HOST: str, PORT: int, _startTime, test:bool = False ):
 	global ultraDecoder
 	Log.getLogger('Ultra').info('Starting Ultra decoder thread.')
-	ultraDecoder = WXUltraDecoder(HOST, PORT, None)
+	if test is True:
+		ultraDecoder = UltraDecoder(HOST, PORT)
+	else:
+		ultraDecoder = WXUltraDecoder(HOST, PORT, None)
 	ultraDecoder.MaximumReconnectionAttempts = 1
 
 	def on_chip_read( tagTimes: List[Union[str, datetime.datetime]] ) -> None:
@@ -99,7 +102,8 @@ async def Server( HOST: str, PORT: int, _startTime ):
 		await ultraDecoder.disconnect()
 
 	Log.getLogger('Ultra').debug('Decoder read thread ended')
-	threading.Thread(target=lambda: asyncio.run(ultraDecoder.signalThreadEnded())).start()
+	if not test:
+		threading.Thread(target=lambda: asyncio.run(ultraDecoder.signalThreadEnded())).start()
 
 
 def GetData():
@@ -149,7 +153,7 @@ def StartListener(startTime: datetime.datetime=now(), host: str=None, port: int=
 		host = (host or Model.race.chipReaderIpAddr)
 		port = (port or Model.race.chipReaderPort)
 
-	listener = Process(target = asyncio.run, args=(Server(host, port, startTime),))
+	listener = Process(target = asyncio.run, args=(Server(host, port, startTime, test=test),))
 	listener.name = 'Ultra Listener'
 	listener.daemon = True
 	listener.start()
@@ -167,7 +171,7 @@ if __name__ == '__main__':
 	def doTest():
 		ultraTestHost = '192.168.1.148' # UltraDecoder.DEFAULT_HOST
 		try:
-			StartListener(host=ultraTestHost, port=UltraDecoder.DEFAULT_PORT)
+			StartListener(host=ultraTestHost, port=UltraDecoder.DEFAULT_PORT, test=True)
 			count = 0
 			cols = 1
 			while 1:
