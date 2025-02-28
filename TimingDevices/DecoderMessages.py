@@ -31,7 +31,7 @@ class DecoderMessage:
 		return f'{self.__class__.__name__}: ' + str(self.__dict__)
 
 
-class DecoderStatusMessage(DecoderMessage):
+class DecoderStatusMessage(DecoderMessage, ABC):
 	_readStatus: bool
 	_sendStatus: bool
 
@@ -48,12 +48,8 @@ class DecoderStatusMessage(DecoderMessage):
 		self._readStatus = readStatus
 		self._sendStatus = sendStatus
 
-	@abstractmethod
-	def match_message(self, message: DecoderMessage) -> DecoderMessage:
-		pass
 
-
-class DecoderTimeMessage(DecoderMessage):
+class DecoderTimeMessage(DecoderMessage, ABC):
 	_time: datetime
 	_invalidTime: bool = False
 
@@ -66,10 +62,6 @@ class DecoderTimeMessage(DecoderMessage):
 		self._time = time
 		self._invalidTime = is_invalid
 
-	@abstractmethod
-	def match_message(self, message: DecoderMessage) -> DecoderMessage:
-		pass
-
 	@property
 	def HasInvalidData(self) -> bool:
 		return self._time is None or self._invalidTime
@@ -79,7 +71,6 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
-	@abstractmethod
 	def match_message(self, received: DecoderMessage) -> DecoderMessage:
 		return received
 
