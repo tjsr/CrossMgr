@@ -150,6 +150,15 @@ class TimingDevice:
 
 		return self.get_messages_from_queue(searchType)
 
+	@staticmethod
+	def filter_message(buffer: str) -> bool:
+		patterns = [
+			r'^V=0$',
+		]
+		for pattern in patterns:
+			if re.match(pattern, buffer):
+				return True
+		return False
 
 	def process_message_buffer(self, buffer: str) -> int:
 		maxBufSize = -1
@@ -162,7 +171,7 @@ class TimingDevice:
 					nextMessage.received_at = datetime.datetime.now()
 				if isinstance(nextMessage, UnrecognisedDecoderMessage):
 					inputLog.warning(bufMessage)
-				else:
+				elif not self.filter_message(buffer):
 					inputLog.info(bufMessage)
 
 				maxBufSize = self.add_message(nextMessage)
