@@ -12,7 +12,7 @@ from TimingDevices.UltraTimeUtils import UltraTimeUtils
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
 
 
-class UltraDecoderMessage(DecoderMessage):
+class UltraDecoderMessage(DecoderMessage, ABC):
 	_UltraId: int | None # Integer value. See section 3.1
 
 	def __init__(self, ultraId: int | None, *args, **kwargs):
@@ -85,17 +85,6 @@ class UltraConnectConfirmationMessage(UltraDecoderMessage):
 	@property
 	def hasUpdates(self) -> bool:
 		return self._hasUpdates
-
-
-# class UltraConnectInfoMessage(UltraDecoderMessage):
-# 	def __init__(self, ultraId: int):
-# 		super().__init__(ultraId)
-#
-# 	@staticmethod
-# 	def parse(message: str) -> Optional['UltraConnectInfoMessage']:
-# 		if re.match(CONNECT_INFO_FORMAT, message) is not None:
-# 			return UltraConnectInfoMessage(0)
-# 		return None
 
 
 class UltraVoltageMessage(UltraDecoderMessage):
@@ -322,21 +311,6 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 			pass
 
 		return None
-
-
-class UltraSetTimeCommandResponse(UltraDecoderTimeMessage):
-	def __init__(self, ultraId: int, message: UltraDecoderTimeMessage):
-		super().__init__(ultraId=ultraId, message=message)
-		self._message = message
-
-	@property
-	def message(self) -> UltraDecoderTimeMessage:
-		return self._message
-
-	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraSetTimeCommandResponse']:
-		if not isinstance(message, UltraDecoderTimeMessage):
-			return None
-		return UltraSetTimeCommandResponse.parse(message.Data)
 
 
 class UltraSettingsMessage(UltraDecoderMessage):
