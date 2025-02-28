@@ -102,6 +102,8 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 			if self.__on_connect_action_start_if_stopped:
 				getStatusResult = await self.get_status()
 				response: UltraDecoderStatusMessage = getStatusResult.response
+				if response is not None:
+					self.remove_from_queue(response)
 				if response is not None and response.readStatus == False:
 					self.begin_reading()
 
