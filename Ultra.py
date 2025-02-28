@@ -55,7 +55,7 @@ class WXUltraDecoder(UltraDecoder):
 			should_restart_thread=self.ShouldReconnect)
 		)
 
-	def sendReaderEvent(self, tagTimes) -> None:
+	def sendReaderEvent(self, tagTimes: List[Union[str, datetime.datetime]]) -> None:
 		if tagTimes and self._readerEventWindow:
 			wx.PostEvent( self._readerEventWindow, ChipReaderEvent(tagTimes = tagTimes) )
 
