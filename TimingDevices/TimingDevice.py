@@ -95,10 +95,19 @@ class TimingDevice():
 		if self._log is not None:
 			log = self._log
 		else:
-			log = Log.getLogger(name=self.getLogName())
+			self._log = Log.getLogger(name='TimingDevice')
+
+		if self.__class__ is not TimingDevice:
+			log = self._log.getChild(self.__class__.__name__)
+		else:
+			log = self._log
 		if child is not None:
 			log = log.getChild(child)
 		return log
+
+	@property
+	def __log(self) -> CrossMgrLogger:
+		return self.getLog()
 
 	def is_readonly_device(self) -> bool:
 		return self._readonly
