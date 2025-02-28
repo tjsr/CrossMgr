@@ -74,10 +74,10 @@ async def Server( HOST: str, PORT: int, _startTime, test:bool = False ):
 	ultraDecoder.MaximumReconnectionAttempts = 1
 
 	def on_chip_read( tagTimes: List[Union[str, datetime.datetime]] ) -> None:
-		ultraDecoder.sendReaderEvent(tagTimes)
-		for tag, tagTime in tagTimes:
-			Log.getLogger('on_chip_read').warning(f'Need to reimplement this. DATA: {tag},{tagTime}.')
-			# q.put(('data', tag, tagTime))
+		if test is not True:
+			ultraDecoder.sendReaderEvent(tagTimes)
+		elif not hasattr(ultraDecoder, 'sendReaderEvent') and test is not True:
+			Log.getLogger('on_chip_read').error('sendReaderEvent is None.')
 
 	ultraDecoder.crossingListener = on_chip_read
 
@@ -104,6 +104,8 @@ async def Server( HOST: str, PORT: int, _startTime, test:bool = False ):
 	Log.getLogger('Ultra').debug('Decoder read thread ended')
 	if not test:
 		threading.Thread(target=lambda: asyncio.run(ultraDecoder.signalThreadEnded())).start()
+	else:
+		ultraDecoder.ShouldReconnect = False
 
 
 def GetData():
@@ -172,24 +174,8 @@ if __name__ == '__main__':
 		ultraTestHost = '192.168.1.148' # UltraDecoder.DEFAULT_HOST
 		try:
 			StartListener(host=ultraTestHost, port=UltraDecoder.DEFAULT_PORT, test=True)
-			count = 0
-			cols = 1
-			while 1:
-				time.sleep( 1 )
-				# sys.stdout.write( '.' )
-				messages = GetData()
-				if messages or cols % 80 == 0:
-					# sys.stdout.write( '\n' )
-					cols = 1
-				else:
-					cols += 1
-				for m in messages:
-					if m[0] == 'data':
-						count += 1
-						# print( '{}: {}, {}'.format(count, m[1], m[2].time()) )
-					else:
-						print( 'other: {}, {}'.format(m[0], ', '.join('"{}"'.format(s) for s in m[1:])) )
-				sys.stdout.flush()
+			listener.join()
+
 		except KeyboardInterrupt:
 			return
 		
