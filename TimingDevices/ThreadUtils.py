@@ -2,17 +2,31 @@ import asyncio
 from threading import Thread
 from typing import Callable, Any
 
+import Log
+
 
 def spawn_event(handler: Callable[..., Any], **kwargs: Any):
+	def sync_handler():
+		try:
+			return handler(**kwargs)
+		except Exception as e:
+			Log.getLogger('UltraThreadUtils').exception(f'Error in {handler.__name__}', exc_info=e)
+			pass
+
 	async def async_handler():
-		await handler(**kwargs)
+		try:
+			return handler(**kwargs)
+		except Exception as e:
+			Log.getLogger('UltraThreadUtils').exception(f'Error in {handler.__name__}', exc_info=e)
+			pass
 
 	if asyncio.iscoroutinefunction(handler):
-		socket_connect_thread = Thread(target=asyncio.run, args=(async_handler(),))
+		spawned_thread = Thread(target=asyncio.run, args=(async_handler(),))
+		spawned_thread.name = f'Ultra {handler.__name__} async handler'
 	else:
-		socket_connect_thread = Thread(target=handler, kwargs=kwargs)
+		spawned_thread = Thread(target=sync_handler, kwargs=kwargs)
+		spawned_thread.name = f'Ultra {handler.__name__} handler'
 
-	socket_connect_thread.name = f'Ultra {handler.__name__} handler'
-	socket_connect_thread.daemon = True
-	socket_connect_thread.start()
+	spawned_thread.daemon = True
+	spawned_thread.start()
 
