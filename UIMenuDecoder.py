@@ -17,7 +17,7 @@ import Utils
 from Utils import logCall
 from ChipReader import ChipReaderType, ChipReader
 import ChipReader as ChipReaderModule
-from TimingDevices import TimingDevice
+from TimingDevices import TimingDevice, ThreadUtils
 from TimingDevices.TCPTimingDevice import TCPTimingDevice
 from TimingDevices.UltraTimingDevice import UltraDecoder
 from UIMenuUtils import AppendMenuItemBitmap
@@ -267,19 +267,19 @@ class UIMenuDecoder(wx.Menu):
 			self.DecoderMenuItemError(e, function.__name__)
 
 	@logCall
-	async def menuDecoderDisconnect(self, event: wx.CommandEvent) -> None:
+	def menuDecoderDisconnect(self, event: wx.CommandEvent) -> None:
 		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
 		if ultraDecoder is None:
 			return
 
-		await ultraDecoder.disconnect()
+		ThreadUtils.spawn_event(handler=ultraDecoder.disconnect)
 
 	@logCall
-	async def menuDecoderReconnect(self, event: wx.CommandEvent) -> None:
+	def menuDecoderReconnect(self, event: wx.CommandEvent) -> None:
 		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
 		if ultraDecoder is None:
 			return
-		await ultraDecoder.reconnect()
+		ThreadUtils.spawn_event(handler=ultraDecoder.reconnect)
 
 	@logCall
 	def menuStartDecoderThread(self, event: wx.CommandEvent) -> None:
