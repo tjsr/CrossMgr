@@ -6,6 +6,7 @@ from typing import Type, TypeVar, Generic
 class DecoderMessage:
 	_data: str | None
 	pushed_back_count: int = 0
+	__received_at: datetime | None = None
 
 	def __init__(self, *args, **kwargs):
 		self._data = None
@@ -20,6 +21,14 @@ class DecoderMessage:
 	@property
 	def Data(self) -> str | None:
 		return self._data
+
+	@property
+	def received_at(self) -> datetime | None:
+		return self.__received_at
+
+	@received_at.setter
+	def received_at(self, value: datetime):
+		self.__received_at = value
 
 	@Data.setter
 	def Data(self, value: str):

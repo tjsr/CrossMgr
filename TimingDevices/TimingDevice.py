@@ -151,6 +151,7 @@ class TimingDevice():
 				nextMessage = self.parse_message(bufMessage)
 				if nextMessage is not None:
 					nextMessage.Data = bufMessage
+					nextMessage.received_at = datetime.datetime.now()
 				if isinstance(nextMessage, UnrecognisedDecoderMessage):
 					inputLog.warning(bufMessage)
 				else:
