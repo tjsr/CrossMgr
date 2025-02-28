@@ -74,7 +74,12 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	async def on_socket_connect(self) -> bool:
 		connectMessage = cast(UltraConnectConfirmationMessage, self.wait_for_message(timeout=5, messageType=UltraConnectConfirmationMessage))
 		if connectMessage is not None:
-			self._messageQueue.remove(connectMessage)
+			try:
+				self._messageQueue.remove(connectMessage)
+			except ValueError:
+				# TODO: Lock messages and mark them as processed.
+				self.getLog().debug('Connect message already removed from queue during on_socket_connect.  This can happen during parsing.')
+
 			# Undecided if the best way is to spawn this or await it.
 			# ThreadUtils.spawn_event(handler=self.on_connect, message=connectMessage)
 			confirmed = await self.on_connect(connectMessage)
