@@ -25,6 +25,12 @@ class TestMatchesValidUltraDecoderTimeMessage(TestCase):
 		result = UltraDecoderTimeMessage.matches(valid_message)
 		self.assertTrue(result)
 
+	def test_should_match_time_with_single_minute_digit(self):
+		# You would think this string would be invalid, but the decoder has been seen to send it.
+		valid_message = '6:28:6 27-2-2077 (-1228867210)'
+		result = UltraDecoderTimeMessage.matches(valid_message)
+		self.assertTrue(result)
+
 class TestParsesValidUltraDecoderTimeMessage(TestCase):
 	def test_parse_valid_time(self):
 		valid_message = "21:25:26 11-02-2025"
@@ -40,6 +46,13 @@ class TestParsesValidUltraDecoderTimeMessage(TestCase):
 
 	def test_parse_valid_time_with_diff_epoch(self):
 		valid_message = "21:25:28 11-02-2025 (1423776300)"
+		response = UltraDecoderTimeMessage.parse(valid_message)
+		self.assertIsNotNone(response)
+		self.assertIsInstance(response, UltraDecoderTimeMessage)
+
+	def test_parse_time_with_single_minute_digit(self):
+		# You would think this string would be invalid, but the decoder has been seen to send it.
+		valid_message = '6:28:6 27-2-2077 (-1228867210)'
 		response = UltraDecoderTimeMessage.parse(valid_message)
 		self.assertIsNotNone(response)
 		self.assertIsInstance(response, UltraDecoderTimeMessage)

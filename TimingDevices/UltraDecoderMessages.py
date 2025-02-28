@@ -236,7 +236,7 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 
 
 class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
-	MESSAGE_FORMAT = r'^(\d{1,2}:\d{2}:\d{2} \d{1,2}-\d{1,2}-\d{4})(\s\(-?\d+\))?$'
+	MESSAGE_FORMAT = r'^(\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4})(\s\(-?\d+\))?$'
 	DATETIME_FORMAT = "%H:%M:%S %d-%m-%Y"
 
 	@staticmethod
