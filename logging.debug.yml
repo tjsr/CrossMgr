@@ -7,6 +7,12 @@ handlers:
     filename: 'logs/crossmgr-debug.log'
     mode: a
     encoding: utf-8
+  console:
+    class: logging.StreamHandler
+    formatter: method
+    stream: ext://sys.stdout
+    filters:
+      - UltraVoltageFilter
 
 loggers:
   UltraDecoder.parse:
