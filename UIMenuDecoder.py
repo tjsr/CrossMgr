@@ -135,7 +135,8 @@ class UIMenuDecoder(wx.Menu):
 			("Stop decoder read thread.", self.menuStopDecoderThread, self.canStopDecoderThread),
 			("Send 'start' command", self.menuDecoderSendStartRead, self.isDecoderConnected),
 			("Send 'stop' command", self.menuDecoderSendStopRead, self.isDecoderConnected),
-			("Send 'time' command", self.menuDecoderSendTime, self.isDecoderConnected),
+			("Send 'set time' command", self.menuDecoderSendSetTime, self.isDecoderConnected),
+			("Send 'get time' command", self.menuDecoderSendGetTime, self.isDecoderConnected),
 			("Send 'get all settings' command", self.menuDecoderGetSettings, self.isDecoderConnected),
 			("Re-send data...", self.menuShowReplay, self.isDecoderConnected),
 			("Stop replaying data.", self.menuDecoderStopRewind, self.isDecoderConnected),
@@ -340,7 +341,14 @@ class UIMenuDecoder(wx.Menu):
 		ultraDecoder.stop_reading()
 
 	@logCall
-	def menuDecoderSendTime(self, event: wx.CommandEvent) -> None:
+	def menuDecoderSendSetTime(self, event: wx.CommandEvent) -> None:
+		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
+		if ultraDecoder is None:
+			return
+		ThreadUtils.spawn_event(ultraDecoder.set_time)
+
+	@logCall
+	def menuDecoderSendGetTime(self, event: wx.CommandEvent) -> None:
 		ultraDecoder: UltraDecoder | None = self.checkDecoderIsUltra(True)
 		if ultraDecoder is None:
 			return
