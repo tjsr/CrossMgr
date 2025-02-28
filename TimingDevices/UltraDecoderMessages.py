@@ -33,14 +33,8 @@ class UltraDecoderMessage(DecoderMessage, ABC):
 
 
 class UltraCommandResponse(UltraDecoderMessage):
-	_timeReceived: datetime.datetime
 	def __init__(self):
 		super().__init__(None)
-		self._timeReceived = datetime.datetime.now()
-
-	@property
-	def timeReceived(self) -> datetime.datetime:
-		return self._timeReceived
 
 	@abstractmethod
 	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraCommandResponse']:
