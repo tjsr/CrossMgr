@@ -11,6 +11,11 @@ class TimingDeviceCommandException(Exception):
 	def __init__(self, msg: str | None, exception: Exception | None = None):
 		super().__init__(msg, exception)
 
+seq: int = 1
+def genId() -> int:
+	global seq
+	seq += 1
+	return seq
 
 class TimingDeviceCommand(Generic[CommandResponseType], ABC):
 	COMMAND_SEND_RECORDS = 'send_records'
@@ -20,6 +25,7 @@ class TimingDeviceCommand(Generic[CommandResponseType], ABC):
 	COMMAND_START = 'start'
 	COMMAND_STOP = 'stop'
 
+	_id: int = genId()
 	_command_str: str | None
 	_sync: bool = False
 	_expectsResponse: bool = True
