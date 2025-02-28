@@ -11,6 +11,7 @@ from TimingDevices.TimingDevice import TimingDevice
 
 class ChipReaderType:
 	IsListening: Callable[[], bool] | None
+	chipReaderType: int | None = None
 
 	@abstractmethod
 	def StartListener( self, startTime: datetime, host: str, port: int, test: bool | None = None ) -> None:
