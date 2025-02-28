@@ -1,16 +1,18 @@
 import asyncio
 import datetime
+import re
+import threading
 import time
 from abc import abstractmethod
 from queue import Queue
 from types import TracebackType
-from typing import List, Type, Callable, Optional, cast, Any
+from typing import List, Type, Callable, Optional, cast
 
 import Log
 from Log import CrossMgrLogger
 
 from LogQueue import LogQueue
-from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, TimingDeviceCommandException, \
+from TimingDevices.TimingDeviceCommand import TimingDeviceCommand, \
 	TimingDeviceSetTimeCommand, TimingDeviceSendRecordsCommand
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, UnrecognisedDecoderMessage
 from TimingDevices.UltraDecoderCommands import UltraSetTimeCommand
@@ -66,11 +68,12 @@ class LogQueueClass:
 		return None
 
 
-class TimingDevice():
+class TimingDevice:
 	_readonly = False
 	_log: CrossMgrLogger | None = None
 	_messageQueue: List[DecoderMessage] = None
 	_commandQueue: Queue[TimingDeviceCommand] = None
+	__response_await_lock: threading.Lock
 
 	STATE_NONE: int = 0
 	STATE_WAIT_READY: int = 1
@@ -86,6 +89,8 @@ class TimingDevice():
 	def __init__(self):
 		self._commandQueue = Queue()
 		self._messageQueue = []
+		self.__response_await_lock = threading.Lock()
+
 
 	def getLogName(self) -> str:
 		class_name = self.__class__.__name__
@@ -125,6 +130,12 @@ class TimingDevice():
 			command = self._commandQueue.get()
 			self.sync_send_command(command)
 
+	def get_messages_from_queue(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
+		# Filter messages by type and return them
+		if searchType is not None:
+			return [message for message in self._messageQueue if isinstance(message, searchType)]
+		return self._messageQueue
+
 	def get_incoming_messages_from_stream(self, searchType: Type[DecoderMessage] | None = None) -> List[DecoderMessage]:
 		buffer: str = self.get_message_buffer()
 		# log = self.getLog(name='TimingDevice.get_messages')
@@ -137,11 +148,8 @@ class TimingDevice():
 			_msgCount = self.process_message_buffer(buffer)
 			# log.debug(f'Processed message buffer now has {msgCount} messages.')
 
-		if searchType is not None:
-			# Filter messages by type and return them
-			return [message for message in self._messageQueue if isinstance(message, searchType)]
+		return self.get_messages_from_queue(searchType)
 
-		return self._messageQueue
 
 	def process_message_buffer(self, buffer: str) -> int:
 		maxBufSize = -1
@@ -250,7 +258,8 @@ class TimingDevice():
 		commandType = command.CommandType
 		self.getLog().debug(f'Send {commandType} command immediately to decoder: {data}, expectsResponse: {command.expectsResponse}')
 		if command.expectsResponse:
-			response = self.wait_for_response(5, command)
+			# response = self.wait_for_message(5, command.response_type)
+			response = self.wait_for_response(command, 5)
 			if response is not None:
 				command.response = response
 				return True
@@ -275,7 +284,7 @@ class TimingDevice():
 
 	def send_command(self, command: TimingDeviceCommand) -> bool:
 		assert isinstance(command, TimingDeviceCommand)
-		if command.is_sync_command():
+		if command.is_sync_command:
 			return self.sync_send_command(command)
 		else:
 			return self.async_send_command(command)
@@ -302,18 +311,40 @@ class TimingDevice():
 			await asyncio.sleep(0.1)
 		return True
 
-	def wait_for_message(self, timeout: int, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
+	def wait_for_response(self, command: TimingDeviceCommand, seconds: float = 5.0) -> Optional[DecoderMessage]:
+		self.__response_await_lock.acquire_lock()
+		try:
+			command.response_expected_before = datetime.datetime.now() + datetime.timedelta(seconds=seconds)
+			found = 0
+			while command.awaiting_response:
+				found_messages = self.get_messages_from_queue(command.response_type)
+				for found_message in found_messages:
+					if command.match_response(found_message):
+						command.response = found_message
+						found += 1
+
+				time.sleep(0.1)
+
+			self.__log.debug(f'Found {found} matching messages for command before {seconds}s timeout: {command.CommandType}[id={command.id}]')
+
+			return command.response
+		finally:
+			self.__response_await_lock.release()
+
+	def wait_for_message(self, timeout: float, messageType: Type[DecoderMessage]) -> Optional[DecoderMessage]:
+		# This expects another thread to be reading.
 		# TODO: We can abstract this with wait_for_response
-		# log = self.getLog(name='TimingDevice.wait_for_message')
-		log = self.getLog(child='wait_for_message')
+		log = self._log
 		message_type_name = messageType.__name__
 		log.debug(f'Waiting for a matching {message_type_name} message before continuing...')
+
+		wait_until = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
 
 		start_time = datetime.datetime.now()
 		current_time = datetime.datetime.now()
 		time_diff = current_time - start_time
-		log.debug(f'Start: {start_time}')
-		log.debug(f'Current time: {current_time}. Time diff: {time_diff} / {time_diff.seconds}')
+		log.log(Log.Log.TRACE, f'Start: {start_time}')
+		log.log(Log.Log.TRACE, f'Current time: {current_time}. Time diff: {time_diff} / {time_diff.seconds}')
 
 		timeout_exceeded = time_diff.seconds > timeout
 		messages = []
@@ -340,48 +371,7 @@ class TimingDevice():
 
 		msgList = [str(message) for message in messages]
 		log.warning(f'Got no matching {message_type_name} message in {timeout} seconds with {messageCount} ' +
-			f' matched messages and {total_messages} total in the queue [{msgList}]')
-		return None
-
-	def wait_for_response(self, timeout: int, command: TimingDeviceCommand) -> Optional[DecoderMessage]:
-		if not command.providesResponse:
-			raise TimingDeviceCommandException(f'Command {command.__class__} does not provide a response')
-		log = self.getLog(child='wait_for_response')
-		start_time = datetime.datetime.now()
-		current_time = datetime.datetime.now()
-
-		time_diff = current_time - start_time
-		log.debug(f'Start: {start_time}')
-		log.debug(f'Current time: {current_time}. Time diff: {time_diff} / {time_diff.seconds}')
-
-		timeout_exceeded = time_diff.seconds > timeout
-		messages = []
-		attempts = 1
-		commandClass = command.__class__.__name__
-		responseClass = command.get_response_type()
-		while not timeout_exceeded:
-			messages = self.get_incoming_messages_from_stream(responseClass)
-			msgCount = len(messages)
-			if msgCount == 0:
-				log.trace(f'No response for {commandClass} iteration on attempt {attempts} with {self.messageQueueLength}...')
-			else:
-				log.trace(f'Got {msgCount} response for {commandClass} iteration on attempt {attempts}...')
-
-			for message in messages:
-				if command.match_response(message):
-					log.debug(f'Received awaited {commandClass} response after {attempts} attempts and {self.messageQueueLength} messages on queue: {message}')
-					## TODO: Pop this from the queue
-					log.todo('Pop the message from the queue after processing it')
-					return message
-			attempts += 1
-			current_time = datetime.datetime.now()
-			time_diff = current_time - start_time
-			timeout_exceeded = time_diff.seconds > timeout
-
-		total_messages = self.messageQueueLength
-		messageCount = len(messages)
-		msgList = [str(message) for message in messages]
-		log.warning(f'Timed out after {timeout}s waiting for {commandClass} response. {messageCount}/{total_messages} in the queue [{msgList}]')
+			f'matched messages and {total_messages} total in the queue [{messages}]')
 		return None
 
 	@abstractmethod
@@ -397,12 +387,25 @@ class TimingDevice():
 
 		try:
 			self._state = self._state | TimingDevice.STATE_SENDING_COMMANDS
-			self.process_queued_outgoing_commands()
-			self._state = (self._state & ~TimingDevice.STATE_SENDING_COMMANDS) | TimingDevice.STATE_READING_DATA
+			if not self.__response_await_lock.locked():
+				try:
+					self.__response_await_lock.acquire()
+					self.process_queued_outgoing_commands()
+					self._state = (self._state & ~TimingDevice.STATE_SENDING_COMMANDS) | TimingDevice.STATE_READING_DATA
+				finally:
+					self.__response_await_lock.release()
+
 			self.get_incoming_messages_from_stream()
 			self._state = (self._state & ~TimingDevice.STATE_READING_DATA) | TimingDevice.STATE_PROCESSING_DATA
-			self.process_messages_on_queue()
-			self._state = (self._state & ~TimingDevice.STATE_PROCESSING_DATA) | TimingDevice.STATE_WAIT_READY
+
+			if not self.__response_await_lock.locked():
+				try:
+					self.__response_await_lock.acquire()
+					self.process_messages_on_queue()
+					self._state = (self._state & ~TimingDevice.STATE_PROCESSING_DATA) | TimingDevice.STATE_WAIT_READY
+				finally:
+					self.__response_await_lock.release()
+
 			return True
 		except Exception as e:
 			self.getLog(child='process').exception(msg='Error processing messages', exc_info=e)
@@ -413,4 +416,12 @@ class TimingDevice():
 			message.pushed_back_count += 1
 			self.add_message(message)
 			time.sleep(self.__MESSAGE_PUSHBACK_SLEEP_TIME)
+
+	def remove_from_queue(self, message: DecoderMessage) -> bool:
+		if self._messageQueue is not None and message in self._messageQueue:
+			self._messageQueue.remove(message)
+			return True
+		return False
+
+
 

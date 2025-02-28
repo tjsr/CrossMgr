@@ -14,3 +14,7 @@ class UnrecognisedCommandException(TimingDeviceException):
 	def __init__(self, command: str):
 		super().__init__(f'Unrecognised command type: {command}')
 
+
+class CommandNotSentError(TimingDeviceException):
+	def __init__(self, message: str, cause: BaseException = None):
+		super().__init__(message=message, cause=cause)
