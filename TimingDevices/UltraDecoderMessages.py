@@ -186,6 +186,9 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 
 	@staticmethod
 	def parse(messageBuf: str) -> Optional['UltraChipReadMessage']:
+		if messageBuf is None or not messageBuf.startswith('0,'):
+			return None
+
 		output: UltraChipReadMessage
 		try:
 			Zero, ChipCode, Seconds, Milliseconds, Extra = messageBuf.split(',', 4)
