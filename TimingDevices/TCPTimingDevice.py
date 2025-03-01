@@ -114,7 +114,7 @@ class TCPTimingDevice:
 	async def _wait_until_ready(self) -> bool:
 		pass
 
-	async def disconnect(self, allow_reconnect: bool = False) -> bool:
+	async def disconnect(self, allow_reconnect: bool = False, reason: str = None) -> bool:
 		await self._wait_until_ready()
 
 		self.__acquire()
@@ -127,7 +127,11 @@ class TCPTimingDevice:
 
 		if self._s is not None:
 			try:
-				self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT).info(_('Disconnecting from {}').format(self.getDeviceType()))
+				log_msg = _('Disconnecting from {}').format(self.getDeviceType())
+				if reason is not None:
+					log_msg += f' - ({reason})'
+
+				self.getLog(child=TCPTimingDevice.LOG_TYPE_TCP_EVENT).info(log_msg)
 				self._s.shutdown(socket.SHUT_RDWR)
 				self._s.close()
 				self._s = None
@@ -143,16 +147,17 @@ class TCPTimingDevice:
 		return False
 
 	@abstractmethod
-	async def on_socket_connect(self):
+	async def on_socket_connect(self) -> None:
 		pass
 
 	def connected(self) -> bool:
 		self.__acquire()
+		result = False
 		try:
-			return self._s is not None and self._connected is True
+			result = self._s is not None and self._connected is True
 		finally:
 			self.__lock.release()
-		return False
+			return result
 
 	def get_message_buffer(self) -> str|None:
 		self.__acquire()
@@ -161,20 +166,30 @@ class TCPTimingDevice:
 		try:
 			buffer: str = socketReadDelimited(self._s)
 			return buffer
-		except socket.timeout as ex:
+		except socket.timeout | ConnectionResetError as ex:
+			self.getLog().error(f'Connection reset or timed out: {ex}')
 			self.on_socket_timeout(ex)
+		except BaseException as e:
+			self.getLog().error(f'Connection reset or timed out: {ex}')
+			self.on_disconnect(ex)
 		finally:
 			self.__lock.release()
 
 		return None
 
 	@abstractmethod
-	def on_socket_timeout(self, ex: socket.timeout):
+	def on_socket_timeout(self, ex: socket.timeout | ConnectionResetError):
 		pass
 
 	@abstractmethod
 	def on_connect(self, msg: TimingDeviceConnectMessage) -> bool:
 		pass
+
+	def on_disconnect(self, error: BaseException = None) -> None:
+		if error is not None:
+			self.getLog().error(f'Disconnected from {self.description}', exc_info=error)
+		else:
+			self.getLog().debug(f'Disconnected from {self.description}')
 
 	def send_data(self, payload: str) -> None:
 		# cmd = payload.split(';', 1)[0]

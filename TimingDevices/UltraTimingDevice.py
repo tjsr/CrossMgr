@@ -312,15 +312,15 @@ class UltraDecoder(TimingDevice, TCPTimingDevice):
 	def connected(self) -> bool:
 		return TCPTimingDevice.connected(self)
 
-	async def disconnect(self, allow_reconnect: bool = False) -> bool:
+	async def disconnect(self, allow_reconnect: bool = False, reason:str = None) -> bool:
 		if self.connected() and self.__on_disconnect_send_stop == True:
 			self.stop_reading()
 
-		return await TCPTimingDevice.disconnect(self, allow_reconnect=allow_reconnect)
+		return await TCPTimingDevice.disconnect(self, allow_reconnect=allow_reconnect, reason=reason)
 
 	async def reconnect(self) -> bool:
 		if self.connected():
-			await TCPTimingDevice.disconnect(self)
+			await TCPTimingDevice.disconnect(self, reason='Reconnecting')
 			return TCPTimingDevice.connect(self)
 		else:
 			raise TimingDeviceNotConnectedException('Decoder not connected - do not call reconnect without first checking connect state.')

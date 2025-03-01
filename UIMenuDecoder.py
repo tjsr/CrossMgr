@@ -273,7 +273,7 @@ class UIMenuDecoder(wx.Menu):
 		if ultraDecoder is None:
 			return
 
-		ThreadUtils.spawn_event(handler=ultraDecoder.disconnect)
+		ThreadUtils.spawn_event(handler=ultraDecoder.disconnect, reason='User actioned disconnect from menu')
 
 	@logCall
 	def menuDecoderReconnect(self, event: wx.CommandEvent) -> None:
@@ -291,7 +291,6 @@ class UIMenuDecoder(wx.Menu):
 		# Do we actually care if it's an Ultra decoder here?
 		if not self.checkDecoderIsUltra(False):
 			return
-		self.log.todo('Requires host, port, and start time')
 
 		error_message = None
 		if Model.getRace() is None:
@@ -311,7 +310,7 @@ class UIMenuDecoder(wx.Menu):
 
 		if self.chipReader is None:
 			self.log.warning('Chip reader has not been created - need to recreate.')
-
+			ChipReaderModule.createChipReader(Model.race.chipReaderType if Model.race else None)
 		try:
 			self.chipReader.StartListener(startTime=datetime.now(), host=Model.race.chipReaderIpAddr.strip(), port=Model.race.chipReaderPort)
 		except Exception as e:

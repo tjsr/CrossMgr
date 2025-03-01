@@ -98,8 +98,7 @@ async def Server( HOST: str, PORT: int, _startTime, test:bool = False ):
 			if not ultraDecoder.process():
 				break
 
-	if ultraDecoder.connected():
-		await ultraDecoder.disconnect()
+	await sync_disconnect(decoder=ultraDecoder, reason='Server thread condition to continue is False.')
 
 	Log.getLogger('Ultra').debug('Decoder read thread ended')
 	if not test:
@@ -119,9 +118,9 @@ def GetData():
 			break
 	return data
 
-async def sync_disconnect(decoder: UltraDecoder):
+async def sync_disconnect(decoder: UltraDecoder, reason: str = None):
 	if decoder.connected():
-		await decoder.disconnect()
+		await decoder.disconnect(reason=reason)
 
 def StopListener():
 	global listener
@@ -147,7 +146,7 @@ def StartListener(startTime: datetime.datetime=now(), host: str=None, port: int=
 	global shutdownQ
 	global listener
 
-	if listener and listener.is_alive():
+	if listener is not None and listener.is_alive():
 		StopListener()
 		listener.join(5.0)
 
