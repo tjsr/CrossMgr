@@ -48,8 +48,9 @@ class ChipReader(ChipReaderType, ABC):
 			Ultra.StopListener()
 			WebReader.StopListener()
 			MyLapsServer.StopListener()
-		
-		self.chipReaderType = (chipReaderType or ChipReader.JChip)
+
+		# TODO: Temporarily set default to Ultra.
+		self.chipReaderType = (chipReaderType or ChipReader.Ultra)
 		
 		if self.chipReaderType == ChipReader.RaceResult:
 			self.StartListener = RaceResult.StartListener
@@ -60,7 +61,6 @@ class ChipReader(ChipReaderType, ABC):
 
 		elif self.chipReaderType == ChipReader.Ultra:
 			self.CurrentDecoder = Ultra.GetCurrentDecoder
-
 			self.StartListener = Ultra.StartListener
 			self.GetData = Ultra.GetData
 			self.StopListener = Ultra.StopListener
@@ -90,4 +90,7 @@ class ChipReader(ChipReaderType, ABC):
 
 chipReaderCur = ChipReader()
 
-
+def createChipReader(chipReaderType: int | None) -> None:
+	global chipReaderCur
+	chipReaderCur = ChipReader()
+	chipReaderCur.reset(chipReaderType)
