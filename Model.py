@@ -361,7 +361,7 @@ class Category:
 		if i:
 			i.sort()
 	
-	def getLapDistance( self, lap ):
+	def getLapDistance(self, lap: int | None) -> int | None:
 		if lap is None or self.distanceType != Category.DistanceByLap:
 			return None
 		if lap <= 0:
@@ -369,7 +369,7 @@ class Category:
 
 		return self.firstLapDistance if lap == 1 and self.firstLapDistance else self.distance
 	
-	def getDistanceAtLap( self, lap ):
+	def getDistanceAtLap(self, lap: int | None) -> float | None:
 		if lap is None or self.distanceType != Category.DistanceByLap:
 			return None
 		if lap == 1 and not (self.firstLapDistance or self.distance):
@@ -379,7 +379,7 @@ class Category:
 		return (self.firstLapDistance or self.distance or 0.0) + (self.distance or 0.0) * (lap-1)
 	
 	@staticmethod
-	def getFullName( name, gender ):
+	def getFullName(name: str, gender: str):
 		GetTranslation = _
 		return '{} ({})'.format(name, GetTranslation(gender))
 	
@@ -395,11 +395,11 @@ class Category:
 			return 1.0
 	
 	@property
-	def distanceIsByLap( self ):
+	def distanceIsByLap( self ) -> bool:
 		return self.distanceType == Category.DistanceByLap
 	
 	@property
-	def distanceIsByRace( self ):
+	def distanceIsByRace( self ) -> bool:
 		return self.distanceType == Category.DistanceByRace
 
 	def getNumLaps( self ):
@@ -440,10 +440,10 @@ class Category:
 		
 	numLaps = property(getNumLaps, setNumLaps)
 	
-	def isNumLapsLocked( self ):
+	def isNumLapsLocked(self) -> bool:
 		return getattr(self, '_numLaps', None) is not None
 
-	def matches( self, num, ignoreActiveFlag = False ):
+	def matches(self, num, ignoreActiveFlag = False) -> bool:
 		if not ignoreActiveFlag:
 			if not self.active:
 				return False
