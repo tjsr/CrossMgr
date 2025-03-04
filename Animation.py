@@ -183,14 +183,14 @@ class Animation(wx.Control):
 	def SuspendAnimate( self ):
 		self.suspendAnimation = True
 	
-	def IsAnimating( self ):
+	def IsAnimating( self ) -> bool:
 		return not self.suspendAnimation and self.timer.IsRunning()
 	
-	def SetTime( self, t ):
+	def SetTime( self, t ) -> None:
 		self.t = t
 		self.Refresh()
 	
-	def NextFrame( self, event ):
+	def NextFrame( self, event ) -> None:
 		if event.GetId() == self.timer.GetId():
 			tNow = datetime.datetime.now()
 			tDelta = tNow - self.tLast
@@ -200,13 +200,15 @@ class Animation(wx.Control):
 			if self.suspendAnimation or self.t >= self.tMax:
 				self.StopAnimate()
 
-	def SetForegroundColour(self, colour):
-		wx.Control.SetForegroundColour(self, colour)
+	def SetForegroundColour(self, colour) -> bool:
+		res = wx.Control.SetForegroundColour(self, colour)
 		self.Refresh()
+		return res
 
-	def SetBackgroundColour(self, colour):
-		wx.Control.SetBackgroundColour(self, colour)
+	def SetBackgroundColour(self, colour) -> None:
+		res = wx.Control.SetBackgroundColour(self, colour)
 		self.Refresh()
+		return res
 		
 	def GetDefaultAttributes(self):
 		"""
@@ -215,7 +217,7 @@ class Animation(wx.Control):
 		"""
 		return wx.StaticText.GetClassDefaultAttributes()
 
-	def ShouldInheritColours(self):
+	def ShouldInheritColours(self) -> bool:
 		"""
 		Overridden base class virtual.  If the parent has non-default
 		colours then we want this control to inherit them.
