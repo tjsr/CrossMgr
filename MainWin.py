@@ -4081,8 +4081,11 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 				ChipReader.chipReaderCur.StopListener()
 			return False
 
-		if not ChipReader.chipReaderCur.IsListening() and self.__restartTimingDeviceListener is True:
-			ChipReader.chipReaderCur.reset( race.chipReaderType )
+		if ChipReader.chipReaderCur.IsListening() is not True and self.__restartTimingDeviceListener is True:
+			if self.chipReader is None or self.chipReader.chipReaderType is None:
+				self.log.debug('Reset chip reader as type not set.')
+				ChipReader.chipReaderCur.reset( race.chipReaderType )
+			self.log.debug('processJChipListener wants to restart timing device listener, calling StartListener')
 			ChipReader.chipReaderCur.StartListener(race.startTime)
 			GetTagNums( True )
 

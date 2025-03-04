@@ -25,6 +25,11 @@ class ChipReaderType:
 	def StopListener( self ) -> None:
 		pass
 
+	@property
+	def IsTDF(self) -> bool:
+		return self.chipReaderType == ChipReader.Ultra
+
+
 class ChipReader(ChipReaderType, ABC):
 	CurrentDecoder: (Callable[[], TimingDevice|None]) | None
 	GetData: Callable[[], list[str, str, datetime]] | None
