@@ -583,21 +583,30 @@ def approximateMatch( s1, s2 ):
 #------------------------------------------------------------------------
 PlatformName = platform.system()
 AppVer = 'v' + AppVerName.split(' ')[1]
-def writeLog( message:str ) -> None:
+def writeLog( message:str, stacklevel: int = 1 ) -> None:
 	log = getLogger()
-	log.info(message.strip() if message else '')
+	log.info(message.strip() if message else '', stacklevel=stacklevel+1)
 
 def disable_stdout_buffering():
 	# No longer necessary as if output goes to the terminal it will be flushed if it ends in newline.
 	''' sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) '''
 
-def logCall( f: callable ) -> callable:
+def logCall( f: callable, add_level: int = None ) -> callable:
 	def _getstr( x: Any ):
-		return '{}'.format(f) if not isinstance(f, wx.Object) else u'<<{}>>'.format(f.__class__.__name__)
+		return '{}'.format(f.__qualname__) if not isinstance(f, wx.Object) else u'<<{}>>'.format(f.__class__.__name__)
 	
 	def new_f( *args, **kwargs ):
 		parameters = [_getstr(a) for a in args] + [ '{}={}'.format( key, _getstr(value) ) for key, value in kwargs.items() ]
-		Log.getLogger(name=f.__name__,).debug(removeDiacritic(', '.join(parameters)))
+		if len(args) > 0 and args[0].__class__ is not None:
+			parent_logger = args[0].__class__.__name__
+		elif f.__class__ is not None:
+			parent_logger = f.__class__.__name__
+		else:
+			parent_logger = f.__name__
+			getLogger().debug(removeDiacritic(', '.join(parameters)))
+		Log.getLogger(name=parent_logger).debug(removeDiacritic(', '.join(parameters)), stacklevel=2)
+			#stack_info=traceback.format_stack()[:-2])
+
 		return f( *args, **kwargs)
 	return new_f
 	
