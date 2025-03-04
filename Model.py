@@ -303,12 +303,18 @@ class Category:
 		self.earlyBellTime = toRaceTime( earlyBellTime )	# In race time seconds.
 			
 		try:
+			# TODO: Why numLaps but not raceLaps?
 			self._numLaps = int(numLaps)
 			if self._numLaps < 1:
 				self._numLaps = None
 		except (ValueError, TypeError):
 			self._numLaps = None
 		
+		try:
+			self.raceLaps = int(raceLaps)
+		except (ValueError, TypeError):
+			self.raceLaps = None
+
 		try:
 			self.raceMinutes = int( raceMinutes )
 		except (ValueError, TypeError):
