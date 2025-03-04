@@ -7,7 +7,7 @@ import os
 import shutil
 import sys
 
-from typing import Any, cast, Callable
+from typing import Any, cast
 
 import yaml
 
@@ -16,15 +16,18 @@ from YamlUtil import merge_yaml
 
 log_base_dir = None
 
+def eprint(*args, **kwargs):
+  print(*args, file=sys.stderr, **kwargs)
+
 def set_log_base_dir(base_dir: str) -> str:
   global log_base_dir
   if not os.path.exists(base_dir):
     os.makedirs(base_dir)
     if not os.access(base_dir, os.W_OK):
       err_message = f"Write permission denied for directory: {base_dir}"
-      sys.stderr.write(err_message)
+      eprint(err_message)
       raise PermissionError(err_message)
-    sys.stdout.write(f'Log directory created at {base_dir}')
+    print(f'Log directory created at {base_dir}')
   log_base_dir = base_dir
   return log_base_dir
 
@@ -102,9 +105,9 @@ def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encodin
     os.makedirs(log_parent)
     if not os.access(log_parent, os.W_OK):
       err_message = f"Write permission denied for directory: {log_parent}"
-      sys.stderr.write(err_message)
+      print(err_message)
       raise PermissionError(err_message)
-    sys.stdout.write(f'Log directory created at {log_parent}')
+    print(f'Log directory created at {log_parent}')
 
   if owner:
     shutil.chown(log_path, *owner)
@@ -112,7 +115,7 @@ def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encodin
   open(log_path, 'a').close()
   if not os.access(log_path, os.W_OK):
     err_message = f"Write permission denied for log file: {log_path}"
-    sys.stderr.write(err_message)
+    eprint(err_message)
     raise PermissionError(err_message)
 
   key = make_safe_key(log_path)
@@ -125,7 +128,7 @@ def load_logging_config_files() -> None:
   logConfigPath = config_search('logging.yml')
 
   if logConfigPath is None:
-    sys.stderr.write('No logging configuration file found in any search path.')
+    eprint('No logging configuration file found in any search pat h.')
     return
 
   with open(logConfigPath, 'r') as logConfig:
@@ -148,13 +151,13 @@ try:
     faulthandler.enable()
   load_logging_config_files()
 except Exception as e:
-  sys.stderr.write('Error loading logging configuration: {}'.format(e))
+  eprint('Error loading logging configuration: {}'.format(e))
   if e.__cause__ is not None and isinstance(e.__cause__, FileNotFoundError):
-    sys.stderr.write('FileNotFound: {}'.format(e.__cause__))
+    eprint('FileNotFound: {}'.format(e.__cause__))
 except BaseException as be:
-  sys.stderr('Error loading logging configuration: {}'.format(be))
+  eprint('Error loading logging configuration: {}'.format(be))
   if be.__cause__ is not None:
-    sys.stderr.write('Cause: {}'.format(e.__cause__))
+    eprint('Cause: {}'.format(e.__cause__))
 
 if __name__ == '__main__':
   logging.getLogger().info("Test")
