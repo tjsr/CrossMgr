@@ -209,6 +209,17 @@ class UIMenuDecoder(wx.Menu):
 			except Exception as e:
 				log.exception(f'Error enabling menu item {item_id}', exc_info=e)
 
+	def __canOpenChipConfig(self) -> bool:
+		if self.isRaceRunning():
+			if self.isDecoderConnected():
+				return False
+			if self.chipReader is not None and self.chipReader.chipReaderType == ChipReader.Ultra:
+				return True
+			return False
+
+		return True
+
+
 	def menuJChip(self, event: wx.CommandEvent) -> None:
 		if not Model.race:
 			Utils.MessageOK(self._parent, _("You must have a valid race.  Open or New a race first."), _("No Valid Race"),
@@ -218,7 +229,8 @@ class UIMenuDecoder(wx.Menu):
 		if self._commit_callback is not None:
 			self._commit_callback()
 
-		if Model.race.isRunning():
+		if not self.__canOpenChipConfig():
+			# Permit dialog for Ultra decoders while race is active.
 			Utils.MessageOK(self._parent, _('Cannot perform RFID setup while race is running.'), _('Cannot Perform RFID Setup'),
 			                iconMask=wx.ICON_ERROR)
 			return
