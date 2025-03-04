@@ -206,6 +206,7 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 		except ValueError:
 			pass
 
+		output.Data = messageBuf
 		return output
 
 	def __init__(self, ultraId: int, chipCode: int):
@@ -311,7 +312,9 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 			parsed_time = parsed_time.replace(tzinfo=datetime.timezone.utc)
 			UltraDecoderTimeMessage.log_message_state(log, parsed_time, epoch_date, invalid_epoch)
 
-			return UltraDecoderTimeMessage(0, parsed_time, is_invalid=invalid_epoch)
+			time_message: UltraDecoderTimeMessage = UltraDecoderTimeMessage(0, parsed_time, is_invalid=invalid_epoch)
+			time_message.Data = messageBuf
+			return time_message
 		except ValueError:
 			pass
 

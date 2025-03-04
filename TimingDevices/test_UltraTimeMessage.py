@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from TimingDevices.UltraDecoderMessages import UltraDecoderTimeMessage
+from TimingDevices.UltraDecoderMessages import UltraDecoderTimeMessage, UltraChipReadMessage
 
 
 class TestMatchesValidUltraDecoderTimeMessage(TestCase):
@@ -56,6 +56,27 @@ class TestParsesValidUltraDecoderTimeMessage(TestCase):
 		response = UltraDecoderTimeMessage.parse(valid_message)
 		self.assertIsNotNone(response)
 		self.assertIsInstance(response, UltraDecoderTimeMessage)
+
+
+class TestMatchesMessageUltraDecoderTimeMessage(TestCase):
+	def test_matches_message_with_time_response(self):
+		valid_message_str = "21:25:26 11-02-2025"
+		valid_message: UltraDecoderTimeMessage = UltraDecoderTimeMessage.parse(valid_message_str)
+		self.assertIsNotNone(valid_message)
+		response = UltraDecoderTimeMessage.match_message(valid_message)
+		self.assertTrue(response)
+
+	def test_matches_message_with_chip_read(self):
+		invalid_message = "0,838871135,1423827949,253,1,-62,0,1,1,0000000000000000,0,363710"
+		crossing: UltraChipReadMessage = UltraChipReadMessage.parse(invalid_message)
+		result = UltraDecoderTimeMessage.match_message(crossing)
+		self.assertFalse(result)
+
+	def test_matches_message_with_chip_read_and_time(self):
+		invalid_message = "0,838871135,1423827949,253,1,-62,0,1,1,0000000000000000,0,363710 21:25:26 11-02-2025"
+		crossing: UltraChipReadMessage = UltraChipReadMessage.parse(invalid_message)
+		result = UltraDecoderTimeMessage.match_message(crossing)
+		self.assertFalse(result)
 
 
 class TestInvalidUltraDecoderTimeMessage(TestCase):
