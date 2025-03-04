@@ -6,7 +6,7 @@ from typing import Optional, cast
 
 from Log import getLogger
 from TimingDevices.DecoderMessages import DecoderStatusMessage, DecoderMessage, DecoderTimeMessage, \
-	DecoderCrossingMessage, TransponderCrossingMessage, TransponderIdType
+	TransponderCrossingMessage, TransponderIdType
 from TimingDevices.UltraTimeUtils import UltraTimeUtils
 
 CONNECT_INFO_FORMAT = r'^\d{1,2}:\d{1,2}:\d{1,2} \d{1,2}-\d{1,2}-\d{4} \(-?\d+\)$'
@@ -19,8 +19,9 @@ class UltraDecoderMessage(DecoderMessage, ABC):
 		super().__init__(*args, **kwargs)
 		self._UltraId = ultraId
 
+	@classmethod
 	@abstractmethod
-	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
+	def match_message(cls, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
 		pass
 
 	@property
@@ -36,8 +37,9 @@ class UltraCommandResponse(UltraDecoderMessage):
 	def __init__(self):
 		super().__init__(None)
 
+	@classmethod
 	@abstractmethod
-	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraCommandResponse']:
+	def match_message(cls, message: 'UltraDecoderMessage') -> Optional['UltraCommandResponse']:
 		pass
 
 
@@ -51,8 +53,9 @@ class UltraConnectConfirmationMessage(UltraDecoderMessage):
 		self._lastTimeSent = lastTimeSent
 		self._hasUpdates = hasUpdates
 
-	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraConnectConfirmationMessage']:
-		if re.match(self.MESSAGE_FORMAT, message.Data) is not None:
+	@classmethod
+	def match_message(cls, message: 'UltraDecoderMessage') -> Optional['UltraConnectConfirmationMessage']:
+		if re.match(cls.MESSAGE_FORMAT, message.Data) is not None:
 			return cast(UltraConnectConfirmationMessage, message)
 		return None
 
@@ -86,7 +89,8 @@ class UltraConnectConfirmationMessage(UltraDecoderMessage):
 
 
 class UltraVoltageMessage(UltraDecoderMessage):
-	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraVoltageMessage']:
+	@classmethod
+	def match_message(cls, message: UltraDecoderMessage) -> Optional['UltraVoltageMessage']:
 		if not isinstance(message, UltraVoltageMessage):
 			return None
 		return message
@@ -112,7 +116,8 @@ class UltraVoltageMessage(UltraDecoderMessage):
 class UltraDecoderStatusMessage(UltraDecoderMessage, DecoderStatusMessage):
 	MESSAGE_FORMAT = r'^S=[01]{2}$'
 
-	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraDecoderStatusMessage']:
+	@classmethod
+	def match_message(cls, message: UltraDecoderMessage) -> Optional['UltraDecoderStatusMessage']:
 		if not isinstance(message, UltraDecoderStatusMessage):
 			return None
 
@@ -218,7 +223,8 @@ class UltraChipReadMessage(UltraDecoderMessage, TransponderCrossingMessage[str|i
 	def hasValidTag(self) -> bool:
 		return self._ChipCode != 0
 
-	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
+	@classmethod
+	def match_message(cls, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
 		if not isinstance(message, UltraChipReadMessage):
 			return None
 
@@ -240,8 +246,9 @@ class UltraDecoderTimeMessage(UltraDecoderMessage, DecoderTimeMessage):
 			super().__init__(ultraId, time, is_invalid)
 			DecoderTimeMessage.__init__(self ,time, is_invalid)
 
-	def match_message(self, message: UltraDecoderMessage) -> Optional['UltraDecoderTimeMessage']:
-		if  UltraDecoderTimeMessage.matches(message.Data):
+	@classmethod
+	def match_message(cls, message: UltraDecoderMessage) -> Optional['UltraDecoderTimeMessage']:
+		if UltraDecoderTimeMessage.matches(message.Data):
 			return cast(UltraDecoderTimeMessage, message)
 		return None
 
@@ -353,8 +360,8 @@ class UltraSettingsMessage(UltraDecoderMessage):
 	SETTING_DNS_SERVER: bytes = 0x2B
 	SAVE_SETTINGS: bytes = 0xFF
 
-
-	def match_message(self, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
+	@classmethod
+	def match_message(cls, message: 'UltraDecoderMessage') -> Optional['UltraDecoderMessage']:
 		if not isinstance(message, UltraSettingsMessage):
 			return None
 		return UltraSettingsMessage.parse(message.Data)

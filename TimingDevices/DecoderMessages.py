@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 from datetime import datetime
-from typing import Type, TypeVar, Generic
+from typing import Type, TypeVar, Generic, Optional
 
 
 class DecoderMessage:
@@ -14,8 +14,9 @@ class DecoderMessage:
 	def is_message_type(self, searchType: Type) -> bool:
 		return isinstance(self, searchType)
 
+	@classmethod
 	@abstractmethod
-	def match_message(self, message: 'DecoderMessage'):
+	def match_message(cls, message: 'DecoderMessage') -> Optional['DecoderMessage']:
 		pass
 
 	@property
@@ -80,8 +81,9 @@ class UnrecognisedDecoderMessage(DecoderMessage):
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 
-	def match_message(self, received: DecoderMessage) -> DecoderMessage:
-		return received
+	@classmethod
+	def match_message(cls, message: DecoderMessage) -> DecoderMessage:
+		return message
 
 
 last_crossing_id: int = 0
@@ -112,9 +114,9 @@ class DecoderCrossingMessage(DecoderMessage, ABC):
 		super().__init__(*args, **kwargs)
 		self._crossingId = crossingId
 
-	@abstractmethod
-	def match_message(self, received: DecoderMessage) -> DecoderMessage:
-		return received
+	@classmethod
+	def match_message(cls, message: DecoderMessage) -> DecoderMessage:
+		return message
 
 
 TransponderIdType = TypeVar('TransponderIdType', str, int)
