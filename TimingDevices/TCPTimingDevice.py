@@ -9,6 +9,7 @@ from Log import CrossMgrLogger
 from SocketUtils import socketReadDelimited, socketSendMessage
 from TimingDevices import ThreadUtils
 from TimingDevices.TimingDevice import TimingDeviceConnectMessage
+from TimingDevices.TimingDeviceExceptions import TimingDeviceNotConnectedException
 
 
 class TCPTimingDevice:
@@ -65,9 +66,30 @@ class TCPTimingDevice:
 		if timeout is None:
 			timeout = self._timeoutSecs
 		if not self.__lock.acquire(True, timeout):
-			self.__tcplog.error(_('Failed to acquire lock for {} after {} seconds').format(self.description, timeout))
+			self.__tcplog.error(_('Failed to acquire lock for {} after {} seconds').format(self.description, timeout), stacklevel=2)
 			return False
+		# self.__tcplog.debug(f'Acquired lock for {self.description}', stacklevel=2)
 		return True
+
+	def __safe_release(self) -> bool:
+		if self.__lock.locked():
+			self.__lock.release()
+			# self.__tcplog.debug('Lock released', stacklevel=2)
+			return True
+		# self.__tcplog.debug('No lock released', stacklevel=2)
+		return False
+
+	def __set_disconnected(self):
+		self.__acquire()
+		if self._s is not None:
+			try:
+				self._s.shutdown(socket.SHUT_RDWR)
+				self._s.close()
+			except Exception:
+				pass
+		self._s = None
+		self._connected = False
+		self.__safe_release()
 
 	def connect(self) -> bool:
 		log = self.__tcplog
@@ -94,18 +116,16 @@ class TCPTimingDevice:
 		except TimeoutError as e:
 			errDesc = _('Connection failed to {}: {}').format(description, e.__class__.__name__)
 			log.error(errDesc)
-			self._s = None
-			self._connected = False
+			self.__set_disconnected()
 			self.__set_reconnect_backoff()
 			return False
 		except Exception as e:
 			log.exception('{}: {}'.format(_('Unknown error connecting to {}'), description, e))
-			self._s = None
-			self._connected = False
+			self.__set_disconnected()
 			self.__set_reconnect_backoff()
 			return False
 		finally:
-			self.__lock.release()
+			self.__safe_release()
 
 		log.info(_('Successfully connected to {}').format(description))
 		return True
@@ -137,12 +157,14 @@ class TCPTimingDevice:
 				self._s = None
 				self._connected = False
 				return True
-			except Exception:
+			except Exception as ex:
 				self._s = None
 				self._connected = False
-				pass
+				raise ex
 			finally:
-				self.__lock.release()
+				self.__safe_release()
+		else:
+			self.__safe_release()
 		self._connected = False
 		return False
 
@@ -151,29 +173,48 @@ class TCPTimingDevice:
 		pass
 
 	def connected(self) -> bool:
-		self.__acquire()
+		lock_acquired = False
+		if self.__lock.locked() is False:
+			lock_acquired = self.__acquire()
+
 		result = False
 		try:
 			result = self._s is not None and self._connected is True
 		finally:
-			self.__lock.release()
+			if lock_acquired:
+				self.__safe_release()
 			return result
+
+	def on_socket_reset(self, ex: ConnectionResetError) -> None:
+		self.__tcplog.error(f'Connection reset by remote: {ex}')
+		self.__set_reconnect_backoff()
 
 	def get_message_buffer(self) -> str|None:
 		self.__acquire()
+		if not self.connected():
+			self.__safe_release()
+			raise TimingDeviceNotConnectedException(f'{self.description} is not connected.')
 		if self._s is None:
-			return ''
+			self.__safe_release()
+			return None
+
 		try:
 			buffer: str = socketReadDelimited(self._s)
 			return buffer
-		except socket.timeout | ConnectionResetError as ex:
+		except ConnectionResetError as ex:
+			if ex.errno == 10054:
+				self.on_socket_reset(ex)
+			else:
+				self.getLog().error(f'Connection reset or timed out: {ex}')
+				self.on_socket_timeout(ex)
+		except socket.timeout as ex:
 			self.getLog().error(f'Connection reset or timed out: {ex}')
 			self.on_socket_timeout(ex)
 		except BaseException as e:
-			self.getLog().error(f'Connection reset or timed out: {ex}')
-			self.on_disconnect(ex)
+			self.getLog().error(f'Unknown Exception occurred while reading message buffer: {e}')
+			self.on_disconnect(e)
 		finally:
-			self.__lock.release()
+			self.__safe_release()
 
 		return None
 
@@ -196,7 +237,7 @@ class TCPTimingDevice:
 		log = self.getLog(child='output')
 		log.info(payload)
 		if not self.__acquire():
-			self.__tcplog.error(f'Failed acquiring lock for {self.description} trying to send data.')
+			self.__tcplog.error(f'Failed acquiring lock for {self.description} trying to send data.', stacklevel=1)
 			return
 		try:
 			socketSendMessage(self._s, payload)
@@ -204,7 +245,7 @@ class TCPTimingDevice:
 			log.exception(msg='{}: {}'.format(payload, _('Failed sending data')), exc_info=e)
 			raise e
 		finally:
-			self.__lock.release()
+			self.__safe_release()
 
 	@property
 	def UnsuccessfulConnectionAttempts(self) -> int:
@@ -261,4 +302,19 @@ class TCPTimingDevice:
 			return False
 
 		return True
+
+	@ShouldReconnect.setter
+	def ShouldReconnect(self, value: bool):
+		if value is False:
+			self.__attempt_reconnect_after = None
+			return
+
+		current_time = datetime.datetime.now()
+		if value is True:
+			if self.__attempt_reconnect_after is None:
+				self.__attempt_reconnect_after = current_time
+			elif current_time < self.__attempt_reconnect_after:
+				self.__attempt_reconnect_after = current_time
+				return
+
 
