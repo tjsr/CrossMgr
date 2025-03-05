@@ -80,7 +80,8 @@ class TCPTimingDevice:
 		return False
 
 	def __set_disconnected(self):
-		self.__acquire()
+		if not self.__lock.locked():
+			self.__tcplog.warning('Lock not acquired when setting disconnected state.')
 		if self._s is not None:
 			try:
 				self._s.shutdown(socket.SHUT_RDWR)
@@ -89,7 +90,6 @@ class TCPTimingDevice:
 				pass
 		self._s = None
 		self._connected = False
-		self.__safe_release()
 
 	def connect(self) -> bool:
 		log = self.__tcplog
