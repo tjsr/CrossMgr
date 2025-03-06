@@ -119,6 +119,9 @@ class UIMenuDecoder(wx.Menu):
 	def hasActiveDecoderThread(self) -> bool:
 		return self.HasChipReader and not self.isDecoderConnected() and not self.chipReader.IsListening()
 
+	def canStartDecoderThread(self) -> bool:
+		return self.isRaceRunning() and not self.__has_listening_chip_reader()
+
 	def canStopDecoderThread(self) -> bool:
 		# Don't check 'HasChipReader' here as if the type is None but we still have a listener thread, it won't
 		# allow us to stop it.
@@ -130,8 +133,7 @@ class UIMenuDecoder(wx.Menu):
 			("Disconnect from decoder.", self.menuDecoderDisconnect, self.isDecoderConnected),
 			("&Connect/reconnect to decoder.", self.menuDecoderReconnect,
 			 lambda: self.isRaceLoaded() and self.hasActiveDecoderThread()),
-			("Start decoder read thread.", self.menuStartDecoderThread,
-			 lambda: self.isRaceRunning() and not self.hasActiveDecoderThread()),
+			("Start decoder read thread.", self.menuStartDecoderThread, self.canStartDecoderThread),
 			("Stop decoder read thread.", self.menuStopDecoderThread, self.canStopDecoderThread),
 			("Send 'start' command", self.menuDecoderSendStartRead, self.isDecoderConnected),
 			("Send 'stop' command", self.menuDecoderSendStopRead, self.isDecoderConnected),
