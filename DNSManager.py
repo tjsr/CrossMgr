@@ -258,10 +258,10 @@ if __name__ == '__main__':
 	
 	from ReadSignOnSheet import ExcelLink, TagFields
 	e = ExcelLink()
-	e.fileName = r'Wyoming\chips and bibs for Wyoming August 26 2012.xls'
-	e.sheetName = r'chips and bibs'
-	e.fieldCol = {'Bib#':2, 'LastName':3, 'FirstName':4, 'Team':-1, 'License':-1, 'Category':-1}
-	e.fieldCol.update( {tf:-1 for tf in TagFields} )
+	e._file_name = r'Wyoming\chips and bibs for Wyoming August 26 2012.xls'
+	e._sheet_name = r'chips and bibs'
+	e._field_col = {'Bib#':2, 'LastName':3, 'FirstName':4, 'Team':-1, 'License':-1, 'Category':-1}
+	e._field_col.update({tf:-1 for tf in TagFields})
 	e.read()
 	Model.race.excelLink = e
 	

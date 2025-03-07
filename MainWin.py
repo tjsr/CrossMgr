@@ -1058,7 +1058,7 @@ class MainWin( wx.Frame ):
 			return
 		
 		try:
-			Utils.LaunchApplication( excelLink.fileName )
+			Utils.LaunchApplication(excelLink._file_name)
 		except Exception as e:
 			pass
 		
@@ -1639,6 +1639,11 @@ class MainWin( wx.Frame ):
 		self.commit()
 		PrintCategories()
 
+	def get_race_excel_link(self) -> Optional['ExcelLink']:
+		if Model.race is not None:
+			return getattr(Model.race, 'excelLink', None)
+		return None
+
 	@logCall
 	def menuLinkExcel( self, event = None ):
 		if not Model.race:
@@ -1647,7 +1652,8 @@ class MainWin( wx.Frame ):
 		self.showResultsPage()
 		self.closeFindDialog()
 		ResetExcelLinkCache()
-		gel = GetExcelLink( self, getattr(Model.race, 'excelLink', None) )
+		excel_link = self.get_race_excel_link()
+		gel = GetExcelLink(self, excel_link)
 		link = gel.show()
 		undo.pushState()
 		with Model.LockRace() as race:
@@ -1662,7 +1668,8 @@ class MainWin( wx.Frame ):
 				race.excelLink = link
 			race.setChanged()
 			race.resetAllCaches()
-		self.writeRace()
+		# TODO: Investigate need for commit=True here.
+		self.writeRace(True)
 		ResetExcelLinkCache()
 		self.refresh()
 		
@@ -3010,7 +3017,7 @@ class MainWin( wx.Frame ):
 					_('Found this Excel file in the race folder with matching name'), newFileName, _('Use this Excel file from now on?')
 				),
 				_('Excel Link Not Found') ):
-				race.excelLink.fileName = newFileName
+				race.excelLink._file_name = newFileName
 				race.setChanged()
 				ResetExcelLinkCache()
 				Model.resetCache()

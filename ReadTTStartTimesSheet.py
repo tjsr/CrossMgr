@@ -252,12 +252,12 @@ class GetExcelTTStartTimeLink:
 
 		self.excelLink = excelLink
 		if excelLink:
-			if excelLink.fileName:
-				self.fileNamePage.setFileName( excelLink.fileName )
-			if excelLink.sheetName:
-				self.sheetNamePage.setExpectedSheetName( excelLink.sheetName )
-			if excelLink.fieldCol:
-				self.headerNamesPage.setExpectedFieldCol( excelLink.fieldCol )
+			if excelLink._file_name:
+				self.fileNamePage.setFileName(excelLink._file_name)
+			if excelLink._sheet_name:
+				self.sheetNamePage.setExpectedSheetName(excelLink._sheet_name)
+			if excelLink._field_col:
+				self.headerNamesPage.setExpectedFieldCol(excelLink._field_col)
 
 		self.wizard.GetPageAreaSizer().Add( self.fileNamePage )
 		self.wizard.SetPageSize( wx.Size(500,200) )
@@ -323,7 +323,7 @@ class ExcelLink:
 		self.fieldCol = {f:c for c, f in enumerate(Fields) }
 	
 	def __eq__( self, e ):
-		return (self.fileName, self.sheetName, self.fieldCol) == (e.fileName, e.sheetName, e.fieldCol)
+		return (self.fileName, self.sheetName, self.fieldCol) == (e._file_name, e._sheet_name, e._field_col)
 	
 	def setFileName( self, fname ):
 		self.fileName = fname
@@ -445,14 +445,14 @@ def AutoImportTTStartTimes():
 	
 	# Create a subset Excel link with two field, Bib# and StartTime, and read the times.
 	excelLink = ExcelLink()
-	excelLink.setFileName( race.excelLink.fileName )
-	excelLink.setSheetName( race.excelLink.sheetName )
+	excelLink.setFileName(race.excelLink._file_name)
+	excelLink.setSheetName(race.excelLink._sheet_name)
 	
 	# If Bib# is not in the spreadsheet, or Bib# not the second column, this is *not* a TT start sheet.
-	if race.excelLink.fieldCol.get('Bib#', 0) != 1:
+	if race.excelLink._field_col.get('Bib#', 0) != 1:
 		return False
 	
-	excelLink.setFieldCol( {'Bib#': race.excelLink.fieldCol['Bib#'], 'StartTime': 0} )	# Hack to hardcode StartTime as the first column.
+	excelLink.setFieldCol({'Bib#': race.excelLink._field_col['Bib#'], 'StartTime': 0})	# Hack to hardcode StartTime as the first column.
 	errors, startTimes, changeCount = DoImportTTStartTimes( race, excelLink )
 	return True
 

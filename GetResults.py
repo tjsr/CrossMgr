@@ -748,7 +748,7 @@ def GetResults( category ):
 	try:
 		excelLink = Model.race.excelLink
 		excelLink.read()
-		if excelLink.readFromFile:
+		if excelLink._read_from_file:
 			Model.resetCache()
 	except Exception as e:
 		pass

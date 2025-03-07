@@ -1,12 +1,14 @@
 import re
 import sys
+
+import Excel
 import Utils
 import Model
 import scramble
 
 sheetName = '--CrossMgr-Properties'
 
-def ReadPropertiesFromExcel( reader, raceHasStartTime=False ):
+def ReadPropertiesFromExcel(reader: Excel.ReadExcelXlsx, raceHasStartTime: bool = False) -> bool:
 	race = Model.race
 	if not race or sheetName not in reader.sheet_names():
 		return False

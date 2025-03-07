@@ -97,6 +97,7 @@ class TDFListenerThread(threading.Thread):
 				if not ultraDecoder.process():
 					return False
 
+		self.log.debug(f'Listener main loop completed - no reconnects to occur.  Disconnecting then exiting (Connected={ultraDecoder.connected}).')
 		await listener.sync_disconnect(reason='Server thread condition to continue is False.')
 
 		return False

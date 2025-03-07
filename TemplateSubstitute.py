@@ -1,5 +1,5 @@
 import re
-from ReadSignOnSheet import BibInfo
+from SignOnSheetBibInfo import BibInfo
 
 reVariable = re.compile( r'\{=[^}]+\}' )
 

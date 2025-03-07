@@ -227,9 +227,9 @@ def ModelTakePhoto( bib, raceSeconds ):
 	if race:
 		if PhotoFinish.okTakePhoto(bib, raceSeconds):
 			if race.enableVideoBuffer:
-				return TakePhoto( Utils.mainWin.fileName if Utils.mainWin else _getTestPhotoFileName(), bib, raceSeconds )
+				return TakePhoto(Utils.mainWin._file_name if Utils.mainWin else _getTestPhotoFileName(), bib, raceSeconds)
 			elif race.enableUSBCamera:
-				return PhotoFinish.TakePhoto( Utils.mainWin.fileName if Utils.mainWin else _getTestPhotoFileName(), bib, raceSeconds )
+				return PhotoFinish.TakePhoto(Utils.mainWin._file_name if Utils.mainWin else _getTestPhotoFileName(), bib, raceSeconds)
 		else:
 			return 0
 	else:

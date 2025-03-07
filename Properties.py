@@ -1472,7 +1472,7 @@ class Properties( wx.Panel ):
 			gi.raceNum.GetValue(),
 			gi.memo.GetValue(),
 		)
-		fi.fileName.SetLabel( fname )
+		fi._file_name.SetLabel(fname)
 		return fname
 	
 	def saveFileNameFields( self ):

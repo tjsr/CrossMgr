@@ -1,51 +1,44 @@
+import datetime
+import logging
+from abc import abstractmethod, ABC
+from typing import Optional, List, Any, Tuple, Set, Dict
+
 import wx
 import wx.adv as adv
 import wx.lib.filebrowsebutton as filebrowse
 import wx.lib.scrolledpanel as scrolled
 import os
-import re
-from html import escape
 import copy
-from io import StringIO
+
+import Log
+import MatchingCategory
 import Utils
 import Model
-from Excel import GetExcelReader
-from ReadCategoriesFromExcel import ReadCategoriesFromExcel
-from ReadPropertiesFromExcel import ReadPropertiesFromExcel
-from ReadCategoriesFromExcel import sheetName as CategorySheetName
-from ReadPropertiesFromExcel import sheetName as PropertySheetName
-import MatchingCategory
+from Excel import GetExcelReader, ReadExcelXlsx
+from ExcelLink import ExcelLink, ExcelRowError, ExcelDataFieldError
+from Race import RaceType
+from ReadCategoriesFromExcel import sheetName as CategorySheetName, ReadCategoriesFromExcel
+from ReadPropertiesFromExcel import sheetName as PropertySheetName, ReadPropertiesFromExcel
 import HelpSearch
 
-with Utils.SuspendTranslation():
-	TagFields = [
-		_('Tag'), _('Tag1'), _('Tag2'), _('Tag3'), _('Tag4'), _('Tag5'), _('Tag6'), _('Tag7'), _('Tag8'), _('Tag9'),
-	]
+def create_numeric_field_list(id: str, count: int = 9) -> List[str]:
+	namedFieldList = [id]
+	for i in range(1, count):
+		namedFieldList.append(f'{id}{i}')
+	return namedFieldList
 
-with Utils.SuspendTranslation():
-	CustomCategoryFields = [
-		_('CustomCategory'), _('CustomCategory1'), _('CustomCategory2'), _('CustomCategory3'), _('CustomCategory4'), _('CustomCategory5'), _('CustomCategory6'), _('CustomCategory7'), _('CustomCategory8'), _('CustomCategory9'),
-	]
+def create_tag_field_list() -> List[str]:
+	return create_numeric_field_list('Tag', 9)
 
-with Utils.SuspendTranslation():
-	Fields = [
-		_('Bib#'),
-		_('LastName'), _('FirstName'),
-		_('Team'),
-		_('City'), _('State'), _('Prov'), _('StateProv'), _('Nat.'),
-		_('Category'), _('EventCategory'), _('Age'), _('Gender'),
-		_('License'),
-		_('NatCode'), _('UCIID'), _('UCICode'), _('TeamCode'),
-		_('Factor'),
-	] + TagFields + CustomCategoryFields
+def create_category_field_list() -> List[str]:
+	return create_numeric_field_list('Category', 9)
 
-IgnoreFields = ['Bib#', 'Factor', 'EventCategory', 'CustomCategory', 'TeamCode'] + TagFields	# Fields to ignore when adding data to standard reports.
-NumericFields = ['Age','Factor']
-ReportFields = [f for f in Fields if f not in IgnoreFields]
-ReportFields = (lambda s: [f for f in Fields if f not in s])(set(IgnoreFields))
+LocaleTagFieldList: List[str] = [_(x) for x in create_tag_field_list()]
+LocaleCategoryFieldList: List[str] = [_(x) for x in create_category_field_list()]
+
 
 class FileNamePage(adv.WizardPageSimple):
-	def __init__(self, parent):
+	def __init__(self, parent: wx.Dialog):
 		super().__init__(parent)
 		
 		border = 4
@@ -72,9 +65,9 @@ class FileNamePage(adv.WizardPageSimple):
 		return self.fbb.GetValue()
 	
 class SheetNamePage(adv.WizardPageSimple):
-	def __init__(self, parent):
+	def __init__(self, parent: wx.Dialog):
 		super().__init__(parent)
-		self.choices = []
+		self.choices: list[str] = []
 		self.expectedSheetName = None
 		
 		border = 4
@@ -85,8 +78,8 @@ class SheetNamePage(adv.WizardPageSimple):
 		vbs.Add( self.ch, flag=wx.ALL, border = border )
 		self.SetSizer( vbs )
 	
-	def setFileName( self, fileName ):
-		reader = GetExcelReader( fileName )
+	def setFileName( self, fileName: str ) -> None:
+		reader: ReadExcelXlsx = GetExcelReader( fileName )
 		self.choices = reader.sheet_names()
 		
 		self.ch.Clear()
@@ -96,102 +89,308 @@ class SheetNamePage(adv.WizardPageSimple):
 		except ValueError:
 			self.ch.SetSelection( 0 )
 	
-	def setExpectedSheetName( self, expectedSheetName ):
+	def setExpectedSheetName( self, expectedSheetName: str ) -> None:
 		self.expectedSheetName = expectedSheetName
 	
-	def getSheetName( self ):
+	def getSheetName( self ) -> str:
 		return self.choices[self.ch.GetCurrentSelection()]
 
-def getDefaultFieldMap( fileName, sheetName, expectedFieldCol = None ):
-	reader = GetExcelReader( fileName )
-	headers, fieldCol = [], {}
-	
-	# Try to find the header columns.
-	# Look for the first row with more than 4 columns.
-	for r, row in enumerate(reader.iter_list(sheetName)):
-		cols = sum( 1 for d in row if d and '{}'.format(d).strip() )
-		if cols > 4:
-			headers = ['{}'.format(h or '').strip() for h in row]
-			break
 
-	# If we haven't found a header row yet, assume the first non-empty row is the header.
-	if not headers:
+class SignOnSheetExcelLink(ExcelLink):
+	_Fields: [str] = None
+	__has_tags: bool = False
+
+	def __init__(self):
+		with Utils.SuspendTranslation():
+			self._Fields = [
+				         _('Bib#'),
+				         _('LastName'), _('FirstName'),
+				         _('Team'),
+				         _('City'), _('State'), _('Prov'), _('StateProv'), _('Nat.'),
+				         _('Category'), _('EventCategory'), _('Age'), _('Gender'),
+				         _('License'),
+				         _('NatCode'), _('UCIID'), _('UCICode'), _('TeamCode'),
+				         _('Factor'),
+			         ] + LocaleTagFieldList + LocaleCategoryFieldList
+
+			IgnoreFields = ['Bib#', 'Factor', 'EventCategory', 'CustomCategory',
+			                'TeamCode'] + LocaleTagFieldList  # Fields to ignore when adding data to standard reports.
+			# ReportFields = [f for f in self.Fields if f not in IgnoreFields]
+			ReportFields = (lambda s: [f for f in self.Fields if f not in s])(set(IgnoreFields))
+
+		self._add_numeric_field('Age')
+		self._add_numeric_field('Factor')
+
+		super().__init__()
+
+	@property
+	def CustomCategoryFields(self) -> [str]:
+		return LocaleCategoryFieldList
+
+	@property
+	def TagFields(self) -> [str]:
+		return LocaleTagFieldList
+
+	@property
+	def HasCategoriesSheet(self) -> bool:
+		return self.__has_categories_sheet
+
+	@property
+	def HasPropertiesSheet(self) -> bool:
+		return self.__has_properties_sheet
+
+	def _getFields(self) -> [str]:
+		return self._Fields
+
+	@staticmethod
+	def __check_tag_fields(data: dict[str, str|int], tag_fields, sheet_row: int, plate_number: int) -> None:
+		errors: list[ExcelRowError] = []
+		for tField, tRow in tag_fields:
+			try:
+
+				if tField not in data and tField == 'Tag':  # Don't check for missing Tag2s as they are optional.
+					msg = '{}: {}'.format(
+							_('Missing field'), tField,
+						)
+					raise ExcelDataFieldError(row=sheet_row, rider_number=plate_number, msg=msg)
+
+				tag = '{}'.format(data.get(tField, '')).lstrip('0').upper()
+				if tag:
+					if tag in tRow:
+						msg = '{}: {} {}.  {} {}: {}  {}: {}'.format(
+								_('Duplicate Field'), tField, tag,
+								_('Same as'),
+								_('Bib'), plate_number,
+								_('Row'), tRow[tag])
+
+						raise ExcelDataFieldError(row=sheet_row, rider_number=plate_number, msg=msg)
+					else:
+						tRow[tag] = sheet_row
+				else:
+					if tField == 'Tag':  # Don't check for empty Tag2s as they are optional.
+						missing_field_msg = '{}: {}'.format(
+								_('Missing Field'), tField,
+							)
+						raise ExcelDataFieldError(row=sheet_row, rider_number=plate_number, msg=missing_field_msg)
+			except ExcelDataFieldError as exExcel:
+				errors.extend(exExcel.errors)
+
+	def _process_sheet_data(self, reader: ReadExcelXlsx) -> None:
+		race: RaceType = Model.race
+		race.clearTagNums()
+
+		# Do not read certain properties or categories fields after the race has started to avoid overwriting local changes.
+		if Model.race and Model.race.startTime:
+			self.__has_properties_sheet = ReadPropertiesFromExcel(reader, bool(Model.race.startTime))
+			self.__has_categories_sheet = ReadCategoriesFromExcel(reader, bool(Model.race.startTime))
+		else:
+			self.__has_properties_sheet = ReadPropertiesFromExcel(reader)
+			self.__has_categories_sheet = ReadCategoriesFromExcel(reader)
+
+		if not self.__has_categories_sheet and self.initCategoriesFromExcel and (
+				self.hasField('EventCategory') or any(self.hasField(f) for f in self.CustomCategoryFields)):
+			MatchingCategory.PrologMatchingCategory()
+			for bib, fields in infoCache.items():
+				MatchingCategory.AddToMatchingCategory(bib, fields)
+			MatchingCategory.EpilogMatchingCategory()
+
+		# Process all known tag nums from the new Excel sheet.
+		# This also adds data from previously missing tags.
+		GetTagNums(True)
+
+		try:
+			Model.race.resetAllCaches()
+		except Exception:
+			pass
+
+	def _handle_local_fields(self, info: Any, rowInfo: Any, *args, **kwargs) -> None:
+		# rowInfo = kwargs['rowInfo']
+		# info = kwargs['info']
+		# Fix all the tag formats
+		FixTagFormat(info)
+
+		# Check for duplicate numbers, duplicate tags and missing tags.
+		numRow = {}
+
+		# Collect how many tag fields we have.
+		tagFields = []
+		if self.__has_tags:
+			for tf in self.TagFields:
+				if self.FieldCol.get(tf, -1) >= 0:
+					tagFields.append((tf, {}))
+
+		errors: list[ExcelRowError] = []
+		rowBib = {}
+		for sheet_row, plate_number, data in rowInfo:
+			rowBib[sheet_row] = plate_number
+
+			try:
+				if plate_number in numRow:
+					duplicate_msg = '{}: {}  {} {}.'.format(
+							_('Duplicate Bib#'), plate_number,
+							_('Same as row'), numRow[plate_number],
+						)
+
+					raise ExcelDataFieldError(row=sheet_row, rider_number=plate_number, msg=duplicate_msg)
+				else:
+					numRow[plate_number] = sheet_row
+
+				self.__check_tag_fields(data, tag_fields=tagFields, sheet_row=sheet_row, plate_number=plate_number)
+			except ExcelDataFieldError as exExcel:
+				errors.extend(exExcel.errors)
+
+
+		if len(errors) > 0:
+			raise ExcelDataFieldError(errors)
+
+	@staticmethod
+	def __parse_to_uppercase(data: dict[str, str], field: str):
+		try:
+			data[field] = '{}'.format(data[field] or '').upper()
+		except Exception:
+			data[field] = _('Unknown')
+
+	@staticmethod
+	def __parse_lastname_field(data: dict[str, str], field: str) -> bool:
+		if field == 'LastName':
+			SignOnSheetExcelLink.__parse_to_uppercase(data, field)
+			return True
+		return False
+
+	def __parse_tag_field(self, data: dict[str, str|int], field: str) -> bool:
+		if field.startswith('Tag'):
+			try:
+				data[field] = int(data[field])
+			except (ValueError, TypeError):
+				pass
+			try:
+				data[field] = '{}'.format(data[field] or '').upper()
+				self.__has_tags = True
+			except Exception:
+				pass
+			return True
+		return False
+	
+	@staticmethod
+	def __parse_gender_field(data: dict[str, Any], field: str) -> bool:
+		if field == 'Gender':
+		# Normalize and encode the gender information.
+			try:
+				genderFirstChar = '{}'.format(data[field] or 'Open').strip().lower()[:1]
+				if genderFirstChar in 'mh':  # Men, Male, Hommes, Uomini
+					data[field] = 'Men'
+				elif genderFirstChar in 'wlfd':  # Women, Ladies, Female, Femmes, Donne
+					data[field] = 'Women'
+				else:
+					data[field] = 'Open'  # Otherwise Open
+			except Exception:
+				data[field] = 'Open'
+				pass
+			return True
+		return False
+
+	def _parse_local_fields(self, data: dict[str, str|int], field: str, *args, **kwargs) -> bool:
+		has_local = False
+		has_local = self.__parse_lastname_field(data, field) or has_local
+		has_local = self.__parse_tag_field(data, field) or has_local
+		has_local = self.__parse_gender_field(data, field) or has_local
+		return has_local
+
+	def getDefaultFieldMap(self, fileName: str, sheetName: str, expectedFieldCol=None):
+		reader = GetExcelReader(fileName)
+		headers, fieldCol = [], {}
+
+		# Try to find the header columns.
+		# Look for the first row with more than 4 columns.
 		for r, row in enumerate(reader.iter_list(sheetName)):
-			cols = sum( 1 for d in row if d and '{}'.format(d).strip() )
-			if cols > 0:
+			cols = sum(1 for d in row if d and '{}'.format(d).strip())
+			if cols > 4:
 				headers = ['{}'.format(h or '').strip() for h in row]
 				break
-	
-	# Ignore empty columns on the end.
-	while headers and (not headers[-1] or headers[-1].isspace()):
-		headers.pop()
-		
-	if not headers:
-		raise ValueError( '{} {}::{}.'.format(_('Could not find a Header Row'), fileName, sheetName) )
-	
-	# Rename empty columns so as not to confuse the user.
-	headers = [h if h else '<{} {:03d}>'.format(_('Blank Header Column'), (c+1)) for c, h in enumerate(headers)]
-	headers = [h if len(h) < 32 else h[:29].strip() + '...' for h in headers]
-	
-	# Set a blank final entry.
-	headers.append( '' )
-		
-	# Create a map for the field names we are looking for
-	# and the headers we found in the Excel sheet.
-	sStateField = 'State'
-	sProvField = 'Prov'
-	sStateProvField = 'StateProv'
-	
-	GetTranslation = _
-	iNoMatch = len(headers) - 1
-	exactMatch = { h.lower():(100.0, i) for i, h in enumerate(headers) }
-	# For Tag fields, try remove spaces.
-	exactMatch.update( {h.lower().replace(' ', ''):(100.0, i) for i, h in enumerate(headers) if h.lower().startswith('tag')} )
-	
-	matchStrength = {}
-	for c, f in enumerate(Fields):
-		# Figure out some reasonable defaults for headers.
-		
-		# First look for a perfect match ignoring case.
-		matchBest, iBest = exactMatch.get( f.lower(), (0.0, iNoMatch) )
-		
-		if not f.lower().startswith('tag'):
-			# Then try the local translation of the header name.
-			if matchBest < 2.0:
-				fTrans = GetTranslation( f )
-				matchBest, iBest = max( ((Utils.approximateMatch(fTrans, h), i) for i, h in enumerate(headers)), key=lambda x: x[0] )
-			
-			# If that fails, try matching the untranslated header fields.
-			if matchBest <= 0.34:
-				matchBest, iBest = max( ((Utils.approximateMatch(f, h), i) for i, h in enumerate(headers)), key=lambda x: x[0] )
-			
-			# If we don't get a high enough match, set to blank.
-			if matchBest <= 0.34:
-				try:
-					iBest = min( expectedFieldCol[c], iNoMatch )
-				except (TypeError, KeyError):
-					iBest = iNoMatch			
-		
-		fieldCol[f] = iBest
-		matchStrength[f] = matchBest
-	
-	# If we already have a match for State of Prov, don't match on StateProv, etc.
-	if matchStrength.get(sStateProvField,0.0) > matchStrength.get(sStateField,0.0):
-		fieldCol[sStateField] = iNoMatch
-		fieldCol[sProvField] = iNoMatch
-	elif matchStrength.get(sProvField,0.0) > matchStrength.get(sStateProvField,0.0):
-		fieldCol[sStateProvField] = iNoMatch
-	elif matchStrength.get(sStateField,0.0) > matchStrength.get(sStateProvField,0.0):
-		fieldCol[sStateProvField] = iNoMatch
-		
-	return headers, fieldCol
+
+		# If we haven't found a header row yet, assume the first non-empty row is the header.
+		if not headers:
+			for r, row in enumerate(reader.iter_list(sheetName)):
+				cols = sum(1 for d in row if d and '{}'.format(d).strip())
+				if cols > 0:
+					headers = ['{}'.format(h or '').strip() for h in row]
+					break
+
+		# Ignore empty columns on the end.
+		while headers and (not headers[-1] or headers[-1].isspace()):
+			headers.pop()
+
+		if not headers:
+			raise ValueError('{} {}::{}.'.format(_('Could not find a Header Row'), fileName, sheetName))
+
+		# Rename empty columns so as not to confuse the user.
+		headers = [h if h else '<{} {:03d}>'.format(_('Blank Header Column'), (c + 1)) for c, h in enumerate(headers)]
+		headers = [h if len(h) < 32 else h[:29].strip() + '...' for h in headers]
+
+		# Set a blank final entry.
+		headers.append('')
+
+		# Create a map for the field names we are looking for
+		# and the headers we found in the Excel sheet.
+		sStateField = 'State'
+		sProvField = 'Prov'
+		sStateProvField = 'StateProv'
+
+		GetTranslation = _
+		iNoMatch = len(headers) - 1
+		exactMatch = {h.lower(): (100.0, i) for i, h in enumerate(headers)}
+		# For Tag fields, try remove spaces.
+		exactMatch.update(
+			{h.lower().replace(' ', ''): (100.0, i) for i, h in enumerate(headers) if h.lower().startswith('tag')})
+
+		matchStrength = {}
+		for c, f in enumerate(self.Fields):
+			# Figure out some reasonable defaults for headers.
+
+			# First look for a perfect match ignoring case.
+			matchBest, iBest = exactMatch.get(f.lower(), (0.0, iNoMatch))
+
+			if not f.lower().startswith('tag'):
+				# Then try the local translation of the header name.
+				if matchBest < 2.0:
+					fTrans = GetTranslation(f)
+					matchBest, iBest = max(((Utils.approximateMatch(fTrans, h), i) for i, h in enumerate(headers)),
+					                       key=lambda x: x[0])
+
+				# If that fails, try matching the untranslated header fields.
+				if matchBest <= 0.34:
+					matchBest, iBest = max(((Utils.approximateMatch(f, h), i) for i, h in enumerate(headers)), key=lambda x: x[0])
+
+				# If we don't get a high enough match, set to blank.
+				if matchBest <= 0.34:
+					try:
+						iBest = min(expectedFieldCol[c], iNoMatch)
+					except (TypeError, KeyError):
+						iBest = iNoMatch
+
+			fieldCol[f] = iBest
+			matchStrength[f] = matchBest
+
+		# If we already have a match for State of Prov, don't match on StateProv, etc.
+		if matchStrength.get(sStateProvField, 0.0) > matchStrength.get(sStateField, 0.0):
+			fieldCol[sStateField] = iNoMatch
+			fieldCol[sProvField] = iNoMatch
+		elif matchStrength.get(sProvField, 0.0) > matchStrength.get(sStateProvField, 0.0):
+			fieldCol[sStateProvField] = iNoMatch
+		elif matchStrength.get(sStateField, 0.0) > matchStrength.get(sStateProvField, 0.0):
+			fieldCol[sStateProvField] = iNoMatch
+
+		return headers, fieldCol
 
 class HeaderNamesPage(adv.WizardPageSimple):
-	def __init__(self, parent):
+	_excel_link: SignOnSheetExcelLink
+
+	def __init__(self, parent: wx.Dialog, excel_link: SignOnSheetExcelLink):
 		super().__init__(parent)
 
 		self.expectedFieldCol = None
-		
+		self._excel_link = excel_link
+
 		border = 4
 		vbs = wx.BoxSizer( wx.VERTICAL )
 		vbs.Add( wx.StaticText(self, label = _('Specify the spreadsheet columns corresponding to CrossMgr fields.')),
@@ -206,9 +405,9 @@ class HeaderNamesPage(adv.WizardPageSimple):
 		sp = scrolled.ScrolledPanel( self, size=(750, 64), style = wx.TAB_TRAVERSAL )
 		
 		GetTranslation = _
-		gs = wx.GridSizer( 2, len(Fields), 2, 4 )
+		gs = wx.GridSizer( 2, len(self._excel_link.Fields), 2, 4 )
 		gs.SetHGap( 3 )
-		for c, f in enumerate(Fields):
+		for c, f in enumerate(self._excel_link.Fields):
 			label = wx.StaticText(sp, label=GetTranslation(f))
 			'''
 			if boldFont is None:
@@ -220,7 +419,8 @@ class HeaderNamesPage(adv.WizardPageSimple):
 		
 		self.headers = []
 		self.choices = []
-		for c, f in enumerate(Fields):
+		# Horizontally listed set of field dropdowns.  Why do we even need this?
+		for c, f in enumerate(self._excel_link.Fields):
 			self.choices.append( wx.Choice(sp, -1, choices = self.headers ) )
 			gs.Add( self.choices[-1] )
 		
@@ -249,10 +449,12 @@ class HeaderNamesPage(adv.WizardPageSimple):
 	def setExpectedFieldCol( self, fieldCol ):
 		self.expectedFieldCol = copy.copy(fieldCol)
 	
-	def setFileNameSheetName( self, fileName, sheetName ):
-		self.headers, fieldCol = getDefaultFieldMap( fileName, sheetName, self.expectedFieldCol )
+	def set_sheets_from_file(self, fileName: str, sheetName: str) -> None:
+		signon_sheet_link: SignOnSheetExcelLink = SignOnSheetExcelLink()
+		signon_sheet_link.getDefaultFieldMap(fileName, sheetName, self.expectedFieldCol)
+		self.headers, fieldCol = signon_sheet_link.getDefaultFieldMap( fileName, sheetName, self.expectedFieldCol )
 		iNoMatch = len(self.headers) - 1
-		for c, f in enumerate(Fields):
+		for c, f in enumerate(signon_sheet_link.Fields):
 			self.choices[c].Clear()
 			self.choices[c].AppendItems( self.headers )
 			self.choices[c].SetSelection( fieldCol[f] )
@@ -262,25 +464,26 @@ class HeaderNamesPage(adv.WizardPageSimple):
 		self.sp.SetAutoLayout(1)
 		self.sp.SetupScrolling( scroll_y = False )
 		self.doUpdateSummary()
+		self._excel_link = signon_sheet_link
 
 	def doUpdateSummary( self, event = None ):
 		self.mapSummary.DeleteAllItems()
 		GetTranslation = _
-		for c, f in enumerate(Fields):
+		for c, f in enumerate(self._excel_link.Fields):
 			r = self.mapSummary.InsertItem( self.mapSummary.GetItemCount(), GetTranslation(f) )
 			self.mapSummary.SetItem( r, 1, self.choices[c].GetStringSelection() )
 		
 	def getFieldCol( self ):
 		headerLen = len(self.headers) - 1
 		fieldCol = {}
-		for c, f in enumerate(Fields):
+		for c, f in enumerate(self._excel_link.Fields):
 			s = self.choices[c].GetSelection()
 			fieldCol[f] = s if s < headerLen else -1
 		return fieldCol
 		
-	def hasTagField( self ):
+	def hasTagField( self ) -> bool:
 		fieldCol = self.getFieldCol()
-		return any( fieldCol.get(tf,-1) >= 0 for tf in TagFields )
+		return any( fieldCol.get(tf,-1) >= 0 for tf in self._excel_link.TagFields )
 			
 class SummaryPage(adv.WizardPageSimple):
 	def __init__(self, parent):
@@ -408,9 +611,18 @@ class SummaryPage(adv.WizardPageSimple):
 		if hasPropertiesSheet and Utils.getMainWin():
 			mainWin = Utils.getMainWin()
 			wx.CallAfter( mainWin.showPage, mainWin.iPropertiesPage )
-	
+
 class GetExcelLink:
-	def __init__( self, parent, excelLink = None ):
+	_log: logging.Logger = Log.getLogger('GetExcelLink')
+	_excel_link: SignOnSheetExcelLink
+
+	def __init__( self, parent: wx.Frame, excel_link: Optional['SignOnSheetExcelLink'] = None ):
+		if excel_link is None:
+			self._log.debug('No excel link attribute found in race settings.')
+			self._excel_link = SignOnSheetExcelLink()
+		else:
+			self._excel_link = excel_link
+
 		img_filename = os.path.join( Utils.getImageFolder(), '20100718-Excel_icon.png' )
 		img = wx.Bitmap(img_filename) if img_filename and os.path.exists(img_filename) else wx.NullBitmap
 		
@@ -423,37 +635,36 @@ class GetExcelLink:
 		
 		self.fileNamePage = FileNamePage( self.wizard )
 		self.sheetNamePage = SheetNamePage( self.wizard )
-		self.headerNamesPage = HeaderNamesPage( self.wizard )
+		self.headerNamesPage = HeaderNamesPage( self.wizard, self._excel_link )
 		self.summaryPage = SummaryPage( self.wizard )
 		
 		adv.WizardPageSimple.Chain( self.fileNamePage, self.sheetNamePage )
 		adv.WizardPageSimple.Chain( self.sheetNamePage, self.headerNamesPage )
 		adv.WizardPageSimple.Chain( self.headerNamesPage, self.summaryPage )
 		
-		self.excelLink = excelLink
-		if excelLink:
-			if excelLink.fileName:
-				self.fileNamePage.setFileName( excelLink.fileName )
-			if excelLink.sheetName:
-				self.sheetNamePage.setExpectedSheetName( excelLink.sheetName )
-			if excelLink.fieldCol:
-				self.headerNamesPage.setExpectedFieldCol( excelLink.fieldCol )
+		if self._excel_link:
+			if self._excel_link.FileName:
+				self.fileNamePage.setFileName(self._excel_link.FileName)
+			if self._excel_link.SheetName:
+				self.sheetNamePage.setExpectedSheetName(self._excel_link.SheetName)
+			if self._excel_link.FieldCol:
+				self.headerNamesPage.setExpectedFieldCol(self._excel_link.FieldCol)
 
 		self.wizard.GetPageAreaSizer().Add( self.fileNamePage )
 		self.wizard.SetPageSize( wx.Size(800,560) )
 		self.wizard.FitToPage( self.fileNamePage )
 	
-	def show( self ):
+	def show( self ) -> ExcelLink:
 		if self.wizard.RunWizard(self.fileNamePage):
-			if not self.excelLink:
-				self.excelLink = ExcelLink()
-			self.excelLink.setFileName( self.fileNamePage.getFileName() )
-			self.excelLink.setSheetName( self.sheetNamePage.getSheetName() )
-			self.excelLink.setFieldCol( self.headerNamesPage.getFieldCol() )
-			self.excelLink.initCategoriesFromExcel = self.headerNamesPage.initCategoriesFromExcel.GetValue()
-		return self.excelLink
+			if not self._excel_link:
+				self._excel_link = SignOnSheetExcelLink()
+			self._excel_link.setFileName( self.fileNamePage.getFileName() )
+			self._excel_link.setSheetName( self.sheetNamePage.getSheetName() )
+			self._excel_link.setFieldCol( self.headerNamesPage.getFieldCol() )
+			self._excel_link.initCategoriesFromExcel = self.headerNamesPage.initCategoriesFromExcel.GetValue()
+		return self._excel_link
 	
-	def onPageChanging( self, evt ):
+	def onPageChanging( self, evt ) -> None:
 		isForward = evt.GetDirection()
 		GetTranslation = _
 		if isForward:
@@ -476,7 +687,7 @@ class GetExcelLink:
 					evt.Veto()
 			elif page == self.sheetNamePage:
 				try:
-					self.headerNamesPage.setFileNameSheetName(self.fileNamePage.getFileName(), self.sheetNamePage.getSheetName())
+					self.headerNamesPage.set_sheets_from_file(self.fileNamePage.getFileName(), self.sheetNamePage.getSheetName())
 				except ValueError:
 					Utils.MessageOK(
 						self.wizard, '\n'.join( [_('Cannot find at least 5 header names in the Excel sheet.'), _('Check the format.')] ),
@@ -489,32 +700,36 @@ class GetExcelLink:
 							title=_('No RFID Tag Columns'), iconMask=wx.ICON_ERROR):
 						evt.Veto()
 						return
-				
-				excelLink = ExcelLink()
-				excelLink.setFileName( self.fileNamePage.getFileName() )
-				excelLink.setSheetName( self.sheetNamePage.getSheetName() )
-				excelLink.initCategoriesFromExcel = self.headerNamesPage.initCategoriesFromExcel.GetValue()
+
+				# Reload the excel link if the filename reference or sheet has changed.
+				if self._excel_link is not None and (self._excel_link.FileName != self.fileNamePage.getFileName() or self._excel_link.SheetName != self.sheetNamePage.getSheetName()):
+					excel_link = SignOnSheetExcelLink()
+					excel_link.setFileName( self.fileNamePage.getFileName() )
+					excel_link.setSheetName( self.sheetNamePage.getSheetName() )
+					excel_link.initCategoriesFromExcel = self.headerNamesPage.initCategoriesFromExcel.GetValue()
+					self._excel_link = excel_link
+
 				fieldCol = self.headerNamesPage.getFieldCol()
-				if fieldCol[Fields[0]] < 0:
-					Utils.MessageOK( self.wizard, '{}: "{}"'.format(_('You must specify column'), GetTranslation(Fields[0])),
+				if fieldCol[self._excel_link.Fields[0]] < 0:
+					Utils.MessageOK( self.wizard, '{}: "{}"'.format(_('You must specify column'), GetTranslation(self._excel_link.Fields[0])),
 										title=_('Excel Format Error'), iconMask=wx.ICON_ERROR)
 					evt.Veto()
 				else:
-					excelLink.setFieldCol( fieldCol )
+					self._excel_link.setFieldCol( fieldCol )
 					try:
-						info = excelLink.read()
-						errors = excelLink.getErrors()
+						info = self._excel_link.read()
+						errors = self._excel_link.getErrors()
 						headerMap = []
-						for f in Fields:
-							i = excelLink.fieldCol.get( f, 0 )
+						for f in self._excel_link.Fields:
+							i = self._excel_link.FieldCol.get(f, 0)
 							if i >= 0:
 								headerMap.append( (f, self.headerNamesPage.headers[i]) )
 						self.summaryPage.setFileNameSheetNameInfo(
 							self.fileNamePage.getFileName(),
 							self.sheetNamePage.getSheetName(),
 							info, errors, headerMap,
-							excelLink.hasCategoriesSheet, excelLink.hasPropertiesSheet,
-							excelLink.initCategoriesFromExcel,
+							self._excel_link.HasCategoriesSheet, self._excel_link.HasPropertiesSheet,
+							self._excel_link.initCategoriesFromExcel,
 						)
 					except ValueError as e:
 						Utils.MessageOK(self.wizard, '{}\n{}\n\n"{}"'.format(
@@ -547,7 +762,7 @@ def GetFixTag( externalInfo ):
 	# Check if we have JChip or Orion tags.
 	countJChip, countOrion = 0, 0
 	for num, edata in externalInfo.items():
-		for tagName in TagFields:
+		for tagName in LocaleTagFieldList:
 			try:
 				tag = edata[tagName]
 			except (KeyError, ValueError):
@@ -564,7 +779,7 @@ def GetFixTag( externalInfo ):
 def FixTagFormat( externalInfo ):
 	fixTagFunc = GetFixTag( externalInfo )
 	for num, edata in externalInfo.items():
-		for tagName in TagFields:
+		for tagName in LocaleTagFieldList:
 			try:
 				tag = edata[tagName]
 			except (KeyError, ValueError):
@@ -573,41 +788,42 @@ def FixTagFormat( externalInfo ):
 
 def GetTagNums( forceUpdate=False ):
 	# Get a dict that links chip tags to bib numbers.
-	race = Model.race
+	race: RaceType = Model.race
 	if not race:
 		return {}
 		
 	# Get the Excel link.
 	try:
 		# If no Excel link, tagNums is empty.
-		excelLink = race.excelLink
+		excel_link = race.excelLink
 	except Exception:
-		race.tagNums = {}
+		race.ensure_tag_nums()
 		return race.tagNums
 		
 	# Read the data from the Excel link.
 	try:
-		externalInfo = excelLink.read()
+		externalInfo = excel_link.read()
 	except Exception:
 		# If the external info cannot be retrieved, tagNums is empty.
-		race.tagNums = {}
+		race.ensure_tag_nums()
 		return race.tagNums
 	
 	# If the file did not change and we are not forcing an update,
 	# return the existing tagNums as it hasn't changed.
-	if not (excelLink.readFromFile or forceUpdate):
+	if not (excel_link.ReadFromFile or forceUpdate):
+		race.ensure_tag_nums()
 		if getattr(race, 'tagNums', None) is None:
 			race.tagNums = {}
 		return race.tagNums
 		
 	# Get all tagName fields that exist in the spreadsheet.
-	tagNames = {tagName for tagName in TagFields if excelLink.hasField(tagName)}
+	tagNames = {tagName for tagName in excel_link.TagFields if excel_link.hasField(tagName)}
 	if not tagNames:
-		race.tagNums = {}		# No tag columns in the spreadsheet.
+		race.ensure_tag_nums()		# No tag columns in the spreadsheet.
 		return race.tagNums
 	
 	# Create a dict of all tags to bib numbers.
-	tagNums = {}	
+	tagNums: dict[str, int] = {}
 	for num, edata in externalInfo.items():
 		for tagName in tagNames:
 			tag = edata.get(tagName, None)
@@ -630,7 +846,7 @@ def GetTagNums( forceUpdate=False ):
 
 def UnmatchedTagsUpdate( tagNums=None ):
 	# Add all times from previously unmatched tags.
-	race = Model.race
+	race: RaceType = Model.race
 	if not race:
 		return
 	
@@ -644,7 +860,7 @@ def UnmatchedTagsUpdate( tagNums=None ):
 		for tag in (race.unmatchedTags.keys() & tagNums.keys()):
 			num = tagNums[tag]
 			for t in race.unmatchedTags[tag]:
-				race.addTime( num, t )		# Sets the changed flag is something changes.
+				race.addTime(num, t)		# Sets the changed flag is something changes.
 			del race.unmatchedTags[tag]
 	
 	if race.missingTags:
@@ -659,7 +875,8 @@ stateCache = None
 infoCache = None
 errorCache = None
 
-def ResetExcelLinkCache():
+def ResetExcelLinkCache() -> None:
+	Log.getLogger().warning('Resetting Excel Link Cache needs to be rewritten.')
 	global stateCache
 	global infoCache
 	global errorCache
@@ -667,323 +884,10 @@ def ResetExcelLinkCache():
 	infoCache = None
 	errorCache = None
 
-class ExcelLink:
-	OpenCode = 0
-	MenCode = 1
-	WomenCode = 2
 
-	hasCategoriesSheet = False
-	hasPropertiesSheet = False
-	
-	initCategoriesFromExcel = False
-	
-	def __init__( self ):
-		self.fileName = None
-		self.sheetName = None
-		self.readFromFile = True
-		self.fieldCol = dict( (f, c) for c, f in enumerate(Fields) )
-	
-	def key( self ):
-		return (self.fileName, self.sheetName, self.fieldCol)
-	
-	def __eq__(self, other):
-		return self.key() == other.key()
-
-	def __ne__(self, other):
-		return self.key() != other.key()
-
-	def __lt__(self, other):
-		return self.key() < other.key()
-
-	def __le__(self, other):
-		return self.key() <= other.key()
-
-	def __gt__(self, other):
-		return self.key() > other.key()
-
-	def __ge__(self, other):
-		return self.key() >= other.key()
-		
-	def setFileName( self, fname ):
-		self.fileName = fname
-		
-	def setSheetName( self, sname ):
-		self.sheetName = sname
-	
-	def setFieldCol( self, fieldCol ):
-		self.fieldCol = fieldCol
-		
-	def bindDefaultFieldCols( self ):
-		headers, fieldCol = getDefaultFieldMap( self.fileName, self.sheetName )
-		iNoMatch = len(headers) - 1
-		self.fieldCol = { f: fieldCol[f] if fieldCol[f] != iNoMatch else -1 for f in fieldCol }
-
-	def hasField( self, field ):
-		return self.fieldCol.get( field, -1 ) >= 0
-		
-	def getFields( self ):
-		return [f for f in Fields if self.hasField(f)]
-	
-	def get( self ):
-		# Check the cache, but don't bother with the modification date of the file for performance.
-		global stateCache
-		global infoCache
-		if stateCache and infoCache:
-			try:
-				state = (self.fileName, self.sheetName, self.fieldCol)
-				if state == stateCache[-3:]:
-					return infoCache
-			except Exception:
-				pass
-		return None
-	
-	def getErrors( self ):
-		global errorCache
-		self.read()
-		return errorCache
-		
-	def isSynced( self ):
-		global stateCache
-		try:
-			state = (os.path.getmtime(self.fileName), self.fileName, self.sheetName, self.fieldCol)
-			return state == stateCache
-		except Exception:
-			return False
-	
-	reVersionField = re.compile( r'^(.+) \(([0-9]+)\)\.(?:xls|xlsx|xlsm)$', re.IGNORECASE )
-	
-	def getMostRecentFilename( self ):
-		dirname, basename = os.path.split(self.fileName)
-		
-		m = ExcelLink.reVersionField.match( basename )
-		nameCur = m.group(1) if m else basename.splitext()[0]
-		versionCur = int(m.group(2)) if m else 0
-		
-		mostRecentFilename = None
-		for f in os.listdir(dirname):
-			m = ExcelLink.reVersionField.match( f )
-			if not m or m.group(1) != nameCur:
-				continue
-			version = int(m.group(2))
-			if version > versionCur:
-				versionCur = version
-				mostRecentFilename = f
-		return os.path.join(dirname, mostRecentFilename) if mostRecentFilename else None
-	
-	def updateFilenameToMostRecent( self ):
-		self.fileName = (self.getMostRecentFilename() or self.fileName)
-		
-	def read( self, alwaysReturnCache=False ):
-		# Check the cache.  Return the last info if the file has not been modified, and the name, sheet and fields are the same.
-		global stateCache
-		global infoCache
-		global errorCache
-		
-		self.readFromFile = False
-		if alwaysReturnCache and infoCache is not None:
-			return infoCache
-
-		if stateCache and infoCache:
-			try:
-				state = (os.path.getmtime(self.fileName), self.fileName, self.sheetName, self.fieldCol)
-				if state == stateCache:
-					return infoCache
-			except Exception:
-				pass
-	
-		# Read the sheet and return the rider data.
-		self.readFromFile = True
-		try:
-			reader = GetExcelReader( self.fileName )
-			if self.sheetName not in reader.sheet_names():
-				infoCache = {}
-				errorCache = []
-				return {}
-		except Exception:
-			infoCache = {}
-			errorCache = []
-			return {}
-		
-		info = {}
-		rowInfo = []
-		hasTags = False
-		
-		for r, row in enumerate(reader.iter_list(self.sheetName)):
-			data = {}
-			for field, col in self.fieldCol.items():
-				if col < 0:					# Skip unmapped columns.
-					continue
-				try:
-					try:
-						data[field] = row[col].strip()
-					except AttributeError:
-						data[field] = row[col]
-					
-					if data[field] is None:
-						data[field] = ''
-						
-					if field == 'LastName':
-						try:
-							data[field] = '{}'.format(data[field] or '').upper()
-						except Exception:
-							data[field] = _('Unknown')
-					elif field.startswith('Tag'):
-						try:
-							data[field] = int( data[field] )
-						except (ValueError, TypeError):
-							pass
-						try:
-							data[field] = '{}'.format(data[field] or '').upper()
-							hasTags = True
-						except Exception:
-							pass
-					elif field == 'Gender':
-						# Normalize and encode the gender information.
-						try:
-							genderFirstChar = '{}'.format(data[field] or 'Open').strip().lower()[:1]
-							if genderFirstChar in 'mh':	# Men, Male, Hommes, Uomini
-								data[field] = 'Men'
-							elif genderFirstChar in 'wlfd':	# Women, Ladies, Female, Femmes, Donne
-								data[field] = 'Women'
-							else:
-								data[field] = 'Open'		# Otherwise Open
-						except Exception:
-							data[field] = 'Open'
-							pass
-					else:
-						if field in NumericFields:
-							try:
-								data[field] = float(data[field])
-								if data[field] == int(data[field]):
-									data[field] = int(data[field])
-							except ValueError:
-								data[field] = 0
-						else:
-							data[field] = '{}'.format(data[field])
-						
-				except IndexError:
-					pass
-			
-			try:
-				num = int(float(data[Fields[0]]))
-			except (ValueError, TypeError, KeyError) as e:
-				pass
-			else:
-				data[Fields[0]] = num
-				info[num] = data
-				rowInfo.append( (r+1, num, data) )	# Add one to the row to make error reporting consistent.
-			
-		# Fix all the tag formats
-		FixTagFormat( info )
-		
-		# Check for duplicate numbers, duplicate tags and missing tags.
-		numRow = {}
-		
-		# Collect how many tag fields we have.
-		tagFields = []
-		if hasTags:
-			for tf in TagFields:
-				if self.fieldCol.get(tf, -1) >= 0:
-					tagFields.append( (tf, {}) )
-			
-		errors = []
-		rowBib = {}
-		for row, num, data in rowInfo:
-			rowBib[row] = num
-			
-			if num in numRow:
-				errors.append( (
-						num,
-						'{}: {}  {}: {}  {} {}.'.format(
-							_('Row'), row,
-							_('Duplicate Bib#'), num,
-							_('Same as row'), numRow[num],
-						)
-					)
-				)
-			else:
-				numRow[num] = row
-				
-			for tField, tRow in tagFields:
-				if tField not in data and tField == 'Tag':		# Don't check for missing Tag2s as they are optional.
-					errors.append( (
-							num,
-							'{}: {}  {}: {}  {}: {}'.format(
-								_('Row'), row,
-								_('Bib'), num, 
-								_('Missing field'), tField,
-							)
-						)
-					)
-					continue
-					
-				tag = '{}'.format(data.get(tField,'')).lstrip('0').upper()
-				if tag:
-					if tag in tRow:
-						errors.append( (
-								num,
-								'{}: {}  {}: {} {}.  {} {}: {}  {}: {}'.format(
-									_('Row'), row,
-									_('Duplicate Field'), tField, tag,
-									_('Same as'),
-									_('Bib'), rowBib[tRow[tag]],
-									_('Row'), tRow[tag]
-								)
-							)
-						)
-					else:
-						tRow[tag] = row
-				else:
-					if tField == 'Tag':					# Don't check for empty Tag2s as they are optional.
-						errors.append( (
-								num,
-								'{}: {}  {}: {}  {}: {}'.format(
-									_('Row'), row,
-									_('Bib'), num,
-									_('Missing Field'), tField,
-								)
-							)
-						)
-		
-		stateCache = (os.path.getmtime(self.fileName), self.fileName, self.sheetName, self.fieldCol)
-		infoCache = info
-		errorCache = errors
-		
-		# Clear the tagNums cache as it will be reset after reading the spreadsheet.
-		try:
-			Model.race.tagNums = None
-		except AttributeError:
-			pass
-		
-		# Do not read certain properties or categories fields after the race has started to avoid overwriting local changes.
-		if Model.race and Model.race.startTime:
-			self.hasPropertiesSheet = ReadPropertiesFromExcel( reader, bool(Model.race.startTime) )
-			self.hasCategoriesSheet = ReadCategoriesFromExcel( reader, bool(Model.race.startTime) )
-		else:
-			self.hasPropertiesSheet = ReadPropertiesFromExcel( reader )
-			self.hasCategoriesSheet = ReadCategoriesFromExcel( reader )
-			
-		if not self.hasCategoriesSheet and self.initCategoriesFromExcel and (
-				self.hasField('EventCategory') or any( self.hasField(f) for f in CustomCategoryFields )):
-			MatchingCategory.PrologMatchingCategory()
-			for bib, fields in infoCache.items():
-				MatchingCategory.AddToMatchingCategory( bib, fields )
-			MatchingCategory.EpilogMatchingCategory()
-		
-		# Process all known tag nums from the new Excel sheet.
-		# This also adds data from previously missing tags.
-		GetTagNums( True )
-		
-		try:
-			Model.race.resetAllCaches()
-		except Exception:
-			pass
-		
-		return infoCache
-
-def IsValidRaceDBExcel( fileName ):
+def IsValidRaceDBExcel(fileName: str) -> bool:
 	try:
-		reader = GetExcelReader( fileName )
+		reader = GetExcelReader(fileName)
 	except Exception:
 		return False
 	sheet_names = set( reader.sheet_names() )
@@ -991,7 +895,7 @@ def IsValidRaceDBExcel( fileName ):
 		for sheetName in ('Registration', PropertySheetName, CategorySheetName)
 	)
 
-def HasExcelLink( race ):
+def HasExcelLink(race: RaceType) -> bool:
 	try:
 		externalInfo = race.excelLink.read()
 		return True
@@ -999,101 +903,10 @@ def HasExcelLink( race ):
 		#Utils.logException( e, sys.exc_info() )
 		return False
 
-def SyncExcelLink( race ):
-	return HasExcelLink( race )
+def SyncExcelLink(race: RaceType) -> bool:
+	return HasExcelLink(race)
 
 #-----------------------------------------------------------------------------------------------------
-
-reSeparators = re.compile( '[,;:.]+' )
-class BibInfo:
-	AllFields = (
-		'Name',
-		'License',
-		'UCIID',
-		'Team',
-		'Wave',
-	)
-	
-	def __init__( self ):
-		self.race = Model.race
-		excelLink = getattr(self.race, 'excelLink', None)
-		if excelLink:
-			self.externalInfo = excelLink.read()
-			self.fields = ['Name'] + [f for f in self.AllFields if excelLink.hasField(f)] + ['Wave']
-		else:
-			self.externalInfo = {}
-			self.fields = []
-			
-	def getData( self, bib ):
-		try:
-			bib = int(bib)
-		except Exception:
-			return {}
-		
-		try:
-			data = { k:'{}'.format(v) for k, v in self.externalInfo.get(bib, {}).items() }
-		except ValueError:
-			data = {}
-		
-		data['Name'] = ', '.join( v for v in (data.get('LastName',None), data.get('FirstName',None)) if v )
-		
-		category = self.race.getCategory( bib )
-		data['Wave'] = category.name if category else ''
-		return data
-		
-	def bibField( self, bib ):
-		data = self.getData( bib )
-		if not data:
-			return '{}'.format(bib)
-		values = [('<strong>{}</strong>' if 'Name' in f else '{}').format(escape(data[f])) for f in self.fields if data.get(f, None)]
-		return '{}: {}'.format(bib, ', '.join(values))
-	
-	def bibList( self, bibs ):
-		bibs = [b for b in bibs if b]
-		html = StringIO()
-		tag = Utils.tag
-		with tag( html, 'ul', 'bibList' ):
-			for bib in bibs:
-				with tag( html, 'li' ):
-					html.write( self.bibField(bib) )
-		return html.getvalue()
-	
-	def bibTable( self, bibs ):
-		bibs = [b for b in bibs if b]
-		if not bibs:
-			return '<br/>'
-		GetTranslation = _
-		html = StringIO()
-		tag = Utils.tag
-		with tag( html, 'table', 'bibTable' ):
-			with tag( html, 'thead' ):
-				with tag( html, 'tr' ):
-					for f in ['Bib#'] + self.fields:
-						with tag( html, 'th', {'style':"text-align:left"} if 'Bib' in f else {'style':"text-align:left"} ):
-							html.write( GetTranslation(f) )
-			with tag( html, 'tbody' ):
-				for bib in bibs:
-					with tag( html, 'tr' ):
-						data = self.getData( bib )
-						with tag( html, 'td', {'style':"text-align:right"} ):
-							html.write( '{}'.format(bib) )
-						for f in self.fields:
-							with tag( html, 'td', {'style':"text-align:left"}):
-								if 'Name' in f:
-									with tag( html,'strong'):
-										html.write( escape(data.get(f,'')) )
-								else:
-									html.write( escape(data.get(f,'')) )
-		return html.getvalue()
-		
-	def getSubValue( self, subkey ):
-		if subkey.startswith('BibTable'):					# {=BibTable 132,110,98}
-			return self.bibTable( reSeparators.sub(' ', subkey).split()[1:] )
-		elif subkey.startswith('BibList'):					# {=BibList 132,110,98}
-			return self.bibList( reSeparators.sub(' ', subkey).split()[1:] )
-		elif subkey.startswith('Bib'):						# {=Bib 111}
-			return self.bibField( ' '.join(reSeparators.sub(' ', subkey).split()[1:]) )
-		return None
 
 if __name__ == '__main__':
 	print( Utils.approximateMatch("Team", "Last Name") )

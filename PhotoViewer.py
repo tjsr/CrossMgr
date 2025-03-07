@@ -263,7 +263,7 @@ class PhotoViewerDialog( wx.Dialog ):
 			wx.TheClipboard.Close() 
 	
 	def OnLaunchFileBrowser( self, event ):
-		dir = getPhotoDirName( Utils.mainWin.fileName if Utils.mainWin and Utils.mainWin.fileName else 'Photos' )
+		dir = getPhotoDirName(Utils.mainWin._file_name if Utils.mainWin and Utils.mainWin._file_name else 'Photos')
 		LaunchFileBrowser( dir )
 	
 	def OnPrint( self, event ):
@@ -409,7 +409,7 @@ class PhotoViewerDialog( wx.Dialog ):
 				if rLast and rLast.num != self.num:
 					return
 					
-		photoDir = getPhotoDirName( Utils.mainWin.fileName ) if Utils.mainWin and Utils.mainWin.fileName else 'Photos'
+		photoDir = getPhotoDirName(Utils.mainWin._file_name) if Utils.mainWin and Utils.mainWin._file_name else 'Photos'
 		self.thumbs._scrolled.filePrefix = '' if self.num == self.ShowAllPhotos else 'bib-{:04d}'.format(self.num)
 		
 		if os.path.isdir(photoDir):

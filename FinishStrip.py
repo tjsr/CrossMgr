@@ -612,7 +612,7 @@ def ShowFinishStrip( parent, t=None ):
 	if not race:
 		return
 	with FinishStripDialog( parent,
-		photoFolder=getPhotoDirName( Utils.mainWin.fileName if Utils.mainWin and Utils.mainWin.fileName else 'Photos' ),
+		photoFolder=getPhotoDirName(Utils.mainWin._file_name if Utils.mainWin and Utils.mainWin._file_name else 'Photos'),
 		fps=getattr(race, 'fps', 25.0),
 		leftToRight=getattr(race, 'leftToRight', True),
 		pixelsPerSec=getattr(race, 'pixelsPerSec', None),

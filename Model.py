@@ -13,12 +13,15 @@ import operator
 import threading
 from os.path import commonprefix
 from collections import defaultdict
+from typing import Set
 
+import Log
 import Utils
 import Version
 from BatchPublishAttrs import setDefaultRaceAttr
 import SetRangeMerge
 from InSortedIntervalList import InSortedIntervalList
+from Race import RaceType, ChipReaderRaceInfo
 
 from getuser import lookup_username
 try:
@@ -1102,9 +1105,9 @@ class NumTimeInfo:
 	
 	def getNumInfo( self, num ):
 		return self.info.get( num, {} )
-		
-class Race:
-	MAX_UNMATCHED_TAGS: int = 2000
+
+
+class Race(RaceType, ChipReaderRaceInfo):
 	finisherStatusList = [Rider.Finisher, Rider.Pulled]
 	finisherStatusSet = set( finisherStatusList )
 	
@@ -1113,6 +1116,9 @@ class Race:
 	
 	UnitKm = 0
 	UnitMiles = 1
+
+	startTime: datetime.datetime = None
+	finishTime: datetime.datetime = None
 	
 	distanceUnit = UnitKm
 	
@@ -1120,20 +1126,9 @@ class Race:
 	
 	automaticManual = 0
 	
-	isChangedFlag = False
 	isTimeTrial = False
 	roadRaceFinishTimes = False
 	estimateLapsDownFinishTime = False
-	
-	enableJChipIntegration = False
-	timeTrialNoRFIDStart = False
-	resetStartClockOnFirstTag = False
-	firstRecordedTime = None
-	skipFirstTagRead = False
-	
-	chipReaderType = 0
-	chipReaderPort = 3601
-	chipReaderIpAddr = '127.0.0.1'
 	
 	autocorrectLapsDefault = True
 	
@@ -1208,12 +1203,8 @@ class Race:
 	
 	useTableToPullRiders = False	# Used for Pulled screen.
 
-	#--------------------------------------
-	rfidRestartTime = None		# Restart time (used to ignore intervening tag reads)
-	#--------------------------------------
-	
 	googleMapsApiKey = ''
-	
+
 	#--------------------------------------
 	
 	def __init__( self ):
@@ -1249,10 +1240,8 @@ class Race:
 		self.syncCategories = True
 		self.modelCategory = 0
 		self.distanceUnit = Race.UnitKm
-		self.missingTags = set()
-		
+
 		self.enableUSBCamera = False
-		self.enableJChipIntegration = False
 		self.photoCount = 0
 		
 		self.hideDetails = True
@@ -1261,15 +1250,13 @@ class Race:
 		# Animation options.
 		self.finishTop = False
 		self.reverseDirection = False
-		
-		self.isChangedFlag = True
-		
+
 		self.allCategoriesHaveRaceLapsDefined = False
 		
 		self.numTimeInfoField = NumTimeInfo()
 		
-		self.tagNums = None
 		self.lastOpened = datetime.datetime.now()
+		ChipReaderRaceInfo.reset(self)
 		memoize.clear()
 	
 	def getFileName( self, raceNum=None, includeMemo=True ):
@@ -1349,11 +1336,8 @@ class Race:
 	def hasRiders( self ):
 		return len(self.riders) > 0
 
-	def isChanged( self ):
-		return self.isChangedFlag
-
 	def setChanged( self, changed = True ):
-		self.isChangedFlag = changed
+		self.changed = changed
 		if changed:
 			memoize.clear()
 			self.lastChangedTime = time.time()
@@ -1413,13 +1397,14 @@ class Race:
 	def getRiderNumbers( self ):
 		return self.riders.keys()
 		
-	def __contains__( self, num ):
+	def __contains__( self, num: int ):
 		return num in self.riders
 
-	def __getitem__( self, num ):
+	def __getitem__( self, num: int ):
 		return self.riders[num]
 
-	def curRaceTime( self ):
+	# TODO: Make this return datetime.timedelta
+	def curRaceTime( self ) -> float | None:
 		return (self.startTime and (datetime.datetime.now() - self.startTime).total_seconds()) or 0.0
 		'''
 		if self.startTime is None:
@@ -1432,10 +1417,10 @@ class Race:
 			return (self.finishTime - self.startTime).total_seconds()
 		return self.curRaceTime()
 
-	def addTime( self, num, t = None, doSetChanged = True ):
+	def addTime( self, num: int, t: datetime.datetime = None, doSetChanged: bool = True ):
 		if t is None:
 			t = self.curRaceTime()
-		
+
 		if self.isTimeTrial:
 			r = self.getRider(num)
 			if r.firstTime is None:
@@ -1454,7 +1439,7 @@ class Race:
 						r.firstTime = t
 					else:
 						r.addTime( t )
-						
+
 				elif self.skipFirstTagRead:
 					if not self.firstRecordedTime:
 						self.firstRecordedTime = self.startTime + datetime.timedelta( seconds = t )
@@ -1463,12 +1448,12 @@ class Race:
 						r.firstTime = t
 					else:
 						r.addTime( t )
-						
+
 				else:
 					self.getRider(num).addTime( t )
 			else:
 				self.getRider(num).addTime( t )
-		
+
 		if doSetChanged:
 			self.setChanged()
 		return t
@@ -1481,9 +1466,14 @@ class Race:
 			rider = self.riders[num]
 		except KeyError:
 			pass
-		rider.times = []
-		rider.firstTime = None
-		rider.clearCache()
+
+		# TODO: Wouldn't this cause an exception if the rider doesn't exist?
+		try:
+			rider.times = []
+			rider.firstTime = None
+			rider.clearCache()
+		except Exception as e:
+			Log.getLogger().exception(msg=f'Exception while deleting rider times for {num}', exc_info=e)
 			
 	def clearAllRiderTimes( self ):
 		for num in self.riders.keys():
@@ -2647,15 +2637,6 @@ class Race:
 		if categoryAttribute:
 			setattr( self, categoryAttribute, iSelection )
 	
-	def addUnmatchedTag( self, tag: str, elapsed_time_seconds: float ) -> None:
-		try:
-			if len(self.unmatchedTags[tag]) < self.MAX_UNMATCHED_TAGS:
-				self.unmatchedTags[tag].append( elapsed_time_seconds )
-		except KeyError:
-			self.unmatchedTags[tag] = [elapsed_time_seconds]
-		except (AttributeError, TypeError):
-			self.unmatchedTags = {tag: [elapsed_time_seconds]}
-		
 	def getRawData( self ):
 		''' Return all data in the model.  If edited, return the edit details. '''
 		if not self.startTime:
