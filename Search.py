@@ -154,8 +154,9 @@ class Search( wx.Panel ):
 		if searchStr is not None:
 			self.search.ChangeValue( searchStr )
 		searchText = Utils.removeDiacritic(self.search.GetValue().lower())
-		
-		fields = ReadSignOnSheet.Fields
+
+		# TODO: Take fields from race excel link.
+		fields = ReadSignOnSheet.StandardFields
 		colnames = [_('StartTime')] if race.isTimeTrial else []
 		colnames.extend( f for f in fields if f in next(iter(externalInfo.values())) )
 		colnames.append( _('In Race') )

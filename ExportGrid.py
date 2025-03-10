@@ -8,7 +8,6 @@ import Utils
 import Model
 import math
 from GetResults import GetResults, GetCategoryDetails
-from ReadSignOnSheet import ReportFields
 from FitSheetWrapper import FitSheetWrapper, FitSheetWrapperXLSX
 import qrcode
 from urllib.parse import quote
@@ -86,11 +85,13 @@ def drawQRCode( url, dc, x, y, size ):
 
 class ExportGrid:
 	PDFLineFactor = 1.10
+	__column_names: list[str] = []
+	__time_columns: set[int] = []
 
 	def __init__( self, title='', colnames=None, data=None, footer='', leftJustifyCols=None, infoColumns=None ):
 		self.title = title
 		self.footer = footer
-		self.colnames = (colnames or [])
+		self.__column_names = (colnames or [])
 		self.data = (data or [])
 		self.leftJustifyCols = (leftJustifyCols or set())
 		self.infoColumns = (infoColumns or set())
@@ -105,12 +106,12 @@ class ExportGrid:
 	
 	def setTimeCols( self ):
 		cols = {_('time'), _('finish'), _('start'), _('clock')} 
-		self.timeCols = set( c for c, name in enumerate(self.colnames) if name.lower().strip() in cols or name.startswith(_('Lap') + ' ')  )
+		self.__time_columns = set(c for c, name in enumerate(self.__column_names) if name.lower().strip() in cols or name.startswith(_('Lap') + ' '))
 	
 	def combineFirstLastNames( self ):
 		try:
-			iLast = self.colnames.index(_('Last Name'))
-			iFirst = self.colnames.index(_('First Name'))
+			iLast = self.__column_names.index(_('Last Name'))
+			iFirst = self.__column_names.index(_('First Name'))
 		except ValueError:
 			return
 		
@@ -132,9 +133,9 @@ class ExportGrid:
 				name = last
 			nameCol.append( name )
 		self.data[iLast] = nameCol
-		self.colnames[iLast] = _('Name')
+		self.__column_names[iLast] = _('Name')
 		del self.data[iFirst]
-		del self.colnames[iFirst]
+		del self.__column_names[iFirst]
 		self.leftJustifyCols = set( c - 1 if c > iLast else c for c in self.leftJustifyCols if c != iFirst )
 		self.infoColumns = set( c - 1 if c > iLast else c for c in self.infoColumns if c != iFirst )
 		self.iLapTimes -= 1
@@ -146,7 +147,7 @@ class ExportGrid:
 	def _getColSizeTuple( self, dc, font, col ):
 		dc.SetFont( font )
 		wSpace, hSpace = dc.GetMultiLineTextExtent( '    ' )
-		extents = [ dc.GetMultiLineTextExtent(self.colnames[col]) ]
+		extents = [dc.GetMultiLineTextExtent(self.__column_names[col])]
 		extents.extend( dc.GetMultiLineTextExtent('{}'.format(v)) for v in self.data[col] )
 		width = max( e[0] for e in extents )
 		height = sum( e[1] for e in extents[:self.rowDrawCount] )
@@ -159,7 +160,7 @@ class ExportGrid:
 		wMax, hMax = 0, 0
 		
 		# Sum the width of each column, and record the max of each column.
-		for col, c in enumerate(self.colnames):
+		for col, c in enumerate(self.__column_names):
 			w, h = self._getColSizeTuple( dc, font, col )
 			wMax += w + wSpace
 			hMax = max( hMax, h )
@@ -257,13 +258,13 @@ class ExportGrid:
 				self.data[iCodeCol][c] = '     ' + v
 				
 		try:
-			iUCICodeCol = self.colnames.index( _("UCICode") )
+			iUCICodeCol = self.__column_names.index(_("UCICode"))
 			padCol( iUCICodeCol )
 		except ValueError:
 			iUCICodeCol = None
 		
 		try:
-			iNatCodeCol = self.colnames.index( _("NatCode") )
+			iNatCodeCol = self.__column_names.index(_("NatCode"))
 			padCol( iNatCodeCol )
 		except ValueError:
 			iNatCodeCol = None
@@ -278,13 +279,13 @@ class ExportGrid:
 		dataDraw = [col[rowDrawStart:rowDrawStart+rowDrawCount] for col in self.data]
 		
 		yPixTop = yPixMax = yPix
-		for col, c in enumerate(self.colnames):
+		for col, c in enumerate(self.__column_names):
 			isSpeed = (c == _('Speed'))
 			if isSpeed and dataDraw[col]:
 				try:
-					c = self.colnames[col] = self.data[col][0].split()[1]
+					c = self.__column_names[col] = self.data[col][0].split()[1]
 				except IndexError:
-					c = self.colnames[col] = ''
+					c = self.__column_names[col] = ''
 		
 			colWidth = self._getColSizeTuple( dc, font, col )[0]
 			yPix = yPixTop
@@ -334,7 +335,7 @@ class ExportGrid:
 			xPix += colWidth + wSpace
 			
 			if isSpeed:
-				self.colnames[col] = _('Speed')
+				self.__column_names[col] = _('Speed')
 		
 		# Switch to smaller font.
 		font = self._getFont( borderPix // 4, False )
@@ -438,7 +439,7 @@ class ExportGrid:
 		speedCol = None
 		uciCodeCol = None
 		natCodeCol = None
-		for col, c in enumerate(self.colnames):
+		for col, c in enumerate(self.__column_names):
 			if c == _('Speed'):
 				speedCol = col
 				try:
@@ -573,13 +574,13 @@ class ExportGrid:
 		
 		# Write the colnames and data.
 		rowMax = 0
-		for col, c in enumerate(self.colnames):
+		for col, c in enumerate(self.__column_names):
 			isSpeed = (c == _('Speed'))
 			if isSpeed and self.data[col]:
 				try:
-					c = self.colnames[col] = self.data[col][0].split()[1]
+					c = self.__column_names[col] = self.data[col][0].split()[1]
 				except IndexError:
-					c = self.colnames[col] = ''
+					c = self.__column_names[col] = ''
 
 			headerStyle = headerStyleAlignLeft if col in self.leftJustifyCols else headerStyleAlignRight
 			style = styleAlignLeft if col in self.leftJustifyCols else styleAlignRight
@@ -596,7 +597,7 @@ class ExportGrid:
 				sheetFit.write( rowCur, col, v, style )
 			
 			if isSpeed:
-				self.colnames[col] = _('Speed')
+				self.__column_names[col] = _('Speed')
 		
 		if self.footer:
 			rowMax += 2
@@ -711,18 +712,18 @@ class ExportGrid:
 		
 		# Write the colnames and data.
 		rowMax = 0
-		for col, c in enumerate(self.colnames):
+		for col, c in enumerate(self.__column_names):
 			isSpeed = (c == _('Speed'))
 			if isSpeed and self.data[col]:
 				try:
-					c = self.colnames[col] = self.data[col][0].split()[1]
+					c = self.__column_names[col] = self.data[col][0].split()[1]
 				except IndexError:
-					c = self.colnames[col] = ''
+					c = self.__column_names[col] = ''
 
 			headerStyle = headerStyleAlignLeft if col in self.leftJustifyCols else headerStyleAlignRight
-			style = styleTime if col in self.timeCols else styleAlignLeft if col in self.leftJustifyCols else styleAlignRight
+			style = styleTime if col in self.__time_columns else styleAlignLeft if col in self.leftJustifyCols else styleAlignRight
 			
-			if col in self.timeCols:
+			if col in self.__time_columns:
 				# Find a time format closest to the maximum value.
 				vMax = 0.0
 				highPrecision = False
@@ -748,7 +749,7 @@ class ExportGrid:
 					v = ('{}'.format(v).split() or [''])[0]
 					if v == '"':
 						v += '    '
-				elif col in self.timeCols:
+				elif col in self.__time_columns:
 					if v:
 						try:
 							v = Utils.StrToSeconds(v) / (24.0*60.0*60.0)	# Convert seconds to fraction of a day for Excel.
@@ -761,7 +762,7 @@ class ExportGrid:
 				sheetFit.write( rowCur, col, v, style )
 			
 			if isSpeed:
-				self.colnames[col] = _('Speed')
+				self.__column_names[col] = _('Speed')
 		
 		if self.footer:
 			rowMax += 2
@@ -788,10 +789,10 @@ class ExportGrid:
 	
 	def setResultsOneList( self, category = None, getExternalData = True,
 							showLapsFrequency = None, showLapTimes = True,
-							showPrizes = False ):
+							showPrizes = False, reportFields: list[str] = ()):
 		''' Format the results into columns. '''
 		self.data = []
-		self.colnames = []
+		self.__column_names = []
 		self.footer = None
 
 		results = GetResults( category )
@@ -865,38 +866,38 @@ class ExportGrid:
 		isTimeTrial = getattr( race, 'isTimeTrial', False )
 		roadRaceFinishTimes = race.roadRaceFinishTimes
 
-		infoFields = ReportFields if getExternalData else []
+		infoFields = reportFields if getExternalData else []
 		infoFieldsPresent = set( infoFields ) & set( dir(leader) )
 		infoFields = [f for f in infoFields if f in infoFieldsPresent]
 		
-		self.colnames = ([_('Pos'), _('Bib')] +
-						infoFields +
-						([_('Clock'),_('Start'),_('Finish')] if isTimeTrial else []) +
-						([_('ElapsedTime'), _('Factor %')] if hasFactor else []) +
-						[_('Time')] +
-						([_('Gap')] if not hasFactor else [])
-		)
+		self.__column_names = ([_('Pos'), _('Bib')] +
+		                       infoFields +
+		                       ([_('Clock'),_('Start'),_('Finish')] if isTimeTrial else []) +
+		                       ([_('ElapsedTime'), _('Factor %')] if hasFactor else []) +
+		                       [_('Time')] +
+		                       ([_('Gap')] if not hasFactor else [])
+		                       )
 		if hasSpeeds:
-			self.colnames.append( _('Speed') )
+			self.__column_names.append(_('Speed'))
 		if showPrizes:
-			self.colnames.append( _('Prize') )
+			self.__column_names.append(_('Prize'))
 			
-		self.colnames = ['{} {}'.format(name[:-len(_('Name'))], _('Name')) if name.endswith(_('Name')) else name for name in self.colnames]
-		self.iLapTimes = len(self.colnames)
+		self.__column_names = ['{} {}'.format(name[:-len(_('Name'))], _('Name')) if name.endswith(_('Name')) else name for name in self.__column_names]
+		self.iLapTimes = len(self.__column_names)
 		if race.winAndOut:
 			lapsMax = max(len(rr.lapTimes or []) for rr in results)
 		else:
 			lapsMax = len(leader.lapTimes or [])
 			
 		if leader.lapTimes and showLapTimes:
-			self.colnames.extend( ['{} {}'.format(_('Lap'),lap) for lap in range(1, lapsMax+1)
-					if lap % showLapsFrequency == 0 or lap == 1 or lap == lapsMax] )
+			self.__column_names.extend(['{} {}'.format(_('Lap'), lap) for lap in range(1, lapsMax + 1)
+			                            if lap % showLapsFrequency == 0 or lap == 1 or lap == lapsMax])
 		
 		self.setTimeCols()
 		
 		highPrecision = Model.highPrecisionTimes()
-		data = [ [] for i in range(len(self.colnames)) ]
-		colsMax = len(self.colnames)
+		data = [[] for i in range(len(self.__column_names))]
+		colsMax = len(self.__column_names)
 		rrFields = (['pos', 'num'] +
 					infoFields +
 					(['clockStartTime','startTime','finishTime'] if isTimeTrial else []) +
@@ -973,19 +974,19 @@ class ExportGrid:
 		self.infoColumns     = set( range(2, 2+len(infoFields)) ) if infoFields else set()
 		self.leftJustifyCols = set( range(2, 2+len(infoFields)) ) if infoFields else set()
 		try:
-			self.leftJustifyCols.remove( self.colnames.index(_('Age')) )
+			self.leftJustifyCols.remove(self.__column_names.index(_('Age')))
 		except ValueError:
 			pass
 		
 		if roadRaceFinishTimes:
 			sameValue = '"    '
 			try:
-				iSpeed = self.colnames.index(_('Speed'))
+				iSpeed = self.__column_names.index(_('Speed'))
 			except ValueError:
 				iSpeed = -1
 			
 			try:
-				iTime = self.colnames.index(_('Time'))
+				iTime = self.__column_names.index(_('Time'))
 			except ValueError:
 				iTime = -1
 			if iTime > 0:
@@ -1001,7 +1002,7 @@ class ExportGrid:
 					else:
 						lastTime = curTime
 			try:
-				iGap = self.colnames.index(_('Gap'))
+				iGap = self.__column_names.index(_('Gap'))
 			except ValueError:
 				iGap = -1
 			if iGap > 0:
@@ -1014,7 +1015,7 @@ class ExportGrid:
 					else:
 						lastGap = curGap
 						
-		self.colnames = [Utils.translate(n) if n in infoFieldsPresent else n for n in self.colnames]
+		self.__column_names = [Utils.translate(n) if n in infoFieldsPresent else n for n in self.__column_names]
 
 if __name__ == '__main__':
 	pass

@@ -1,3 +1,5 @@
+from typing import cast
+
 import Model
 from bisect import bisect_left
 from math import floor
@@ -9,7 +11,7 @@ import itertools
 from datetime import timedelta, datetime
 from collections import deque, defaultdict
 
-from ReadSignOnSheet import IgnoreFields, NumericFields
+from ReadSignOnSheet import SignOnSheetExcelLink
 from SetNoDataDNS import SetNoDataDNS
 statusSortSeq = Model.Rider.statusSortSeq
 
@@ -685,7 +687,7 @@ def GetResultsWithData( category ):
 	try:
 		excelLink = race.excelLink
 		externalInfo = excelLink.read()
-		ignoreFields = set(IgnoreFields)
+		ignoreFields = set(excelLink.IgnoreFields)
 		externalFields = [f for f in excelLink.getFields() if f not in ignoreFields]
 	except Exception:
 		excelLink = None
@@ -699,7 +701,7 @@ def GetResultsWithData( category ):
 		for f in externalFields:
 			try:
 				v = externalInfo[rr.num][f]
-				if f in NumericFields:
+				if f in excelLink.NumericFields:
 					v = float(v)
 					if float(v) == int(v):
 						v = int(v)
@@ -1116,7 +1118,7 @@ def GetResultsBaseline():
 def GetResultMap( category ):
 	return {rr.num:rr for rr in GetResults(category)} 
 	
-def IsRiderFinished( bib, t ):
+def IsRiderFinished( bib, t ) -> bool:
 	race = Model.race
 	if not race:
 		return False

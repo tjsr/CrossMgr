@@ -1,7 +1,5 @@
-import datetime
 import logging
-from abc import abstractmethod, ABC
-from typing import Optional, List, Any, Tuple, Set, Dict
+from typing import Optional, List, Any
 
 import wx
 import wx.adv as adv
@@ -36,6 +34,20 @@ def create_category_field_list() -> List[str]:
 LocaleTagFieldList: List[str] = [_(x) for x in create_tag_field_list()]
 LocaleCategoryFieldList: List[str] = [_(x) for x in create_category_field_list()]
 
+StandardFields: list[str] = [
+	_('Bib#'),
+	_('LastName'), _('FirstName'),
+	_('Team'),
+	_('City'), _('State'), _('Prov'), _('StateProv'), _('Nat.'),
+	_('Category'), _('EventCategory'), _('Age'), _('Gender'),
+	_('License'),
+	_('NatCode'), _('UCIID'), _('UCICode'), _('TeamCode'),
+	_('Factor'),
+	]
+
+StandardIgnoreFields = ['Bib#', 'Factor', 'EventCategory', 'CustomCategory', 'TeamCode'] + LocaleTagFieldList
+StandardReportFields = (lambda s: [f for f in StandardFields if f not in s])(set(StandardIgnoreFields))
+ReportFields = StandardReportFields
 
 class FileNamePage(adv.WizardPageSimple):
 	def __init__(self, parent: wx.Dialog):
@@ -58,10 +70,10 @@ class FileNamePage(adv.WizardPageSimple):
 		
 		self.SetSizer( vbs )
 	
-	def setFileName( self, fileName ):
+	def setFileName( self, fileName: str ) -> None:
 		self.fbb.SetValue( fileName )
 	
-	def getFileName( self ):
+	def getFileName( self ) -> str:
 		return self.fbb.GetValue()
 	
 class SheetNamePage(adv.WizardPageSimple):
@@ -102,21 +114,12 @@ class SignOnSheetExcelLink(ExcelLink):
 
 	def __init__(self):
 		with Utils.SuspendTranslation():
-			self._Fields = [
-				         _('Bib#'),
-				         _('LastName'), _('FirstName'),
-				         _('Team'),
-				         _('City'), _('State'), _('Prov'), _('StateProv'), _('Nat.'),
-				         _('Category'), _('EventCategory'), _('Age'), _('Gender'),
-				         _('License'),
-				         _('NatCode'), _('UCIID'), _('UCICode'), _('TeamCode'),
-				         _('Factor'),
-			         ] + LocaleTagFieldList + LocaleCategoryFieldList
+			self._Fields = StandardFields + LocaleTagFieldList + LocaleCategoryFieldList
 
-			IgnoreFields = ['Bib#', 'Factor', 'EventCategory', 'CustomCategory',
-			                'TeamCode'] + LocaleTagFieldList  # Fields to ignore when adding data to standard reports.
-			# ReportFields = [f for f in self.Fields if f not in IgnoreFields]
-			ReportFields = (lambda s: [f for f in self.Fields if f not in s])(set(IgnoreFields))
+			self._ignore_fields = StandardIgnoreFields  # Fields to ignore when adding data to standard reports.
+
+			# self.__report_fields = [f for f in self.Fields if f not in self.IgnoreFields]
+			self.__report_fields = StandardReportFields
 
 		self._add_numeric_field('Age')
 		self._add_numeric_field('Factor')
@@ -128,7 +131,7 @@ class SignOnSheetExcelLink(ExcelLink):
 		return LocaleCategoryFieldList
 
 	@property
-	def TagFields(self) -> [str]:
+	def TagFields(self) -> list[str]:
 		return LocaleTagFieldList
 
 	@property
@@ -138,6 +141,10 @@ class SignOnSheetExcelLink(ExcelLink):
 	@property
 	def HasPropertiesSheet(self) -> bool:
 		return self.__has_properties_sheet
+
+	@property
+	def ReportFields(self) -> list[str]:
+		return self.__report_fields
 
 	def _getFields(self) -> [str]:
 		return self._Fields
@@ -190,9 +197,24 @@ class SignOnSheetExcelLink(ExcelLink):
 		if not self.__has_categories_sheet and self.initCategoriesFromExcel and (
 				self.hasField('EventCategory') or any(self.hasField(f) for f in self.CustomCategoryFields)):
 			MatchingCategory.PrologMatchingCategory()
-			for bib, fields in infoCache.items():
-				MatchingCategory.AddToMatchingCategory(bib, fields)
-			MatchingCategory.EpilogMatchingCategory()
+			if race is None:
+				self.log.error('No race found while trying to process sheet data.')
+				# TODO: Throw an exception here
+				return
+
+			excel_link = race.excelLink
+			if excel_link is None:
+				self.log.error('No excel link found while trying to process sheet data.')
+				# TODO: Throw an exception here
+				return
+
+			info_cache = excel_link.InfoCache
+			if info_cache is None:
+				self.log.error('Info cache is expected to have data - got None')
+			else:
+				for bib, fields in info_cache.items():
+					MatchingCategory.AddToMatchingCategory(bib, fields)
+				MatchingCategory.EpilogMatchingCategory()
 
 		# Process all known tag nums from the new Excel sheet.
 		# This also adds data from previously missing tags.
@@ -241,7 +263,7 @@ class SignOnSheetExcelLink(ExcelLink):
 
 
 		if len(errors) > 0:
-			raise ExcelDataFieldError(errors)
+			raise ExcelDataFieldError(errors=errors, msg=_('Errors in Excel Sheet'))
 
 	@staticmethod
 	def __parse_to_uppercase(data: dict[str, str], field: str):
@@ -886,6 +908,8 @@ def ResetExcelLinkCache() -> None:
 
 
 def IsValidRaceDBExcel(fileName: str) -> bool:
+	assert fileName is not None
+
 	try:
 		reader = GetExcelReader(fileName)
 	except Exception:
@@ -896,14 +920,28 @@ def IsValidRaceDBExcel(fileName: str) -> bool:
 	)
 
 def HasExcelLink(race: RaceType) -> bool:
+	assert race is not None
+
+	link = race.excelLink
+	if link is None:
+		return False
+	if isinstance(link, property):
+		msg = 'excelLink is a Property type, not ExcelLink or SignOnSheet'
+		Log.getLogger().error(msg)
+		raise TypeError(msg)
+
 	try:
-		externalInfo = race.excelLink.read()
+		externalInfo = link.read()
 		return True
 	except Exception as e:
+		Log.getLogger().exception('Failed while reading excel link', exc_info=e)
 		#Utils.logException( e, sys.exc_info() )
 		return False
 
 def SyncExcelLink(race: RaceType) -> bool:
+	assert race is not None
+	assert race.excelLink is None, 'ExcelLink not defined on Race object'
+	assert isinstance(race.excelLink, ExcelLink), f'Race has excelLink, but is of type {race.excelLink.__class__.__name__}'
 	return HasExcelLink(race)
 
 #-----------------------------------------------------------------------------------------------------

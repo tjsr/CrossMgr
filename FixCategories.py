@@ -1,7 +1,7 @@
 import wx
 import Model
 
-def FixCategories( choice, iSelection = None, doSyncCategories = True ):
+def FixCategories( choice, iSelection = None, doSyncCategories = True ) -> list:
 	choice.InvalidateBestSize() 
 	choice.SetSize(choice.GetBestSize()) 
 

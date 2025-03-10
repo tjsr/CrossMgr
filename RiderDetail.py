@@ -5,13 +5,13 @@ import re
 import bisect
 import random
 import Utils
-from Utils				import logCall
+from Utils import logCall
 import Model
 import ColGrid
 import EditEntry
 from LineGraph import LineGraph
 from GanttChartPanel import GanttChartPanel
-from ReadSignOnSheet import GetTagNums, TagFields
+from ReadSignOnSheet import GetTagNums
 from Undo import undo
 import Gantt
 from EditEntry import CorrectNumber, ShiftNumber, DeleteEntry

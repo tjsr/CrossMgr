@@ -56,7 +56,7 @@ class HelpHandler( BaseHTTPRequestHandler ):
 	def log_message(self, format, *args):
 		return
 
-def getHelpURL( fname ):
+def getHelpURL( fname: str ):
 	return 'http://localhost:{}/{}'.format(PORT_NUMBER, os.path.basename(fname))
 
 def showHelp( url ):

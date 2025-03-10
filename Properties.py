@@ -147,9 +147,9 @@ class GeneralInfoProperties( wx.Panel ):
 		ms.Add( fgs, 1, flag=wx.EXPAND|wx.ALL, border=16 )
 
 	def refresh( self ):
-		race = Model.race
-		self.raceName.SetValue( race.name )
-		self.raceLongName.SetValue( race.longName )
+		race: Model.Race = Model.race
+		self.raceName.SetValue( race.Name )
+		self.raceLongName.SetValue( race.LongName or '' )
 		self.raceCity.SetValue( race.city )
 		self.raceStateProv.SetValue( race.stateProv )
 		self.raceCountry.SetValue( race.country )
@@ -157,15 +157,15 @@ class GeneralInfoProperties( wx.Panel ):
 		d = wx.DateTime()
 		d.ParseDate(race.date)
 		self.date.SetValue( d )
-		self.raceNum.SetValue( race.raceNum )
+		self.raceNum.SetValue( race.RaceNum )
 		self.scheduledStart.SetValue( race.scheduledStart )
-		self.minutes.SetValue( race.minutes )
+		self.minutes.SetValue( race.Minutes )
 		self.organizer.SetValue( getattr(race, 'organizer', '') )
 		self.commissaire.SetValue( getattr(race, 'commissaire', '') )
-		self.memo.SetValue( race.memo )
+		self.memo.SetValue( race.Memo or '')
 
 	def commit( self ):
-		race = Model.race
+		race: Model.Race = Model.race
 		race.name = self.raceName.GetValue().strip()
 		race.longName = self.raceLongName.GetValue().strip()
 		race.city = self.raceCity.GetValue().strip()
@@ -1459,10 +1459,10 @@ class Properties( wx.Panel ):
 	def onChanged( self, event ):
 		self.updateFileName()
 	
-	def updateFileName( self ):
+	def updateFileName( self ) -> str:
 		try:
-			gi = self.generalInfoProperties
-			fi = self.filesProperties
+			gi: GeneralInfoProperties = self.generalInfoProperties
+			fi: FilesProperties = self.filesProperties
 		except ValueError:
 			return ''
 	
@@ -1472,7 +1472,7 @@ class Properties( wx.Panel ):
 			gi.raceNum.GetValue(),
 			gi.memo.GetValue(),
 		)
-		fi._file_name.SetLabel(fname)
+		fi.fileName.SetLabel(fname)
 		return fname
 	
 	def saveFileNameFields( self ):
