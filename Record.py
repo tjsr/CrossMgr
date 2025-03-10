@@ -200,26 +200,26 @@ class Record(wx.Panel, TimeEntryController):
 		with SetLaps( self, category=category ) as setLaps:
 			setLaps.ShowModal()
 
-	def doClockUpdate( self ):
+	def doClockUpdate( self ) -> bool:
 		mainWin = Utils.getMainWin()
-		return not mainWin or mainWin.isShowingPage(self)
+		return not mainWin or mainWin.is_showing_page(self)
 
-	def isKeypadInputMode( self ):
+	def isKeypadInputMode( self ) -> bool:
 		return self.notebook.GetSelection() == 0
 
-	def isTimeTrialInputMode( self ):
+	def isTimeTrialInputMode( self ) -> bool:
 		return self.notebook.GetSelection() == 1
 
-	def isBibTimeInputMode( self ):
+	def isBibTimeInputMode( self ) -> bool:
 		return self.notebook.GetSelection() == 2
 
-	def setTimeTrialInput( self, isTimeTrial=True ):
+	def setTimeTrialInput( self, isTimeTrial: bool=True ) -> None:
 		page = 1 if isTimeTrial else 0
 		if self.notebook.GetSelection() != page:
 			self.notebook.SetSelection( page )
 			self.timeTrialRecord.refresh()
 
-	def onPageChanged( self, event ):
+	def onPageChanged( self, event: wx.Event ) -> None:
 		if self.isBibTimeInputMode():
 			self.bibTimeRecord.refresh()
 

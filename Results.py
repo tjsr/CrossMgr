@@ -662,7 +662,7 @@ class Results( wx.Panel ):
 		exportGrid = ExportGrid()
 		exportGrid.setResultsOneList( category, self.showRiderData, showLapsFrequency = 1 )
 		
-		if not exportGrid.colnames:
+		if not exportGrid.__column_names:
 			self.clearGrid()
 			return
 
@@ -670,7 +670,7 @@ class Results( wx.Panel ):
 		speedUnit = None
 		iSpeedCol = None
 		try:
-			iSpeedCol = next(i for i, c in enumerate(exportGrid.colnames) if c == _('Speed'))
+			iSpeedCol = next(i for i, c in enumerate(exportGrid.__column_names) if c == _('Speed'))
 		except StopIteration:
 			pass
 		if iSpeedCol is not None:
@@ -680,12 +680,12 @@ class Results( wx.Panel ):
 					continue
 				dSplit = d.split()
 				if not speedUnit and len(dSplit) > 1:
-					exportGrid.colnames[iSpeedCol] = speedUnit = dSplit[1]
+					exportGrid.__column_names[iSpeedCol] = speedUnit = dSplit[1]
 				exportGrid.data[iSpeedCol][r] = dSplit[0]
 				if exportGrid.data[iSpeedCol][r] == '"':
 					exportGrid.data[iSpeedCol][r] += '    '
 			
-		colnames = exportGrid.colnames
+		colnames = exportGrid.__column_names
 		data = exportGrid.data
 		
 		sortCol = None
@@ -824,7 +824,7 @@ class Results( wx.Panel ):
 		# Highlight the sorted column.
 		if sortLap:
 			colnames = []
-			for name in exportGrid.colnames:
+			for name in exportGrid.__column_names:
 				try:
 					if int(name.split()[1]) == sortLap:
 						name = '<{}>\n{}'.format(name,
@@ -834,12 +834,12 @@ class Results( wx.Panel ):
 				colnames.append( name )
 		elif sortLabel:
 			colnames = []
-			for name in exportGrid.colnames:
+			for name in exportGrid.__column_names:
 				if name == sortLabel:
 					name = '<{}>'.format(name)
 				colnames.append( name )
 		else:
-			colnames = exportGrid.colnames
+			colnames = exportGrid.__column_names
 		
 		try:
 			iLabelMax = next(i for i, name in enumerate(colnames) if name.startswith(_('Lap')) or name.startswith('<' + _('Lap')))

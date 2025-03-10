@@ -1,12 +1,18 @@
+from typing import cast
+
 import wx
 import bisect
+
+import Log
 import Model
 import Utils
 import ColGrid
 from GetResults import GetResults
 from FixCategories import FixCategories
+from Race import RaceType
 from RiderDetail import ShowRiderDetailDialog
-from ReadSignOnSheet import SyncExcelLink
+from ReadSignOnSheet import SyncExcelLink, HasExcelLink
+
 
 class Recommendations( wx.Panel ):
 	def __init__( self, parent, id = wx.ID_ANY ):
@@ -118,25 +124,33 @@ class Recommendations( wx.Panel ):
 		self.grid.Reset()
 	
 	def refresh( self ):
-		with Model.LockRace() as race:
+		with Model.LockRace() as r:
+			race: RaceType = cast(RaceType, r)
 			self.isEmpty = True
 			
 			if race is None:
 				self.clearGrid()
 				return
 
-			SyncExcelLink( race )
+			has_excel_link = HasExcelLink(race)
 			category = FixCategories( self.categoryChoice, getattr(race, 'recommendationsCategory', 0) )
 					
 			excelErrors = []
+			externalInfo = None
 			try:
-				externalInfo = race.excelLink.read( True )
-				excelErrors = race.excelLink.getErrors()
-			except Exception:
+				if has_excel_link:
+					externalInfo = race.excelLink.read( True )
+					excelErrors = race.excelLink.getErrors()
+				else:
+					Log.getLogger().error('No excel link while racing race file.')
+				if excelErrors is None:
+					excelErrors = []
+			except Exception as e:
+				Log.getLogger().exception( 'Recommendations: ExcelLink.read', exc_info=e )
 				externalInfo = {}
 				excelErrors = []
 				
-			def getName( num ):
+			def getName( num: str ) -> str:
 				info = externalInfo.get(num, {})
 				last = info.get('LastName','')
 				first = info.get('FirstName','')

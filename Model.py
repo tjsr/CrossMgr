@@ -111,6 +111,8 @@ def resetCache():
 class LockRace:
 	def __enter__(self):
 		lock.acquire()
+		if race is None:
+			Log.getLogger('LockRace').warning('Acquired lock on race but Model.race has no race object.')
 		return race
 		
 	def __exit__( self, type, value, traceback ):
@@ -140,7 +142,6 @@ def IntervalsToSet( intervals ):
 
 #----------------------------------------------------------------------
 class Category:
-
 	DistanceByLap = 0
 	DistanceByRace = 1
 
@@ -150,6 +151,8 @@ class Category:
 	CatWave = 0
 	CatComponent = 1
 	CatCustom = 2
+
+	name: str = None
 	
 	catType = 0
 	publishFlag = True
@@ -263,7 +266,7 @@ class Category:
 						gender='Open', lappedRidersMustContinue=False,
 						catType=CatWave, publishFlag=True, uploadFlag=True, seriesFlag=True, earlyBellTime=None ):
 		
-		self.name = f'{name}'.strip()
+		self.Name = f'{name}'.strip()
 		self.catStr = f'{catStr}'.strip()
 		self.startOffset = startOffset if startOffset else '00:00:00'
 		
@@ -388,13 +391,17 @@ class Category:
 		return (self.firstLapDistance or self.distance or 0.0) + (self.distance or 0.0) * (lap-1)
 	
 	@staticmethod
-	def getFullName(name: str, gender: str):
+	def getFullName(name: str | None, gender: str) -> str:
 		GetTranslation = _
+		if name is None:
+			safe_name = '<Unknown Rider>'
+		else:
+			safe_name = name.strip()
 		return '{} ({})'.format(name, GetTranslation(gender))
 	
 	@property
-	def fullname( self ):
-		return Category.getFullName( self.name.strip(), getattr(self, 'gender', 'Open') )
+	def fullname( self ) -> str | None:
+		return Category.getFullName( self.name, getattr(self, 'gender', 'Open') )
 	
 	@property
 	def firstLapRatio( self ):
@@ -411,7 +418,8 @@ class Category:
 	def distanceIsByRace( self ) -> bool:
 		return self.distanceType == Category.DistanceByRace
 
-	def getNumLaps( self ):
+	def getNumLaps( self ) -> int | None:
+		# TODO: Make static, and pass in race, don't use global value
 		laps = getattr( self, '_numLaps', None )
 		if (race and race.isTimeTrial) and ((laps or 0) < 1 and not self.raceMinutes):
 			laps = 1
@@ -1185,7 +1193,6 @@ class Race(RaceType, ChipReaderRaceInfo):
 	headerImage = None
 	email = None
 	postPublishCmd = ''
-	longName = ''
 
 	#--------------------------------------
 	# Team results criteria
@@ -1211,19 +1218,16 @@ class Race(RaceType, ChipReaderRaceInfo):
 		self.reset()
 
 	def reset( self ):
-		self.name = 'MyEventName'
 		self.organizer = 'MyOrganizer'
 		
 		self.city = 'MyCity'
 		self.stateProv = 'MyStateProv'
 		self.country = 'MyCountry'
 		
-		self.raceNum = 1
 		self.date = datetime.date.today().strftime('%Y-%m-%d')
 		self.scheduledStart = '10:00'
 		self.minutes = 60
 		self.commissaire = 'MyCommissaire'
-		self.memo = ''
 		self.discipline = 'Cyclo-cross'
 
 		self.categories = {}
@@ -1269,26 +1273,26 @@ class Race(RaceType, ChipReaderRaceInfo):
 	
 	@property
 	def title( self ):
-		return self.longName or self.name
+		return self.LongName or self.Name
 	
 	def getTemplateValues( self ):
-		excelLink = getattr(self, 'excelLink', None)
+		excelLink = self.excelLink
 		if excelLink:
-			excelLinkStr = '{}|{}'.format( os.path.basename(excelLink.fileName or ''), excelLink.sheetName or '')
+			excelLinkStr = '{}|{}'.format( os.path.basename(excelLink.FileName or ''), excelLink.SheetName or '')
 		else:
 			excelLinkStr = ''
 		
 		path = Utils.getFileName() or ''
 		return {
-			'EventName':	self.name,
+			'EventName':	self.Name,
 			'EventTitle':	self.title,
-			'RaceNum':		'{}'.format(self.raceNum),
+			'RaceNum':		'{}'.format(self.RaceNum),
 			'City':			self.city,
 			'StateProv':	self.stateProv,
 			'Country':		self.country,
 			'Commissaire':	self.commissaire,
 			'Organizer':	self.organizer,
-			'Memo':			self.memo,
+			'Memo':			self.Memo,
 			'Discipline':	self.discipline,
 			'RaceType':	_('Time Trial') if self.isTimeTrial else _('Mass Start'),
 			'RaceDate':		self.date,
@@ -2128,7 +2132,9 @@ class Race(RaceType, ChipReaderRaceInfo):
 		allInactive = True
 		for t in nameStrTuples:
 			args = dict( t )
+			self._log.debug('Category args from nameStrTuples: {}'.format(args))
 			if 'name' not in args or not args['name']:
+				self._log.warning(f'Category name is missing in {t}. Skipping.')
 				continue
 			if '{}'.format(args.get('active', '1')).strip().upper() in '1YT':
 				allInactive = False
@@ -2225,7 +2231,7 @@ class Race(RaceType, ChipReaderRaceInfo):
 		fp.write( '# Created By: {}\n'.format(CurrentUser) )
 		fp.write( '# Created On: {}\n'.format(datetime.datetime.now()) )
 		fp.write( '#   Computer: {}\n'.format(CurrentComputer) )
-		fp.write( '#  From Race: "{}-r{}"\n'.format(self.name, self.raceNum) )
+		fp.write( '#  From Race: "{}-r{}"\n'.format(self.Name, self.raceNum) )
 		fp.write( '#    Version: {}\n'.format(Version.AppVerName) )
 		fp.write( '#\n' )
 		fp.write( '# for details see http://sites.google.com/site/crossmgrsoftware/\n' )
@@ -2414,7 +2420,7 @@ class Race(RaceType, ChipReaderRaceInfo):
 	
 	def getRaceIntro( self ):
 		intro = [
-			'{}:{}'.format(self.name, self.raceNum),
+			'{}:{}'.format(self.Name, self.raceNum),
 			'{}: {} ({})'.format(_('Start'), self.scheduledStart, self.date),
 			_('Time Trial') if self.isTimeTrial else _('Mass Start'),
 		]

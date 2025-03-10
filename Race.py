@@ -1,6 +1,11 @@
 import datetime
+import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Set, Any
+from typing import Dict, List, Set, Any, Optional
+
+import Log
+import Utils
+from ExcelLink import ExcelLink
 
 
 class ChipReaderRaceInfo:
@@ -53,20 +58,36 @@ class ChipReaderRaceInfo:
 class RaceType(ABC, ChipReaderRaceInfo):
 	MAX_UNMATCHED_TAGS: int = 2000
 
-	_excelLink: Any
-	__missing_tags: set[(int, datetime.datetime)]
-	__unmatched_tags: dict[str, list[float]]
-	__is_changed_flag = False
+	_excelLink: Optional[ExcelLink] = None
+	__missing_tags: set[(int, datetime.datetime)] = set()
+	__unmatched_tags: dict[str, list[float]] = dict()
+	__is_changed_flag:bool = False
+	__race_num: int = 1
+	__date: datetime.date = datetime.date.today()
+	__memo: str | None = None
+	__name: str = 'MyEventName'
+	__long_name: str|None = None
+	__race_duration: datetime.timedelta = datetime.timedelta(minutes=60)
+	__log: logging.Logger = Log.getLogger()
 
 	def reset(self):
 		self._excelLink = None
 		self.__missing_tags = set()
 		self.__unmatched_tags = dict()
 		self.__is_changed_flag = True
+		self.__race_num = 1
+		self.__date = datetime.date.today()
+		self.__memo = None
+		self.__name = 'MyEventName'
+		self.__long_name = None
 
 	@property
-	def excelLink(self) -> Any:
+	def excelLink(self) -> ExcelLink | None:
 		return self._excelLink
+
+	@excelLink.setter
+	def excelLink(self, value: ExcelLink | None):
+		self._excelLink = value
 
 	@property
 	def unmatchedTags(self) -> Dict[str, List[float]]:
@@ -107,4 +128,63 @@ class RaceType(ABC, ChipReaderRaceInfo):
 	def changed(self, value: bool):
 		self.__is_changed_flag = value
 
+	@property
+	def FileName(self) -> str:
+		return Utils.GetFileName(
+			self.__date.strftime('%Y-%m-%d'),
+			self.__name,
+			self.__race_num,
+			self.__memo
+		)
 
+	@property
+	def Name(self) -> str:
+		return self.__name
+
+	@Name.setter
+	def Name(self, value: str):
+		self.__name = value
+
+	@property
+	def LongName(self) -> str | None:
+		return self.__long_name
+
+	@LongName.setter
+	def LongName(self, value: str):
+		self.__long_name = value
+
+	@property
+	def RaceNum(self) -> int | None:
+		return self.__race_num
+
+	@RaceNum.setter
+	def RaceNum(self, value: int):
+		self.__race_num = value
+
+	@property
+	def Minutes(self) -> int | None:
+		if self.__race_duration is None:
+			return None
+		return self.__race_duration.seconds // 60
+
+	@Minutes.setter
+	def Minutes(self, value: int):
+		self.__race_duration = datetime.timedelta(minutes=value)
+
+	@property
+	def Memo(self) -> str | None:
+		return self.__memo
+
+	@Memo.setter
+	def Memo(self, value: str | None):
+		self.__memo = value
+
+	@property
+	def _log(self) -> logging.Logger:
+		if self.__log is None:
+			self.__log = Log.getLogger()
+		return self.__log
+
+	@property
+	def log(self) -> None:
+		raise NotImplementedError('Use ._log not .log property must be overridden.')

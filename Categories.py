@@ -3,6 +3,8 @@ import os
 import wx
 import wx.grid as gridlib
 import xlsxwriter
+
+import Log
 import Utils
 import Model
 from AddExcelInfo import AddExcelInfo
@@ -845,16 +847,16 @@ and remove them from other categories.'''),
 			if race is None:
 				return
 			numStrTuples = []
-			for r in range(self.grid.GetNumberRows()):
-				values = { name:self.grid.GetCellValue(r, c)
-					for name, c in self.iCol.items() if name not in self.computedFields
+			for row_num in range(self.grid.GetNumberRows()):
+				values = { name:self.grid.GetCellValue(row_num, col_num)
+					for name, col_num in self.iCol.items() if name not in self.computedFields
 				}
 				for field in ('distance', 'firstLapDistance'):
 					try:
 						d = Utils.floatLocale( values[field] )
-						self.grid.SetCellValue( r, self.iCol[field], f'{d:.3n}' if d>0.0 else '' )
+						self.grid.SetCellValue( row_num, self.iCol[field], f'{d:.3n}' if d>0.0 else '' )
 					except Exception:
-						self.grid.SetCellValue( r, self.iCol[field], '' )
+						self.grid.SetCellValue( row_num, self.iCol[field], '' )
 						values[field] = ''
 				
 				values['catType'] = self.CategoryTypeChoices.index(values['catType'])

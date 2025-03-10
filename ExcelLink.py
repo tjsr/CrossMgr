@@ -3,17 +3,12 @@ import re
 from abc import abstractmethod, ABC
 from typing import List, Tuple, Any
 
-import Model
-from Race import RaceType
-from ReadCategoriesFromExcel import ReadCategoriesFromExcel
-from ReadPropertiesFromExcel import ReadPropertiesFromExcel
-import MatchingCategory
 from Excel import GetExcelReader, ReadExcelXlsx
 
 ExcelRowError = Tuple[int, str]
 
 class ExcelDataFieldError(Exception):
-	def __init__(self, row: int, msg: str, rider_number: int = None, errors: List[Tuple[int, str]] = None):
+	def __init__(self, row: int = None, msg: str = None, rider_number: int = None, errors: List[Tuple[int, str]] = None):
 		if errors is None:
 			full_msg = f'Row {row}:'
 			full_msg += f' Rider {rider_number}:' if rider_number is not None else ''
@@ -35,7 +30,8 @@ class ExcelLink(ABC):
 	__info_cache: Any = None
 	__error_cache: list[ExcelRowError] = None
 	__state_cache: Tuple[float, str, str,  dict[Any, int]] = None
-	_numeric_fields: [str] = None
+	_numeric_fields: list[str] = None
+	_ignore_fields: list[str] = None
 	_field_col: dict[str, int] = None
 
 	def __init__(self):
@@ -46,12 +42,16 @@ class ExcelLink(ABC):
 		self._numeric_fields = []
 
 	@property
-	def Fields(self) -> [str]:
+	def Fields(self) -> list[str]:
 		return self._getFields()
 
 	@property
-	def NumericFields(self) -> [str]:
+	def NumericFields(self) -> list[str]:
 		return self._numeric_fields
+
+	@property
+	def IgnoreFields(self) -> list[str]:
+		return self._ignore_fields
 
 	@property
 	def ReadFromFile(self) -> bool:
@@ -72,6 +72,10 @@ class ExcelLink(ABC):
 	@abstractmethod
 	def _getFields(self) -> [str]:
 		pass
+
+	@property
+	def InfoCache(self) -> Any:
+		return self.__info_cache
 
 	def _add_numeric_field(self, field_name: str) -> None:
 		if self._numeric_fields is None:

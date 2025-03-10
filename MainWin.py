@@ -26,6 +26,7 @@ from collections import defaultdict
 import locale
 
 import Log
+import MainWinSimulations
 import TimingDevices.TimingDeviceWXEvents
 from TimingDevices.DecoderMessages import DecoderCrossingMessage
 import Ultra
@@ -33,6 +34,7 @@ from SplashScreen import ShowSplashScreen
 from TipProvider import ShowTipAtStartup
 from UIMenuUtils import AppendMenuItemBitmap
 from UIMenuDecoder import UIMenuDecoder
+from CrossMgrPageController import CrossMgrPageController
 
 try:
 	localDateFormat = locale.nl_langinfo( locale.D_FMT )
@@ -83,7 +85,6 @@ from CrossResultsExport	import CrossResultsExport
 from WebScorerExport	import WebScorerExport
 from HelpSearch			import HelpSearchDialog, getHelpURL
 from Utils				import logCall, logException
-from FileDrop			import FileDrop
 from RaceDB				import RaceDB, RaceDBUpload
 from SimulateData		import SimulateData
 from NonBusyCall		import NonBusyCall
@@ -106,7 +107,7 @@ from Printing			import ChoosePrintCategoriesDialog, ChoosePrintCategoriesPodiumD
 from ExportGrid			import ExportGrid
 import SimulationLapTimes
 import Version
-from ReadSignOnSheet	import GetExcelLink, ResetExcelLinkCache, ExcelLink, ReportFields, SyncExcelLink, IsValidRaceDBExcel, GetTagNums
+from ReadSignOnSheet	import GetExcelLink, ResetExcelLinkCache, ExcelLink, SyncExcelLink, IsValidRaceDBExcel, GetTagNums, SignOnSheetExcelLink
 from SetGraphic			import SetGraphicDialog
 from GetResults			import GetCategoryDetails, UnstartedRaceWrapper, GetLapDetails, GetAnimationData, ResetVersionRAM
 from PhotoFinish		import okTakePhoto
@@ -138,75 +139,6 @@ def loggingThreadStart( self, *args, **kwargs ):
 	print( '----------------------------------' )
 threading.Thread.start = types.MethodType(loggingThreadStart, None, threading.Thread)
 '''
-
-class SimulateDialog(wx.Dialog):
-	ID_MASS_START = 0
-	ID_TIME_TRIAL = 1
-
-	def __init__(
-			self, parent, fName, id=wx.ID_ANY, title=_('Simulation'), size=wx.DefaultSize, pos=wx.DefaultPosition,
-			style=wx.DEFAULT_DIALOG_STYLE, name='dialog'
-			):
-
-		super().__init__(parent, id, title, pos, size, style, name)
-
-		explain = '\n'.join( [
-				_('Simulate Race'),
-				'',
-				_('This will simulate a race using randomly generated data.'),
-				_("It is a good illustration of CrossMgr's functionality with real time data."),
-				'',
-				_('The simulation takes about 8 minutes.'),
-				_('In the Time Trial simulation, riders start on 15 second intervals.'),
-				'',
-				'{}:\n    "{}"'.format(_('The race will be written to'), fName),
-				'',
-				_('Continue?'),
-				] )
-		
-		# Now continue with the normal construction of the dialog
-		# contents
-		sizer = wx.BoxSizer(wx.VERTICAL)
-
-		label = wx.StaticText(self, label=explain )
-		sizer.Add(label, flag=wx.ALIGN_CENTRE|wx.ALL, border=4)
-
-		btnsizer = wx.BoxSizer(wx.HORIZONTAL)
-
-		#---------------------------------------------------------------
-		box = wx.StaticBox( self, label=_('Mass Start Race') )
-		sboxsizer = wx.StaticBoxSizer( box, wx.VERTICAL )
-		
-		btn = wx.Button(self, label=_('Start') )
-		btn.Bind( wx.EVT_BUTTON, lambda e: self.EndModal(self.ID_MASS_START) )
-		btn.SetDefault()
-		sboxsizer.Add( btn, flag=wx.ALL, border=4 )
-		
-		self.rfidResetStartClockOnFirstTag = wx.CheckBox( self, label=_('Simulate RFID Reset Start Clock on First Read') )
-		sboxsizer.Add( self.rfidResetStartClockOnFirstTag, flag=wx.ALL, border=4 )
-		
-		btnsizer.Add(sboxsizer, flag=wx.ALL, border=4)
-		
-		#---------------------------------------------------------------
-		
-		box = wx.StaticBox( self, label=_('Time Trial') )
-		sboxsizer = wx.StaticBoxSizer( box, wx.VERTICAL )
-		
-		btn = wx.Button(self, label=_('Start') )
-		btn.Bind( wx.EVT_BUTTON, lambda e: self.EndModal(self.ID_TIME_TRIAL) )
-		sboxsizer.Add(btn, flag=wx.ALL, border=4)
-				
-		btnsizer.Add(sboxsizer, flag=wx.ALL, border=4)
-		
-		#---------------------------------------------------------------
-		sizer.Add(btnsizer, 0, wx.ALL, 8)
-
-		#---------------------------------------------------------------
-		btn = wx.Button(self, wx.ID_CANCEL)
-		sizer.Add(btn, flag=wx.ALIGN_RIGHT|wx.ALL, border=8)
-				
-		self.SetSizer(sizer)
-		sizer.Fit(self)
 
 def replaceJsonVar( s, varName, value ):
 	return s.replace( '{} = null'.format(varName), '{} = {}'.format(varName, Utils.ToJson(value, separators=(',',':'))), 1 )
@@ -240,9 +172,13 @@ class ProcessRfidRefresh(wx.Timer):
 
 #----------------------------------------------------------------------------------
 
+
+
 class MainWin( wx.Frame ):
 	__log: Log.CrossMgrLogger = Log.getLogger(name='CrossMgr.MainWin')
 	__restartTimingDeviceListener: bool = True
+	__simulations_context: MainWinSimulations.IMainWinSimulations
+
 	config: wx.Config
 
 	def __init__( self, parent, id = wx.ID_ANY, title='', size=(200,200) ):
@@ -274,7 +210,6 @@ class MainWin( wx.Frame ):
 		self.Bind( wx.EVT_TIMER, self.updateRaceClock, self.timer )
 
 		self.simulateTimer = None
-		self.simulateSeen = set()
 
 		# Default print options.
 		self.printData = wx.PrintData()
@@ -593,50 +528,10 @@ class MainWin( wx.Frame ):
 			| flatnotebook.FNB_FF2
 		)
 		self.notebook = flatnotebook.FlatNotebook( self.splitter, 1000, agwStyle=bookStyle )
-		self.notebook.Bind( wx.EVT_NOTEBOOK_PAGE_CHANGED, self.onPageChanging )
-		
-		self.fileDrop = FileDrop()	# Create a file drop target for all the main pages.
-		
-		# Add all the pages to the notebook.
-		self.pages = []
 
-		def addPage( page, name ):
-			self.notebook.AddPage( page, name )
-			self.pages.append( page )
-			
-		self.attrClassName = [
-			[ 'actions',		Actions,			_('Actions') ],
-			[ 'record', Record, _('Record')],
-			[ 'results',		Results,			_('Results') ],
-			[ 'pulled',			Pulled,				_('Pulled') ],
-			[ 'history',		History,			_('Passings') ],
-			[ 'riderDetail',	RiderDetail,		_('RiderDetail') ],
-			[ 'gantt', 			Gantt,				_('Chart') ],
-			[ 'recommendations',Recommendations,	_('Recommendations') ],
-			[ 'categories', 	Categories,			_('Categories') ],
-			[ 'properties',		Properties,			_('Properties') ],
-			[ 'primes',			Primes,				_('Primes') ],
-			[ 'resultNote',		ResultNote,			_('Result Notes') ],
-			[ 'prizes',			Prizes,				_('Prizes') ],
-			[ 'raceAnimation',	RaceAnimation,		_('Animation') ],
-			#[ 'situation',		Situation,			_('Situation') ],
-			[ 'gapChart',		GapChart,			_('GapChart') ],
-			[ 'lapCounter',		LapCounter,			_('LapCounter') ],
-			[ 'announcer',		Announcer,			_('Announcer') ],
-			[ 'histogram',		HistogramPanel,		_('Histogram') ],
-			[ 'teamResults',	TeamResults,		_('Team Results') ],
-		]
-		self.attrWindowSet = {'results', 'history', 'gantt', 'raceAnimation', 'gapChart', 'announcer', 'lapCounter', 'teamResults'}
-		
-		for i, (a, c, n) in enumerate(self.attrClassName):
-			setattr( self, a, c(self.notebook) )
-			getattr( self, a ).SetDropTarget( self.fileDrop )
-			addPage( getattr(self, a), '{}. {}'.format(i+1, n) )
-			setattr( self, 'i' + a[0].upper() + a[1:] + 'Page', i )
-		# Add page alternale names.
-		self.iChartPage = self.iGanttPage
-		self.iPassingsPage = self.iHistoryPage
-		
+		self.__page_controller = CrossMgrPageController(self.notebook, self.refreshWindows)
+		self.__simulations_context = MainWinSimulations.MainWinSimulations(self, self.__page_controller)
+
 		self.riderDetailDialog = None
 		self.splitter.SplitVertically( self.forecastHistory, self.notebook, 256+80)
 		self.splitter.UpdateSize()
@@ -665,9 +560,8 @@ class MainWin( wx.Frame ):
 		self.Bind(wx.EVT_MENU, self.menuCopyLogFileToClipboard, item )
 
 		self.toolsMenu.AppendSeparator()
-		
-		item = self.toolsMenu.Append( wx.ID_ANY, _("&Simulate Race..."), _("Simulate a race") )
-		self.Bind(wx.EVT_MENU, self.menuSimulate, item )
+
+		self.__simulations_context.addSimulateMenuItem(self.toolsMenu)
 
 		item = self.toolsMenu.Append( wx.ID_ANY, _("&Reload Checklist..."), _("Reload the Checklist from the Checklist File") )
 		self.Bind(wx.EVT_MENU, self.menuReloadChecklist, item )
@@ -727,7 +621,7 @@ class MainWin( wx.Frame ):
 		self.pageMenu = wx.Menu()
 		self.idPage = {}
 		jumpToIds = []
-		for i, p in enumerate(self.pages):
+		for i, p in enumerate(self.__page_controller.pages):
 			name = self.notebook.GetPageText(i)
 			if i <= 11:
 				item = self.pageMenu.Append( wx.ID_ANY, '{}\tF{}'.format(name, i+1), '{} {}'.format(_('Jump to'), name) )
@@ -758,10 +652,9 @@ class MainWin( wx.Frame ):
 				attr, name, menuItem,
 				pageDialog,
 			]
-			
-		for attr, cls, name in self.attrClassName:
-			if attr not in self.attrWindowSet:
-				continue
+
+		window_classes = self.__page_controller.window_classes
+		for attr, cls, name in window_classes:
 			addMenuWindow( attr, cls, name )
 		addMenuWindow( None, UnmatchedTagsGantt, _('Unmatched RFID Tags') )
 			
@@ -912,9 +805,11 @@ class MainWin( wx.Frame ):
 		if success:
 			race.photoCount += len(requests) * 2
 	
-	def updateLapCounter( self, labels=None ):
-		labels = labels or []
-		self.lapCounter.SetLabels( labels )
+	def updateLapCounter( self, labels=None ) -> None:
+		lap_counter_index = self.__page_controller.get_page_index_by_name('lapCounter')
+		if lap_counter_index is not None:
+			self.__page_controller.pages[lap_counter_index].SetLabels( labels or [] )
+
 		self.lapCounterDialog.page.SetLabels( labels )
 		WebServer.WsLapCounterRefresh()
 
@@ -1209,7 +1104,7 @@ class MainWin( wx.Frame ):
 			race.setChanged()
 		
 		self.refreshAll()
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 			
 	def menuChangeProperties( self, event ):
 		if not Model.race:
@@ -1639,7 +1534,7 @@ class MainWin( wx.Frame ):
 		self.commit()
 		PrintCategories()
 
-	def get_race_excel_link(self) -> Optional['ExcelLink']:
+	def get_race_excel_link(self) -> SignOnSheetExcelLink:
 		if Model.race is not None:
 			return getattr(Model.race, 'excelLink', None)
 		return None
@@ -1649,7 +1544,7 @@ class MainWin( wx.Frame ):
 		if not Model.race:
 			Utils.MessageOK(self, _("You must have a valid race."), _("Link ExcelSheet"), iconMask=wx.ICON_ERROR)
 			return
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		self.closeFindDialog()
 		ResetExcelLinkCache()
 		excel_link = self.get_race_excel_link()
@@ -1759,6 +1654,7 @@ class MainWin( wx.Frame ):
 		return html
 	
 	def getBasePayload( self, publishOnly=True ):
+		from ReadSignOnSheet import ReportFields
 		race = Model.race
 		
 		payload = {}
@@ -2214,7 +2110,7 @@ class MainWin( wx.Frame ):
 		return html
 	
 	@logCall
-	def menuPublishHtmlTTStart( self, event=None, silent=False ):
+	def menuPublishHtmlTTStart(self, event=None, silent: bool=False) -> None:
 		self.commit()
 		race = Model.race
 		if not race or self.fileName is None or len(self.fileName) < 4:
@@ -2520,7 +2416,7 @@ class MainWin( wx.Frame ):
 		
 	#--------------------------------------------------------------------------------------------
 	def doCleanup( self ):
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		race = Model.race
 		if race:
 			try:
@@ -2538,13 +2434,7 @@ class MainWin( wx.Frame ):
 		except Exception as e:
 			Utils.writeLog( 'call: doCleanup: (2) "{}"'.format(e) )
 
-		try:
-			self.simulateTimer.Stop()
-			self.simulateTimer = None
-		except AttributeError:
-			pass
-		except Exception as e:
-			Utils.writeLog( 'call: doCleanup: (3) "{}"'.format(e) )
+		MainWinSimulations.MainWinSimulations._doCleanup(self)
 
 		try:
 			OutputStreamer.StopStreamer()
@@ -2918,20 +2808,21 @@ class MainWin( wx.Frame ):
 		
 		self.openRaceDBExcel( fname )
 
-	def updateRecentFiles( self ):
+	def updateRecentFiles( self ) -> None:
 		self.filehistory.AddFileToHistory(self.fileName)
 		self.filehistory.Save(self.config)
 		self.config.Flush()
 		
-	def closeFindDialog( self ):
+	def closeFindDialog( self ) -> None:
 		if getattr(self, 'findDialog', None):
 			self.findDialog.Show( False )
 
 	@logCall
-	def openRace( self, fileName ):
+	def openRace( self, fileName: str ) -> None:
 		if not fileName:
+			self.log.error('No filename specified in openRace')
 			return
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		self.refresh()
 		Model.resetCache()
 		ResetExcelLinkCache()
@@ -2945,7 +2836,8 @@ class MainWin( wx.Frame ):
 			with open(fileName, 'rb') as fp, Model.LockRace() as race:
 				try:
 					race = pickle.load( fp, encoding='latin1', errors='replace' )
-				except Exception:
+				except Exception as ex:
+					self.log.exception(f'Failed while loading {fileName}', exc_info=ex)
 					fp.seek( 0 )
 					race = ModuleUnpickler( fp, module='CrossMgr', encoding='latin1', errors='replace' ).load()
 				race.sortLap = None			# Remove results lap sorting to avoid confusion.
@@ -2991,41 +2883,42 @@ class MainWin( wx.Frame ):
 						self.refresh()
 					return
 				
-				Utils.writeLog( 'openRace: changed FileName to "{}".'.format(eventFileName) )
+				Utils.writeLog(f'openRace: changed FileName to "{eventFileName}".')
 				self.fileName = eventFileName
 			
 			self.updateRecentFiles()
 			WebServer.SetFileName( self.fileName )
 
-			excelLink = getattr(race, 'excelLink', None)
-			if excelLink is None or not excelLink.fileName:
+			excelLink = race.excelLink
+			if excelLink is None or not excelLink.FileName:
 				return
 				
-			if os.path.isfile(excelLink.fileName):
-				Utils.writeLog( 'openRace: Excel file "{}"'.format(excelLink.fileName) )
+			if os.path.isfile(excelLink.FileName):
+				self.log.info(f'openRace: Excel file "{excelLink.FileName}"')
 				AutoImportTTStartTimes()			# Import any TT times changes.
 				GetTagNums( True )					# Get the RFID-->num map and process any missing RFID tags.
 				self.refreshAll()
 				return
 				
 			# Check if we have a missing spreadsheet but can find one in the same folder as the race.
-			Utils.writeLog( 'openRace: cannot open Excel file "{}"'.format(excelLink.fileName) )
-			newFileName = GetMatchingExcelFile(fileName, excelLink.fileName)
+			self.log.error(f'openRace: cannot open Excel file "{excelLink.filename}"')
+			newFileName = GetMatchingExcelFile(fileName, excelLink.FileName)
 			if newFileName and Utils.MessageOKCancel(self,
 				'{}:\n\n"{}"\n\n{}:\n\n"{}"\n\n{}'.format(
-					_('Could not find Excel file'), excelLink.fileName,
+					_('Could not find Excel file'), excelLink.FileName,
 					_('Found this Excel file in the race folder with matching name'), newFileName, _('Use this Excel file from now on?')
 				),
 				_('Excel Link Not Found') ):
-				race.excelLink._file_name = newFileName
+				race.excelLink.FileName = newFileName
 				race.setChanged()
 				ResetExcelLinkCache()
 				Model.resetCache()
 				GetTagNums( True )
 				self.refreshAll()
-				Utils.writeLog( 'openRace: changed Excel file to "{}"'.format(newFileName) )
+				self.log.info(f'openRace: changed Excel file to "{newFileName}"')
 				
 		except Exception as e:
+			self.log.exception(f'Failed while loading {fileName}', exc_info=e)
 			Utils.logException( e, sys.exc_info() )
 			Utils.MessageOK(self, '{} "{}"\n\n{}.'.format(_('Cannot Open File'), fileName, e), _('Cannot Open File'), iconMask=wx.ICON_ERROR )
 
@@ -3099,7 +2992,7 @@ class MainWin( wx.Frame ):
 												_('No race loaded') )
 			return
 	
-		self.showResultsPage()	# Switch to a read-only view to force a commit.
+		self.__page_controller.showResultsPage()	# Switch to a read-only view to force a commit.
 		self.updateLapCounter()
 		self.closeFindDialog()
 		self.refresh()
@@ -3134,283 +3027,6 @@ class MainWin( wx.Frame ):
 	def menuExit(self, event):
 		self.onCloseWindow( event )
 
-	def genTimes( self, regen=False ):
-		if regen:
-			for k, v in SimulateData(200, 40).items():
-				setattr( self, k, v )
-		else:
-			self.raceMinutes = SimulationLapTimes.raceMinutes
-			self.lapTimes = copy.copy(SimulationLapTimes.lapTimes)
-				
-			self.riderInfo = None
-			self.categories = [
-				{'name':'Junior', 'catStr':'100-199', 'startOffset':'00:00', 'distance':0.5, 'gender':'Men'},
-				{'name':'Senior', 'catStr':'200-299', 'startOffset':'00:10', 'distance':0.5, 'gender':'Women', 'raceMinutes':6}
-			]
-			
-			# Add some out-of-category numbers to test.
-			for e in range(10, 50, 10):
-				self.lapTimes[e] = ( self.lapTimes[e][0], 1111+e )
-		
-		return self.lapTimes
-		
-	@logCall
-	def menuSimulate( self, event=None, userConfirm=True, isTimeTrial=False ):
-		# Put simulation in user's home directory.
-		simulationDir = os.path.join( os.path.expanduser('~'), 'CrossMgrSimulation' )
-		
-		# Create the stub of the race so we can get the file name.
-		race = Model.Race()
-		race.name = 'Simulation'
-		race.raceNum = 1
-		race.organizer = 'Edward Sitarski'
-		race.memo = ''
-		
-		race.simulation = True		# Flag this as a simulation race.
-		#race.setNoDataDNS = True	# Show all entries in the spreadsheet as NP or DNS.
-		
-		fName = os.path.join( simulationDir, race.getFileName() )
-		if userConfirm:
-			with SimulateDialog( self, fName ) as dlg:
-				ret = dlg.ShowModal()
-				if ret == wx.ID_CANCEL:
-					return
-				rfidResetStartClockOnFirstTag = dlg.rfidResetStartClockOnFirstTag.GetValue()
-				isTimeTrial = (ret == SimulateDialog.ID_TIME_TRIAL)
-		else:
-			rfidResetStartClockOnFirstTag = False
-			isTimeTrial = isTimeTrial
-
-		# Delete any pre-existing Simulation directory.
-		try:
-			shutil.rmtree( simulationDir, ignore_errors=True )
-		except Exception:
-			pass
-		
-		# Create the simulation directory.
-		try:
-			os.makedirs( simulationDir )
-		except Exception:
-			pass
-		
-		# Test if we can write something there.
-		try:
-			with open(fName, 'wb'):
-				pass
-		except IOError:
-			Utils.MessageOK(self, '{} "{}".'.format(_('Cannot open file'), fName), _('File Open Error'), iconMask=wx.ICON_ERROR)
-			return
-
-		self.showResultsPage()	# Switch to a read-only view and force a commit.
-		self.updateLapCounter()
-		self.closeFindDialog()
-		self.refresh()
-		
-		# Get the simulation times.
-		bigSimulation = False
-		self.lapTimes = self.genTimes( bigSimulation )
-		tMin = self.lapTimes[0][0]
-		self.lapTimes.reverse()			# Reverse the times so we can pop them from the end later.
-
-		# Commit to the new race and file for the simulation.
-		undo.clear()
-		Model.setRace( race )
-		self.fileName = fName
-		WebServer.SetFileName( self.fileName )
-		self.updateRecentFiles()
-		
-		race.isTimeTrial = isTimeTrial
-		race.enableUSBCamera = True
-		race.minutes = self.raceMinutes
-		race.enableJChipIntegration = race.resetStartClockOnFirstTag = rfidResetStartClockOnFirstTag
-		race.minPossibleLapTime = 0.0	# Override any defaults so that laps will show up.
-		#race.photosAtRaceEndOnly = True
-		
-		# Prep the simulation data.
-		self.simulateSeen = set()
-		categories = getattr( self, 'categories', None )
-		if not categories:
-			categories = [	{'name':'Junior', 'catStr':'100-199', 'startOffset':'00:00', 'distance':0.5, 'firstLapDistance':0.0, 'gender':'Men'},
-							{'name':'Senior', 'catStr':'200-299', 'startOffset':'00:10', 'distance':0.5, 'firstLapDistance':0.0, 'gender':'Women', 'raceMinutes':6}]
-		if race.isTimeTrial:
-			for c in categories:
-				c.pop( 'raceMinutes', None )
-				c['lappedRidersMustContinue'] = True
-			categories[0]['numLaps'] = 3
-			categories[1]['numLaps'] = 2
-			race.setCategories( categories )
-			for c in race.getCategories():
-				c.distance = 0.5
-				c.firstLapDistance = 0.0
-			
-			scheduledStart = datetime.datetime.now() + datetime.timedelta(seconds=120)
-			scheduledStart -= datetime.timedelta( seconds=scheduledStart.second ) + datetime.timedelta( seconds=scheduledStart.microsecond/1000000.0 ) 
-			race.scheduledStart = '{:02d}:{:02d}'.format(scheduledStart.hour, scheduledStart.minute)
-			
-			nums = set()
-			numTimes = defaultdict( list )
-			for t, num in self.lapTimes:
-				if num < 500:
-					nums.add( num )
-					numTimes[num].append( t )
-			
-			numRaceTimes = {}
-			for num, times in numTimes.items():
-				times.sort()
-				numRaceTimes[num] = [t - times[0] for t in times[1:]]	# Convert race times to zero start.
-			
-			timeBeforeFirstRider = 120.0
-			startGap = 30.0
-			nums = sorted( nums, reverse=True )				
-			numStartTime = {n:timeBeforeFirstRider + i*startGap for i, n in enumerate(nums)}	# Set start times for all competitors.
-			self.lapTimes = []
-			for num, raceTimes in numRaceTimes.items():
-				startTime = numStartTime[num]
-				race.getRider( num ).firstTime = startTime
-				self.lapTimes.extend( [(t + startTime, num) for t in raceTimes] )
-			self.lapTimes.sort( reverse=True )
-		else:
-			scheduledStart = datetime.datetime.now()
-			race.scheduledStart = '{:02d}:{:02d}'.format(scheduledStart.hour, scheduledStart.minute)
-			
-			race.setCategories( categories )
-			for c in race.getCategories():
-				c.distance = 0.5
-				c.firstLapDistance = 0.0
-			
-			self.lapTimes = [(t + race.getStartOffset(num), num) for t, num in self.lapTimes]
-			if race.enableJChipIntegration and race.resetStartClockOnFirstTag:
-				self.lapTimes.extend( (race.getStartOffset(num) + 2.0*random.random(), num) for num in set(tn[1] for tn in self.lapTimes) )
-				self.lapTimes = [(t+4.0, num) for t, num in self.lapTimes]
-				self.lapTimes.sort( reverse=True )
-
-		# Create an Excel rider data file.
-		riderInfo = getattr( self, 'riderInfo', None )
-		if not riderInfo:
-			riderInfo = []
-			fnameInfo = os.path.join( Utils.getImageFolder(), 'NamesTeams.csv' )
-			try:
-				with open(fnameInfo, encoding='iso-8859-1') as fp:
-					header = None
-					for r, line in enumerate(fp):
-						if not header:
-							header = line.split(',')
-							continue
-						riderInfo.append( [r+100] + line.split(',') )
-			except IOError:
-				pass
-			
-		if riderInfo:
-			fnameRiderInfo = os.path.join(simulationDir, 'SimulationRiderData.xlsx')
-			sheetName = 'Registration'
-			wb = xlsxwriter.Workbook( fnameRiderInfo )
-			ws = wb.add_worksheet(sheetName)
-			for c, h in enumerate(['Bib#', 'LastName', 'FirstName', 'Team']):
-				ws.write(0, c, h)
-			for r, row in enumerate(riderInfo):
-				for c, v in enumerate(row):
-					ws.write( r+1, c, v )
-			wb.close()
-			
-			race.excelLink = ExcelLink()
-			race.excelLink.setFileName( fnameRiderInfo )
-			race.excelLink.setSheetName( sheetName )
-			race.excelLink.setFieldCol( {'Bib#':0, 'LastName':1, 'FirstName':2, 'Team':3} )
-
-		# Start the simulation.
-		self.showPage( self.iRecordPage if isTimeTrial else self.iChartPage )
-		self.record.setTimeTrialInput( race.isTimeTrial )
-
-		ChipReader.chipReaderCur.reset( race.chipReaderType )
-
-		# Start the race.
-		self.nextNum = None
-		if race.isTimeTrial:
-			# If a TT, start the race at the start time in the future.
-			def startRaceInFuture( aSelf, aRace ):
-				aRace.startRaceNow()
-				aSelf.simulateTimer = wx.CallLater( 1, aSelf.updateSimulation, True )
-				OutputStreamer.writeRaceStart()
-				wx.CallAfter( self.refresh )
-				
-			wx.CallLater( max(0,int((scheduledStart-datetime.datetime.now()).total_seconds()*1000.0)), startRaceInFuture, self, race )
-			Utils.MessageOK(
-				self,
-				'{}\n\n{}'.format( _('TT will start automatically in 1-2 minutes'), _('Review the TTCountdown page (from Web/Index).') ),
-				_('TT Start'),
-			)
-			self.menuPublishHtmlTTStart()
-		else:
-			# If a Mass Start, start the race now.
-			race.startRaceNow()
-			if not (race.enableJChipIntegration and race.resetStartClockOnFirstTag):
-				# Backup all the events and race start so we don't have to wait for the first lap.
-				race.startTime -= datetime.timedelta( seconds = (tMin-5) )
-			self.simulateTimer = wx.CallLater( 1, self.updateSimulation, True )
-			OutputStreamer.writeRaceStart()
-
-		self.writeRace()
-		self.updateRaceClock()
-		self.refresh()
-
-	def updateSimulation( self, num ):
-		if Model.race is None:
-			return
-		
-		'''
-		if self.nextNum is not None and self.nextNum not in self.simulateSeen:
-			self.forecastHistory.logNum( self.nextNum )
-
-		with Model.LockRace() as race:
-			if race.curRaceTime() > race.minutes * 60.0:
-				self.simulateSeen.add( self.nextNum )
-
-		try:
-			t, self.nextNum = self.lapTimes.pop()
-			with Model.LockRace() as race:
-				if t < (self.raceMinutes*60.0 + race.getAverageLapTime()*1.5):
-					self.simulateTimer.Restart( int(max(1,(t - race.curRaceTime()) * 1000)), True )
-					return
-		except IndexError:
-			pass
-		'''
-		
-		race = Model.race
-		aveLapTime = race.getAverageLapTime()
-		curRaceTime = race.curRaceTime()
-		tRaceEnd = self.raceMinutes*60.0 + aveLapTime*1.5
-		nums = []
-		while self.lapTimes:
-			t, nextNum = self.lapTimes[-1]
-			if t < curRaceTime:
-				self.lapTimes.pop()
-				if t < tRaceEnd:
-					nums.append( nextNum )
-				else:
-					self.simulateSeen.add( nextNum )
-			else:
-				break
-		
-		if nums:
-			self.forecastHistory.logNum( nums )
-			
-		if self.lapTimes:
-			self.simulateTimer.Restart( random.randint(200,600), True )
-			return
-		
-		self.simulateTimer.Stop()
-		nextNum = None
-		with Model.LockRace() as race:
-			race.finishRaceNow()
-		ChipReader.chipReaderCur.CleanupListener()
-		
-		OutputStreamer.writeRaceFinish()
-		# Give the streamer a chance to write the last message.
-		wx.CallLater( 2000, OutputStreamer.StopStreamer )
-		
-		Utils.writeRace()
-		self.refresh()
-
 	@logCall
 	def menuImportCategories( self, event ):
 		if not Model.race:
@@ -3426,7 +3042,7 @@ class MainWin( wx.Frame ):
 				return
 			categoriesFile = dlg.GetPath()
 			
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		try:
 			with open(categoriesFile, encoding='utf8') as fp, Model.LockRace() as race:
 				race.importCategories( fp )
@@ -3511,7 +3127,7 @@ class MainWin( wx.Frame ):
 		if self.fileName is None or len(self.fileName) < 4 or not Model.race:
 			return
 
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		
 		xlFName = self.getFormatFilename( 'usacexcel' )
 		
@@ -3536,8 +3152,8 @@ class MainWin( wx.Frame ):
 		if self.fileName is None or len(self.fileName) < 4 or not Model.race:
 			return
 
-		self.showPage( self.iResultsPage )
-		
+		self.__page_controller.showResultsPage()
+
 		xlFName = self.getFormatFilename( 'vttaexcel' )
 
 		wb = xlsxwriter.Workbook( xlFName )
@@ -3665,7 +3281,7 @@ class MainWin( wx.Frame ):
 		if not self.resultsCheck():
 			return
 			
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		
 		fname = os.path.splitext(self.fileName)[0] + '-{}.csv'.format(destination)
 		
@@ -3706,7 +3322,7 @@ class MainWin( wx.Frame ):
 		if not silent and not self.resultsCheck():
 			return
 			
-		self.showResultsPage()
+		self.__page_controller.showResultsPage()
 		
 		fname = self.getFormatFilename( 'webscorertxt' )
 		
@@ -3780,11 +3396,16 @@ class MainWin( wx.Frame ):
 			webbrowser.open( getHelpURL('Main.html') )
 		except Exception as e:
 			logException( e, sys.exc_info() )
+
+	def __get_current_help_url(self) -> str:
+		label = self.__page_controller.get_page_label()
+		return getHelpURL(f'{label}.html')
 	
 	@logCall
 	def onContextHelp( self, event ):
 		try:
-			webbrowser.open( getHelpURL(self.attrClassName[self.notebook.GetSelection()][2] + '.html') )
+			help_url = self.__get_current_help_url()
+			webbrowser.open(help_url)
 		except Exception as e:
 			logException( e, sys.exc_info() )
 		
@@ -3857,49 +3478,14 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 
 	#--------------------------------------------------------------------------------------
 
-	def getCurrentPage( self ):
-		return self.pages[self.notebook.GetSelection()]
-		
-	def isShowingPage( self, page ):
-		return page == self.pages[self.notebook.GetSelection()]
-	
-	def showPage( self, iPage, commitFirst=True ):
-		if commitFirst:
-			self.callPageCommit( self.notebook.GetSelection() )
-		
-		self.callPageRefresh( iPage )
-		self.notebook.SetSelection( iPage )
-		self.pages[self.notebook.GetSelection()].Layout()
-		
-	def showPageName( self, name ):
-		name = name.replace(' ', '')
-		for i, (a, c, n) in enumerate(self.attrClassName):
-			if n == name:
-				self.showPage( i )
-				break
-
-	def showRiderDetail( self, num = None ):
+	def showRiderDetail( self, num = None ) -> None:
 		self.riderDetail.setRider( num )
 		self.showPage( self.iRiderDetaiPage )
 
 	def setRiderDetail( self, num = None ):
 		self.riderDetail.setRider( num )
 
-	def showResultsPage( self ):
-		self.showPage( self.iResultsPage )
-
-	def callPageRefresh( self, i ):
-		try:
-			page = self.pages[i]
-		except IndexError:
-			return
-		
-		try:
-			page.refresh()
-		except AttributeError:
-			pass
-
-	def refreshWindows( self ):
+	def refreshWindows( self ) -> None:
 		try:
 			for d in (dialog for attr, name, menuItem, dialog in self.menuIdToWindowInfo.values() if dialog.IsShown()):
 				try:
@@ -3909,22 +3495,15 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		except AttributeError:
 			pass
 
-	def callPageCommit( self, i ):
-		try:
-			self.pages[i].commit()
-		except (AttributeError, IndexError):
-			pass
-		self.refreshWindows()
-
 	def commit( self ):
-		self.callPageCommit( self.notebook.GetSelection() )
+		self.__page_controller.callPageCommit()
 				
-	def refreshCurrentPage( self ):
-		self.callPageRefresh( self.notebook.GetSelection() )
+	def refreshCurrentPage( self ) -> None:
+		self.__page_controller.callPageRefresh( )
 		self.refreshWindows()
 		WebServer.WsRefresh()
 
-	def refresh( self ):
+	def refresh( self ) -> None:
 		self.refreshCurrentPage()
 		self.forecastHistory.refresh()
 		if self.riderDetailDialog:
@@ -3936,39 +3515,17 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 
 		self.updateRaceClock()
 
-	def refreshTTStart( self ):
-		if Model.race:
-			# If a rider started the TT, force the results to be re-computed if necessary.
-			Model.race.setChanged()
-		if self.notebook.GetSelection() in (self.iHistoryPage, self.iRecordPage):
-			self.refreshCurrentPage()
+	def refreshTTStart( self ) -> None:
+		self.__page_controller.refreshTTStart(self.refreshCurrentPage)
 
-	def updateUndoStatus( self, event = None ):
+	def updateUndoStatus( self, event = None ) -> None:
 		race = Model.race
 		self.undoMenuButton.Enable( bool(not race.isRunning() and undo.isUndo()) )
 		self.redoMenuButton.Enable( bool(not race.isRunning() and undo.isRedo()) )
-		
-	def onPageChanging( self, event ):
-		notebook = event.GetEventObject()
-		if notebook == self.notebook:
-			self.callPageCommit( event.GetOldSelection() )
-			self.callPageRefresh( event.GetSelection() )
-		try:
-			Utils.writeLog( 'page: {}'.format(notebook.GetPage(event.GetSelection()).__class__.__name__) )
-		except IndexError:
-			pass
-		event.Skip()	# Required to properly repaint the screen.
 
-	def refreshRaceAnimation( self ):
-		if self.pages[self.notebook.GetSelection()] == self.raceAnimation:
-			self.raceAnimation.refresh()
-	
-	def refreshAll( self ):
+	def refreshAll( self ) -> None:
 		self.refresh()
-		iSelect = self.notebook.GetSelection()
-		for i, p in enumerate(self.pages):
-			if i != iSelect:
-				self.callPageRefresh( i )
+		self.__page_controller.refreshAll()
 
 	def setNumSelect( self, num ):
 		try:
@@ -4113,8 +3670,12 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 
 		return False	# Never signal for an update.
 
-	def updateRaceClock( self, event = None ):
-		self.record.refreshAll()
+	def is_showing_page(self, page) -> bool:
+		return self.__page_controller.isShowingPage(page)
+
+	def updateRaceClock( self, event = None ) -> None:
+		record_index = self.__page_controller.get_page_index_by_name('record')
+		self.__page_controller.callPageRefresh(record_index, True)
 
 		doRefresh = False
 		race = Model.race
