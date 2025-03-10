@@ -1,5 +1,6 @@
 import datetime
 import inspect
+import logging
 import socket
 import time
 from typing import cast, Callable
@@ -21,6 +22,12 @@ now = datetime.datetime.now
 # if we get the same time, make sure we give it a small offset to make it unique, but preserve the order.
 tSmall = datetime.timedelta( seconds = 0.000001 )
 
+
+class UltraVoltageFilter(logging.Filter):
+	def filter(self, record: logging.LogRecord) -> bool:
+		if record.name == 'input' and record.levelname == 'INFO' and record.getMessage().startswith('V=0'):
+			return False
+		return True
 
 class UltraDecoder(TimingDevice, TCPTimingDevice):
 	COMMAND_STOP_REWIND = 'stop_rewind'
