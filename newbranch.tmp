@@ -1,0 +1,45 @@
+set TARGET="develop/gmbc/%date:~10,4%-%date:~7,2%-%date:~4,2%-%time:~0,2%%time:~3,2%"
+
+git checkout master
+git checkout -b %TARGET%
+
+@rem fix/inno-setup-paths ^
+@rem develop/no-race-disable-keypad ^
+@rem develop/refactor/record ^
+
+
+git merge --no-edit ^
+develop/mypy/config ^
+fix/readme-lint ^
+feat/ff2-tab-style ^
+feat/devcontainers ^
+feat/dev-branches ^
+feat/info-on-no-active-race ^
+fix/inno-setup-paths ^
+develop/logging/existing-to-logger ^
+develop/logging/windows-logging ^
+develop/logging/wx-log-todo ^
+develop/logging/yaml-config ^
+develop/logging/log-path-permissions ^
+develop/logging/install-config-file ^
+develop/no-race-disable-keypad-fix-setfocus ^
+refactor/filesystem-utils
+
+exit /b 0
+
+
+@rem fix/missing-uninitialized-close-finish-bib ^
+
+
+exit /b 0
+
+develop/python/3.13 ^
+
+
+rem develop/timing-device-framework-4
+rem develop/disable-decoder-menu-items
+rem develop/logging/auto-name
+
+
+
+
