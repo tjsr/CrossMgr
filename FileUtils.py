@@ -36,3 +36,19 @@ def config_search(file_name: str) -> str:
   config_path = find_file(file_name, default_search_functions)
   return config_path
 
+
+def is_empty_or_current_dir(directory: str) -> bool:
+  if directory is None:
+    return True
+  if not isinstance(directory, str):
+    raise ValueError('directory must be a string')
+
+  clean_dir = directory.strip()
+  if clean_dir == '' or clean_dir == '.':
+    return True
+
+  if os.path.isdir(clean_dir):
+    return True
+
+  return False
+
