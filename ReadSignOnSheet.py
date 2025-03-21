@@ -677,6 +677,9 @@ class GetExcelLink:
 		self.wizard.FitToPage( self.fileNamePage )
 	
 	def show( self ) -> ExcelLink:
+		if self.fileNamePage is None:
+			self._log.warning('No fileNamePage value set.')
+
 		if self.wizard.RunWizard(self.fileNamePage):
 			if not self._excel_link:
 				self._excel_link = SignOnSheetExcelLink()
@@ -898,7 +901,7 @@ infoCache = None
 errorCache = None
 
 def ResetExcelLinkCache() -> None:
-	Log.getLogger().warning('Resetting Excel Link Cache needs to be rewritten.')
+	Log.getLogger('ReadSignOnSheet').warning('Resetting Excel Link Cache needs to be rewritten.', stacklevel=1)
 	global stateCache
 	global infoCache
 	global errorCache

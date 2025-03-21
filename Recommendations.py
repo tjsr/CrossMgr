@@ -142,7 +142,7 @@ class Recommendations( wx.Panel ):
 					externalInfo = race.excelLink.read( True )
 					excelErrors = race.excelLink.getErrors()
 				else:
-					Log.getLogger().error('No excel link while racing race file.')
+					Log.getLogger().error('No excel link while refreshing race file.')
 				if excelErrors is None:
 					excelErrors = []
 			except Exception as e:
