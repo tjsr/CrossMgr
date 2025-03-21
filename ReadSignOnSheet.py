@@ -1,4 +1,5 @@
 import logging
+from os import PathLike
 from typing import Optional, List, Any
 
 import wx
@@ -8,12 +9,14 @@ import wx.lib.scrolledpanel as scrolled
 import os
 import copy
 
+import FileUtils
 import Log
 import MatchingCategory
 import Utils
 import Model
 from Excel import GetExcelReader, ReadExcelXlsx
 from ExcelLink import ExcelLink, ExcelRowError, ExcelDataFieldError
+from FileSystemUtils import get_file_or_path
 from Race import RaceType
 from ReadCategoriesFromExcel import sheetName as CategorySheetName, ReadCategoriesFromExcel
 from ReadPropertiesFromExcel import sheetName as PropertySheetName, ReadPropertiesFromExcel
@@ -50,6 +53,31 @@ StandardReportFields = (lambda s: [f for f in StandardFields if f not in s])(set
 ReportFields = StandardReportFields
 
 class FileNamePage(adv.WizardPageSimple):
+	def __get_safe_current_dir(self, race_file_path: str | os.PathLike | None) -> os.PathLike | str:
+		path = get_file_or_path(race_file_path, True)
+		if path is not None:
+			return path
+
+		# Try the current value it's set to, but ignore '.' and empty strings.
+		current_value = self.fbb.GetValue()
+		path = get_file_or_path(current_value, True)
+		if path is not None:
+			return path
+
+		return FileUtils.get_user_home_directory()
+
+	# Return just the user's home directory.
+
+	def __fix_safe_current_dir(self, current_race_file: str|PathLike) -> None:
+		path = self.__get_safe_current_dir(current_race_file)
+		if path:
+			try:
+				self.fbb.SetValue('C:\\Users\\tim\\OneDrive\\timing-mtb\\GMBC Timing\\No Frills\\2025-Summer\\2025-03-07')
+
+				# fbb.SetValue(path)
+			except Exception as ex:
+				Log.getLogger().exception(msg='Failed while setting path for file selector', exc_info=ex)
+
 	def __init__(self, parent: wx.Dialog):
 		super().__init__(parent)
 		
@@ -66,6 +94,9 @@ class FileNamePage(adv.WizardPageSimple):
 												labelText = _('Excel Workbook:'),
 												fileMode=wx.FD_OPEN,
 												fileMask='|'.join(fileMask) )
+
+		current_race_file = Model.getRace().FileName
+		self.__fix_safe_current_dir(current_race_file=current_race_file)
 		vbs.Add( self.fbb, flag=wx.ALL, border = border )
 		
 		self.SetSizer( vbs )

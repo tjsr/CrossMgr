@@ -806,11 +806,12 @@ class MainWin( wx.Frame ):
 			race.photoCount += len(requests) * 2
 	
 	def updateLapCounter( self, labels=None ) -> None:
-		lap_counter_index = self.__page_controller.get_page_index_by_name('lapCounter')
-		if lap_counter_index is not None:
-			self.__page_controller.pages[lap_counter_index].SetLabels( labels or [] )
+		lap_counter_dialog = self.__page_controller.get_page_by_name('lapCounter')
+		if lap_counter_dialog is None:
+			self.log.error('Could not find lapCounter dialog.')
+			return
 
-		self.lapCounterDialog.page.SetLabels( labels )
+		lap_counter_dialog.SetLabels( labels or [] )
 		WebServer.WsLapCounterRefresh()
 
 	def getValidNum( self, message, mustBeInRace=True, exclude=[] ):
@@ -2855,9 +2856,14 @@ class MainWin( wx.Frame ):
 			Model.resetCache()
 			
 			self.setNumSelect( None )
-			self.record.setTimeTrialInput( race.isTimeTrial )
-			self.showPage( self.iResultsPage if isFinished else self.iActionsPage, commitFirst=False )
+			record_page = self.__page_controller.get_page_by_id('record')
+			record_page.setTimeTrialInput( race.isTimeTrial )
+
+			show_page_index = self.__page_controller.get_page_index_by_id('results' if isFinished else 'actions')
+
+			self.__page_controller.showPage( show_page_index, commitFirst=False )
 			self.refreshAll()
+
 			Utils.writeLog( '{}: {} {}'.format(Version.AppVerName, platform.system(), platform.release()) )
 			Utils.writeLog( 'call: openRace: "{}"'.format(fileName) )
 			
@@ -3088,13 +3094,19 @@ class MainWin( wx.Frame ):
 			return
 
 		self.showPage( self.iPassingsPage )
-		self.history.setCategoryAll()
-		self.history.refresh()
+		if not hasattr(self, 'history'):
+			historyPage = self.__page_controller.get_page_by_id('history')
+
+			if historyPage is None:
+				raise ValueError('Cannot find history page')
+
+		historyPage.setCategoryAll()
+		historyPage.refresh()
 		
 		xlFName = os.path.splitext(self.fileName)[0] + '-Passings.xlsx'
 
-		colnames = self.history.grid.GetColNames()
-		data = self.history.grid.GetData()
+		colnames = historyPage.grid.GetColNames()
+		data = historyPage.grid.GetData()
 		if data:
 			rowMax = max( len(c) for c in data )
 			colnames = ['Count'] + colnames
@@ -3527,23 +3539,39 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		self.refresh()
 		self.__page_controller.refreshAll()
 
-	def setNumSelect( self, num ):
+	def __attr_or_page(self, page_id: str):
+		if hasattr(self, page_id):
+			page = getattr(self, page_id)
+		else:
+			page = self.__page_controller.get_page_by_id(page_id)
+
+		if page is None:
+			raise ValueError(f'Cannot find page with id {page_id}')
+
+		return page
+
+	def __set_page_num(self, page_id: str, num: int) -> None:
+		page = self.__attr_or_page(page_id)
+		page.setNumSelect(num)
+
+	def setNumSelect( self, num: int ) -> None:
 		try:
 			num = int(num)
 		except (TypeError, ValueError):
 			num = None
 			
 		if num is None or num != self.numSelect:
-			self.history.setNumSelect( num )
-			self.results.setNumSelect( num )
-			self.riderDetail.setNumSelect( num )
-			self.gantt.setNumSelect( num )
-			self.raceAnimation.setNumSelect( num )
+			self.__set_page_num('history', num)
+			self.__set_page_num('results', num)
+			self.__set_page_num('riderdetail', num)
+			self.__set_page_num('gantt', num)
+			self.__set_page_num('raceanimation', num)
+
 			self.numSelect = num
 
 	#-------------------------------------------------------------
 	
-	def processNumTimes( self ):
+	def processNumTimes( self ) -> bool:
 		if not self.numTimes:
 			return False
 		
@@ -3674,7 +3702,7 @@ Computers fail, screw-ups happen.  Always use a manual backup.
 		return self.__page_controller.isShowingPage(page)
 
 	def updateRaceClock( self, event = None ) -> None:
-		record_index = self.__page_controller.get_page_index_by_name('record')
+		record_index = self.__page_controller.get_page_index_by_id('record')
 		self.__page_controller.callPageRefresh(record_index, True)
 
 		doRefresh = False

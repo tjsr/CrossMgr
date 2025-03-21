@@ -82,10 +82,15 @@ class AbstractPageController(ABC):
 	def pages(self) -> list[Any]:
 		return self._pages
 
+	@staticmethod
+	def __ensure_lowercase_keys(page_types: list[(str, type, str)]) -> list[(str, type, str)]:
+		return [(alias.lower(), cls, label) for alias, cls, label in page_types]
+
 	def __create_pages(self) -> None:
 		# Add all the pages to the notebook.
 		self._pages = []
 		page_types = self._get_page_types()
+		page_types = self.__ensure_lowercase_keys(page_types)
 		self.attrClassName.extend(page_types)
 
 		for index, (alias, class_name, label_text) in enumerate(self.attrClassName):
@@ -153,11 +158,35 @@ class AbstractPageController(ABC):
 		self._notebook.SetSelection(iPage)
 		self._pages[self._notebook.GetSelection()].Layout()
 
-	def get_page_index_by_name(self, name: str) -> int | None:
-		name = name.replace(' ', '')
-		for i, (a, c, n) in enumerate(self.attrClassName):
-			if n == name:
+	def get_page_index_by_id(self, page_id: str) -> int | None:
+		page_id = page_id.replace(' ', '').lower()
+		for i, (id, cls, label) in enumerate(self.attrClassName):
+			if id == page_id:
 				return i
+		return None
+
+	def get_page_index_by_name(self, name: str) -> int | None:
+		name = name.replace(' ', '').lower()
+		for i, (id, cls, label) in enumerate(self.attrClassName):
+			if label.replace(' ', '').lower() == name:
+				return i
+		return None
+
+	def get_page_by_id(self, page_id: str, required: bool = True) -> Any | None:
+		index = self.get_page_index_by_id(page_id)
+		if index is not None:
+			return self._pages[index]
+
+		if required:
+			self.log.error(f'Page with id {page_id} not found.')
+			raise ValueError(f'Page with id {page_id} not found.')
+
+		return None
+
+	def get_page_by_name(self, name: str) -> Any | None:
+		index = self.get_page_index_by_name(name)
+		if index is not None:
+			return self._pages[index]
 		return None
 
 	def showPageName(self, name: str) -> None:
