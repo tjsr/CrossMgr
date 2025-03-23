@@ -24,6 +24,8 @@ develop/logging/log-path-permissions ^
 develop/logging/install-config-file ^
 develop/no-race-disable-keypad-fix-setfocus ^
 refactor/filesystem-utils
+develop/voltage-filter
+refactor/retain-excel-links
 
 exit /b 0
 
