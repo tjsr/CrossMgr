@@ -2,11 +2,13 @@ from datetime import datetime
 from enum import Enum
 import re
 import socket
+from logging import Logger
 from typing import Dict
 
 import wx
 import wx.lib.intctrl
 
+import Log
 import Model
 import Utils
 import JChip
@@ -60,6 +62,14 @@ def GetAllIps():
 	return sorted( ips )
 
 class JChipSetupDialog( wx.Dialog ):
+	__log: Logger = None
+
+	@property
+	def _log(self):
+		if self.__log is None:
+			self.__log = Log.getLogger()
+		return self.__log
+
 	def __init__( self, parent, id = wx.ID_ANY ):
 		super().__init__( parent, id, _("Chip Reader Setup"),
 						style=wx.DEFAULT_DIALOG_STYLE|wx.TAB_TRAVERSAL|wx.RESIZE_BORDER )
@@ -71,11 +81,23 @@ class JChipSetupDialog( wx.Dialog ):
 		self.chipReaderPort: Dict[ChipReaderType, int] = {}
 		self.chipReaderAddress: Dict[ChipReaderType, str] = {}
 		for chipReaderType in ChipReaderType:
-			configPort = Utils.readConfig(chipReaderType.name + '.Port', None)
+			port_key = f'{chipReaderType.name}.Port'
+			host_key = f'{chipReaderType.name}.Host'
+
+			if not Utils.hasExistingConfigValue(port_key) and not Utils.hasExistingConfigValue(host_key):
+				self._log.debug(f'No existing config for {chipReaderType.name} reader type.')
+				continue
+
+			configPort = Utils.readConfig(port_key, None)
 			self.chipReaderPort[chipReaderType] = configPort
-			configAddress = Utils.readConfig(chipReaderType.name + '.Host', None)
-			self.chipReaderAddress[chipReaderType] = configAddress
-			print('Chip reader {} type has config for {}:{}'.format(chipReaderType.name, configAddress, configPort ))
+			configHost = Utils.readConfig(host_key, None)
+			self.chipReaderAddress[chipReaderType] = configHost
+
+			if not configHost or not configPort:
+				self._log.debug(f'Chip reader {chipReaderType.name} type has no endpoint hostname:port to connect to.')
+			else:
+				configAddress = f'{configHost}:{configPort}'
+				self._log.debug(f'Chip reader {chipReaderType.name} type has config for {configAddress}')
 
 		self.enableJChipCheckBox = wx.CheckBox( self, label = _('Use RFID Reader During Race') )
 		if Model.race:
@@ -124,7 +146,7 @@ class JChipSetupDialog( wx.Dialog ):
 			flag=wx.TOP|wx.LEFT|wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL )
 		self.chipReaderType = wx.Choice( self, choices=ChipReader.ChipReader.Choices )
 		self.chipReaderType.SetSelection( 0 )
-		self.chipReaderType.Bind( wx.EVT_CHOICE, self.changechipReaderType )
+		self.chipReaderType.Bind(wx.EVT_CHOICE, self.changeChipReaderType)
 		gridBagSizer.Add( self.chipReaderType,
 			pos=(row, 1), border=border, flag=wx.EXPAND|wx.TOP|wx.RIGHT|wx.ALIGN_LEFT )
 
@@ -197,34 +219,42 @@ class JChipSetupDialog( wx.Dialog ):
 		race.chipReaderPort = self.port.GetValue()
   
 		chipReaderType = ChipReaderType(race.chipReaderType)
-		Utils.writeConfig(chipReaderType.name + '.Host', race.chipReaderIpAddr)
-		Utils.writeConfig(chipReaderType.name + '.Port', race.chipReaderPort)
-		print('Saved {} reader address:port to {}:{}'.format(
-			chipReaderType.name, race.chipReaderIpAddr, race.chipReaderPort)
-		)
+		host_setting = f'{chipReaderType.name}.Host'
+		port_setting = f'{chipReaderType.name}.Port'
+		Utils.writeConfig(host_setting, race.chipReaderIpAddr)
+		Utils.writeConfig(port_setting, race.chipReaderPort)
+		address = f'{race.chipReaderIpAddr}:{race.chipReaderPort}'
+		self._log.info(f'Saved {chipReaderType.name} reader address to {address}')
 		self.setReaderAddress(chipReaderType, race.chipReaderIpAddr, race.chipReaderPort)
 
 		race.enableJChipIntegration = bool(self.enableJChipCheckBox.GetValue())
 		ChipReader.chipReaderCur.reset( race.chipReaderType )
 
 	def setReaderAddress(self, readerType: ChipReaderType, ipAddr: str, port: int) -> None:
-		print('Setting reader address:port to ', ipAddr, port)
+		if port is None:
+			self._log.warning('Requested setting port to None value - using default instead.')
+			port = self.getDefaultPort(readerType)
+
+		reader_address = f'{ipAddr}:{port}'
+		self._log.info(f'Setting {readerType} reader address to {reader_address}')
 		self.chipReaderPort[readerType] = port
 		self.chipReaderAddress[readerType] = ipAddr
-  
+
 	def setReaderAddressField(self, readerType: ChipReaderType, editable: bool = True) -> None:
-		print('Setting reader address field', readerType)
 		rfidReaderHost = self.getReaderAddress(readerType)
 		try:
 			self.ipaddr.SetValue( rfidReaderHost )
+			self._log.debug(f'Setting {readerType} reader host field to {rfidReaderHost}')
 		except Exception as e:
-			self.ipaddr.SetValue( Utils.GetDefaultHost() )
+			default_host = Utils.GetDefaultHost()
+			self.ipaddr.SetValue(default_host)
+			self._log.debug(f'Setting {readerType} reader host field to default of {default_host} due to exception')
 
 		self.ipaddr.SetEditable( editable )
 
 	def setReaderPortField(self, readerType: ChipReaderType, editable: bool = True) -> None:
-		print('Setting reader port field', readerType)
 		rfidReaderPort: int|None = self.getReaderPort(readerType)
+		self._log.debug(f'Setting {readerType} reader port field to {rfidReaderPort}')
 		self.port.SetValue( rfidReaderPort )
 		self.port.SetEditable( editable )
 
@@ -232,8 +262,9 @@ class JChipSetupDialog( wx.Dialog ):
 		currentAddress: str|None = self.chipReaderAddress.get(readerType)
 		defaultAddress = Utils.GetDefaultHost()
 		if not currentAddress:
-			currentAddress = Utils.readConfig(readerType.name + '.Host', defaultAddress)
-		print('Current address for reader: ', readerType, str(currentAddress), defaultAddress)
+			reader_host = f'{readerType.name}.Host'
+			currentAddress = Utils.readConfig(reader_host, defaultAddress)
+		self._log.debug(f'Current address for {readerType} reader: {str(currentAddress)} (default: {defaultAddress})')
 
 		if not currentAddress:
 			return defaultAddress
@@ -256,11 +287,11 @@ class JChipSetupDialog( wx.Dialog ):
 
 	def getReaderPort(self, readerType: ChipReaderType) -> int:
 		currentPort = self.chipReaderPort.get(readerType)
-
 		defaultPort = self.getDefaultPort(readerType)
 		if not currentPort:
-			currentPort = Utils.readConfig(readerType.name + '.Port', defaultPort)
-		print('Getting reader port of type: ', readerType, currentPort, defaultPort)
+			port_setting = f'{readerType.name}.Port'
+			currentPort = Utils.readConfig(port_setting, defaultPort)
+		self._log.debug(f'{readerType} reader has port {currentPort} (default {defaultPort})')
 
 		if not currentPort:
 			return defaultPort
@@ -269,19 +300,20 @@ class JChipSetupDialog( wx.Dialog ):
 	def update( self ) -> None:
 		race = Model.race
 		if not race:
-			print('No race to updated chip reader setup dialog')
+			self._log.warning('No race to update chip reader setup dialog')
 			return
 
-		print('Updating chip reader setup dialog', race.chipReaderType, race.chipReaderIpAddr, race.chipReaderPort)
+		self._log.info(f'Updating {race.chipReaderType} chip reader setup dialog with {race.chipReaderIpAddr}:{race.chipReaderPort}')
 
 		self.enableJChipCheckBox.SetValue( race.enableJChipIntegration )
 		self.chipReaderType.SetSelection( max(0, race.chipReaderType) )
-		self.setReaderAddress(self.chipReaderType, race.chipReaderIpAddr, race.chipReaderPort)
-		self.changechipReaderType()
+		self._log.log(Log.Log.TODO, 'Check that chipReaderType.GetSelection() gives index matching enum value')
+		self.setReaderAddress(self.chipReaderType.GetSelection(), race.chipReaderIpAddr, race.chipReaderPort)
+		self.changeChipReaderType()
 
-	def changechipReaderType( self, event=None ):
+	def changeChipReaderType(self, event=None):
 		selection = self.chipReaderType.GetSelection()
-		print('Chip reader type selection: ', selection)
+		self._log.debug(f'Chip reader type selection: {selection}')
 		chipReaderType = ChipReaderType(selection)
 
 		showJChipHelpText: bool = selection == ChipReaderType.JChip.value
