@@ -12,11 +12,17 @@ formatters:
   output:
     format: '#%(message)s'
 
+filters:
+  UltraVoltageFilter:
+    '()': ext://TimingDevices.UltraTimingDevice.UltraVoltageFilter
+
 handlers:
   console:
     class: logging.StreamHandler
     formatter: simple
     stream: ext://sys.stdout
+    filters:
+      - UltraVoltageFilter
   file:
     '()': ext://Log.owned_file_handler
     formatter: method
