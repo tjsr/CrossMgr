@@ -1,6 +1,6 @@
 import sys
 import collections
-from typing import Any
+from typing import Any, Optional
 
 import FileSystemUtils
 import Log
@@ -637,11 +637,11 @@ def updateUndoStatus():
 	if mainWin is not None:
 		mainWin.updateUndoStatus()
 
-def writeRace():
+def writeRace() -> None:
 	if mainWin is not None:
 		mainWin.writeRace()
 		
-def writeConfig( key, value ):
+def writeConfig( key: str, value: Any ):
 	try:
 		ret = mainWin.config.Write( key, value )
 		mainWin.config.Flush()
@@ -649,13 +649,19 @@ def writeConfig( key, value ):
 	except Exception:
 		pass
 
-def readConfig( key, defaultVal ):
+def readConfig( key: str, defaultVal: Any ):
 	try:
 		return mainWin.config.Read( key, defaultVal )
 	except Exception:
 		return None
+
+def hasExistingConfigValue(key: str) -> bool:
+	try:
+		return mainWin.config.HasEntry(key)
+	except Exception:
+		return False
 	
-def getFileName():
+def getFileName() -> Optional[str]:
 	try:
 		return mainWin.fileName
 	except Exception:
