@@ -39,6 +39,10 @@ class MainWinCalls(ABC):
 		pass
 
 	@abstractmethod
+	def showPageName(self, name: str) -> None:
+		pass
+
+	@abstractmethod
 	def refresh( self ) -> None:
 		pass
 

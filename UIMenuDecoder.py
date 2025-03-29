@@ -199,7 +199,7 @@ class UIMenuDecoder(wx.Menu):
 
 	def enableOrDisableMenuItems(self) -> None:
 		log = self.log.getChild('enableOrDisableMenuItems')
-		log.trace(f'Enabling or disabling menu items for menu {self.GetTitle()}')
+		log.log(Log.Log.TRACE, f'Enabling or disabling menu items for menu {self.GetTitle()}')
 		for item_id, check in self.__menuItemEnabledState.items():
 			try:
 				is_enabled = self.isMenuItemEnabled(item_id)

@@ -14,7 +14,13 @@ formatters:
 
 filters:
   UltraVoltageFilter:
-    '()': ext://TimingDevices.UltraTimingDevice.UltraVoltageFilter
+    class: ext://TimingDevices.UltraVoltageFilter
+#    '()': ext://TimingDevices.UltraTimingDevice.UltraVoltageFilter
+
+objects:
+  decoder_log_queue:
+    class: queue.Queue
+    maxsize: 1000
 
 handlers:
   console:
@@ -23,32 +29,65 @@ handlers:
     stream: ext://sys.stdout
     filters:
       - UltraVoltageFilter
+#  file:
+#    class: logging.FileHandler
+#    delay: true
+#    formatter: method
+#    filename: logs/crossmgr.log
+#    encoding: utf-8
   file:
     '()': ext://Log.owned_file_handler
     formatter: method
     filename: 'logs/crossmgr.log'
     encoding: utf-8
-  decoderinput:
+  decoder_input_file:
     # TODO: Replace this with a single handler for I/O.
+#    class: logging.FileHandler
+#    delay: true
     '()': ext://Log.owned_file_handler
     formatter: input
-    filename: 'logs/decoder.log'
+    filename: logs/decoder.log
     encoding: utf-8
-  decoderoutput:
+  decoder_output_file:
     # TODO: Replace this with a single handler for I/O.
+#    class: logging.FileHandler
+#    delay: true
     '()': ext://Log.owned_file_handler
     formatter: output
-    filename: 'logs/decoder-out.log'
+    filename: logs/decoder-out.log
     encoding: utf-8
+#  decoder_log_queue:
+##    class: logging.handlers.QueueListener
+##    class: ext://QueueListenerHandler
+#    class: TimingDevices.QueueListenerHandler
+##    '()': ext://LogRedirect.QueueListenerHandler
+##    class: LogRedirect.QueueListenerHandler
+#    queue: cfg://objects.decoder_log_queue
+#    handlers:
+#    - console
+#    - file
 
 loggers:
+#  'TimingDevice[UltraDecoder]':
+#    level: INFO
+#    handlers:
+#    - decoder_log_queue
+#    propagate: false
   'TimingDevice[UltraDecoder].input':
     level: INFO
-    handlers: [decoderinput]
+    handlers:
+    - decoder_input_file
+#    - decoder_log_queue
+#    propagate: false
   'TimingDevice[UltraDecoder].output':
     level: INFO
-    handlers: [decoderoutput]
+    handlers:
+    - decoder_output_file
+#    - decoder_log_queue
+#    propagate: false
   root:
     class: CrossMgrLogger
     level: INFO
-    handlers: [console, file]
+    handlers:
+    - console
+    - file

@@ -8,6 +8,9 @@ import webbrowser
 import threading
 import subprocess
 import platform
+
+from ExcelLink import ExcelLink
+from Race import RaceType
 from RaceInputState import RaceInputState
 import Utils
 import Model
@@ -331,6 +334,9 @@ class RfidProperties( wx.Panel ):
 				_('Automatic Start: Reset start clock on first RFID read.') + '\n' + _('All riders get the start time of the first read.'),
 				_('Manual Start: Skip first RFID read for all riders.') + '\n' + _('Required when start run-up passes the finish on the first lap.')]
 
+	device_options: list = None
+	device_log: wx.TextCtrl = None
+
 	def __init__( self, parent, id = wx.ID_ANY ):
 		super().__init__( parent, id )
 		self.jchip = wx.CheckBox( self, style=wx.ALIGN_LEFT, label = _('Use RFID Reader During Race') )
@@ -351,7 +357,7 @@ class RfidProperties( wx.Panel ):
 		)
 		
 		hs = wx.BoxSizer( wx.HORIZONTAL )
-		hs.Add( wx.StaticText( self, label='{}:'.format(_('Reader Type')) ), flag=wx.ALIGN_CENTER_VERTICAL )
+		hs.Add( wx.StaticText( self, label=_('Reader Type') ), flag=wx.ALIGN_CENTER_VERTICAL )
 		self.chipReaderChoices = ChipReader.ChipReader.Choices
 		self.chipReaderType = wx.StaticText( self )
 		hs.Add( self.chipReaderType, flag=wx.LEFT, border=4)
@@ -368,6 +374,10 @@ class RfidProperties( wx.Panel ):
 		ms.Add( hs, flag=wx.ALL, border=4 )
 		ms.AddSpacer( 16 )
 		ms.Add( self.setupButton, flag=wx.ALL, border=4 )
+
+		ms.AddSpacer( 16 )
+		self.device_log = wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_DONTWRAP|wx.TE_LEFT|wx.HSCROLL)
+		ms.Add( self.device_log, 1, flag=wx.EXPAND|wx.ALL, border=4 )
 
 	def onSetup( self, event ):
 		self.commit()
@@ -1219,18 +1229,18 @@ class FilesProperties( wx.Panel ):
 		addToFGS( fgs, labelFieldBatchPublish )
 		ms.Add( fgs, 1, flag=wx.EXPAND|wx.ALL, border=16 )
 		
-	def excelButtonCallback( self, event ):
+	def excelButtonCallback(self, event: wx.Event) -> None:
 		mainWin = Utils.getMainWin()
 		if mainWin:
 			mainWin.menuLinkExcel()
 	
-	def refresh( self ):
-		race = Model.race
-		excelLink = getattr(race, 'excelLink', None)
+	def refresh( self ) -> None:
+		race: RaceType = Model.race
+		excelLink: ExcelLink = race.excelLink
 		if excelLink:
 			self.excelName.SetLabel( '{}|{}'.format(
-				os.path.basename(excelLink.fileName) if excelLink.fileName else '',
-				excelLink.sheetName if excelLink.sheetName else '') )
+				os.path.basename(excelLink.FileName) if excelLink.FileName else '',
+				excelLink.SheetName if excelLink.SheetName else '') )
 		else:
 			self.excelName.SetLabel( '' )
 		self.categoriesFile.SetLabel( os.path.basename(getattr(race, 'categoriesImportFile', '')) )

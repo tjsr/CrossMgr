@@ -196,8 +196,8 @@ def GetData():
 	data = []
 	while 1:
 		try:
-			# data.append( q.get_nowait() )
-			Log.getLogger().warning("Need to re-implement this.")
+			data.append( q.get_nowait() )
+			# Log.getLogger().warning("Need to re-implement this.")
 			pass
 		except (Empty, AttributeError):
 			break
@@ -229,7 +229,7 @@ def StartListener(startTime: datetime.datetime=now(), host: str=None, port: int=
 	global listener
 	global ultraDecoder
 
-	Log.getLogger('Ultra').trace(msg='Starting Ultra decoder thread')
+	Log.getLogger('Ultra').log(Log.Log.TRACE, msg='Starting Ultra decoder thread')
 
 	lock.acquire(blocking=True, timeout=1.0)
 	try:

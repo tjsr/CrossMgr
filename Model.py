@@ -2420,7 +2420,7 @@ class Race(RaceType, ChipReaderRaceInfo):
 	
 	def getRaceIntro( self ):
 		intro = [
-			'{}:{}'.format(self.Name, self.raceNum),
+			'{}:{}'.format(self.Name, self.RaceNum),
 			'{}: {} ({})'.format(_('Start'), self.scheduledStart, self.date),
 			_('Time Trial') if self.isTimeTrial else _('Mass Start'),
 		]

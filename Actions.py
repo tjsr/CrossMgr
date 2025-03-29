@@ -1,5 +1,13 @@
+import logging.handlers
+import multiprocessing
+from logging.handlers import QueueHandler
+from multiprocessing.queues import Queue
+from typing import Callable
+
 import wx
 from wx.lib.wordwrap import wordwrap
+
+import Log
 from roundbutton import RoundButton
 from HighPrecisionTimeEdit import HighPrecisionTimeEdit
 
@@ -41,7 +49,7 @@ def StartRaceNow( page=_('Record') ):
 	OutputStreamer.writeRaceStart()
 	
 	# Refresh the main window and switch to the specified pane.
-	mainWin = Utils.getMainWin()
+	mainWin: MainWinCalls = Utils.getMainWin()
 	if mainWin is not None:
 		mainWin.showPageName( page )
 		mainWin.updateLapCounter()
@@ -200,12 +208,53 @@ class StartRaceAtTime( wx.Dialog ):
 StartText = '\n'.join(_('Start Race').split(maxsplit=1))
 FinishText = '\n'.join(_('Finish Race').split(maxsplit=1))
 
+class DecoderLogQueueListener(logging.handlers.QueueListener):
+	__formatter: logging.Formatter
+	__callback: Callable[[str], None]
+	__device_log: wx.TextCtrl
+
+	def __init__(self, queue: multiprocessing.Queue, callback: Callable[[str], None]):
+		super().__init__(queue)
+		self.__formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+		self.__callback = callback
+
+	def handle(self, record):
+		super().handle(record)
+		record_string = self.__formatter.format(record)
+
+		self.__callback(record_string)
+
+class LogControl(wx.TextCtrl):
+	def __init__(self, parent: wx.Window):
+		super().__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_DONTWRAP|wx.TE_LEFT|wx.HSCROLL)
+
+		self.__log_queue = multiprocessing.Queue()
+		self.__log_queue_handler = QueueHandler(self.__log_queue)
+		self.__log_queue_listener = DecoderLogQueueListener(self.__log_queue, self.on_log_event)
+		self.__log_queue_listener.start()
+
+	def on_log_event(self, message: str):
+		self.AppendText(message + '\n')
+
+	def add_logger(self, logger_name: str):
+		ud_log = Log.getLogger(logger_name)
+		ud_log.addHandler(self.__log_queue_handler)
+
+	def __del__(self):
+		self.__log_queue_handler.stop()
+
+
 class Actions( wx.Panel ):
 	iResetStartClockOnFirstTag = 1
 	iSkipFirstTagRead = 2
 	normalFont: wx.Font
 	largeFont: wx.Font
 	mediumFont: wx.Font
+	device_log: wx.TextCtrl
+	__decoder_log_queue: Queue
+	__log_queue_handler: QueueHandler
+	__log_queue_listener: DecoderLogQueueListener
+	# decoder_log_buffer: Py_Buffe
 
 	def __init__( self, parent, id = wx.ID_ANY ):
 		super().__init__(parent, id)
@@ -220,6 +269,8 @@ class Actions( wx.Panel ):
 		self.splitter = wx.SplitterWindow( self, wx.VERTICAL )
 		ps.Add( self.splitter, 1, flag=wx.EXPAND )
 		self.SetSizer( ps )
+
+		# Handler.
 		
 		#---------------------------------------------------------------------------------------------
 		
@@ -228,7 +279,7 @@ class Actions( wx.Panel ):
 		self.leftPanel.SetSizer( bs )
 		self.leftPanel.SetBackgroundColour( wx.Colour(255,255,255) )
 		self.leftPanel.Bind( wx.EVT_SIZE, self.setWrappedRaceInfo )
-		
+
 		buttonSize = 220
 		self.button = RoundButton( self.leftPanel, size=(buttonSize, buttonSize) )
 		self.button.SetLabel( FinishText )
@@ -275,7 +326,21 @@ class Actions( wx.Panel ):
 		bs.Add( hsClock, border=4, flag=wx.ALL )
 		
 		bs.Add(self.chipTimingOptions, border=border, flag=wx.ALL)
-		
+
+		self.__device_log = LogControl(self.leftPanel)
+		self.__device_log.add_logger('TimingDevice.UltraDecoder.input')
+		self.__device_log.add_logger('TimingDevice.WXUltraDecoder.input')
+
+		self.log_sizer = wx.StaticBoxSizer(wx.VERTICAL, self.leftPanel, _('Decoder Log'))
+		self.log_sizer.Add(self.__device_log, 1, flag=wx.EXPAND|wx.ALL, border=4)
+
+		# log_label = wx.StaticBox(self.leftPanel, wx.ID_ANY, _('Device Log'))
+		# self.device_log = wx.TextCtrl(log_label, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_DONTWRAP|wx.TE_LEFT|wx.HSCROLL)
+		# bs.Add( log_label, 1, flag=wx.EXPAND|wx.ALL, border=4 )
+		# bs.Add( log_label, 1, flag=wx.EXPAND|wx.ALL, border=4 )
+		# bs.Add( self.device_log, 1, flag=wx.EXPAND|wx.ALL, border=4 )
+		bs.Add(self.log_sizer, 1, flag=wx.EXPAND|wx.ALL, border=4 )
+
 		#---------------------------------------------------------------------------------------------
 		
 		self.rightPanel = wx.Panel( self.splitter )

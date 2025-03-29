@@ -738,18 +738,18 @@ class MainWin( wx.Frame ):
 			self.log.warning(f'Decoder read thread ending was signalled but is still alive.')
 
 		self._chipMenu.enableOrDisableMenuItems()
-		self.log.exiting( 'onTimingDeviceThreadEnded' )
+		self.log.log( Log.Log.EXIT, 'onTimingDeviceThreadEnded' )
 
 	def onTimingDeviceDisconnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceDisconnectedEvent):
-		self.log.entering( 'onTimingDeviceDisconnected' )
+		self.log.log( Log.Log.ENTER, 'onTimingDeviceDisconnected' )
 		self._chipMenu.enableOrDisableMenuItems()
 
 	def onTimingDeviceConnected(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceConnectedEvent):
-		self.log.entering( 'onTimingDeviceConnected' )
+		self.log.log( Log.Log.ENTER, 'onTimingDeviceConnected' )
 		self._chipMenu.enableOrDisableMenuItems()
 
 	def onTransponderEvent(self, event: TimingDevices.TimingDeviceWXEvents.TimingDeviceTransponderEvent):
-		self.log.entering( 'onTransponderEvent' )
+		self.log.log( Log.Log.ENTER, 'onTransponderEvent' )
 		crossing: TimingDevices.DecoderMessages.TransponderCrossingMessage = event.message
 
 		tx_string: str = f'{crossing.TransponderId}@{crossing.Time}'
@@ -1041,7 +1041,7 @@ class MainWin( wx.Frame ):
 				):
 				return
 			self.actions.onFinishRace( event, False )
-			self.showPage( self.iHistoryPage )			
+			self.showPage( self.iHistoryPage )
 			
 		with Restart(self) as dlg:
 			dlg.refresh()
@@ -1575,6 +1575,14 @@ class MainWin( wx.Frame ):
 				wx.CallAfter( self.showPage, self.iCategoriesPage )
 		except AttributeError:
 			pass
+
+	@logCall
+	def showPage(self, index: int) -> None:
+		return self.__page_controller.showPage(index)
+
+	@logCall
+	def showPageName(self, name: str) -> None:
+		return self.__page_controller.showPageName(name)
 	
 	#--------------------------------------------------------------------------------------------
 

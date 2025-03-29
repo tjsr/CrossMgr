@@ -87,8 +87,17 @@ function CheckEnvActive
 	Write-Host $env:VIRTUAL_ENV
 	if (([string]::IsNullOrEmpty($env:VIRTUAL_ENV)) -and (Test-Path -Path $environ))
 	{
+		if ([string]::IsNullOrEmpty($environ))
+		{
+			Write-Host "environ value is empty, can't activate virtual environment. Aborting..."
+			exit 1
+		}
 		$runenv = "$environ\scripts\activate.ps1"
 		Invoke-Expression $runenv
+		if ($? -eq $false) {
+			Write-Host "Failed to activate the virtual environment. Aborting..."
+			exit 1
+		}
 		Write-Host "Virtual environment ($env:VIRTUAL_ENV) activated"
 	}
 	elseif (!([string]::IsNullOrEmpty($env:VIRTUAL_ENV)))

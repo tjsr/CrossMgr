@@ -6,8 +6,12 @@ import logging.config
 import os
 import shutil
 import sys
+import traceback
 
-from typing import Any, cast
+# from TimingDevices.QueueListenerHandler import QueueListenerHandler
+# _qlh = QueueListenerHandler(logging.getLogger().handlers, auto_run=False)
+
+from typing import Any, cast, List
 
 import yaml
 
@@ -17,7 +21,16 @@ from YamlUtil import merge_yaml
 log_base_dir = None
 
 def eprint(*args, **kwargs):
-  print(*args, file=sys.stderr, **kwargs)
+  if kwargs['exc_info'] is not None:
+    exc_info = kwargs.pop('exc_info')
+    tb = traceback.format_exc()
+    print(tb)
+
+  if kwargs['msg'] is not None:
+    msg = kwargs.pop('msg')
+    print(msg, file=sys.stderr, *args, **kwargs)
+  else:
+    print(file=sys.stderr, *args, **kwargs)
 
 def set_log_base_dir(base_dir: str) -> str:
   global log_base_dir
@@ -75,13 +88,17 @@ class CrossMgrLogger(logging.Logger):
   def todo(self, msg: object, *args: tuple[Any, ...], **kwargs: Any) -> None:
     return self.log(Log.TODO, 'TODO: ' + str(msg), *args, **kwargs)
 
-logging.setLoggerClass(CrossMgrLogger)
+# logging.setLoggerClass(CrossMgrLogger)
 
 def getLogger(name: str = None) -> CrossMgrLogger:
   if name is None:
-    frame = inspect.stack()[1]
-    module = inspect.getmodule(frame[0])
-    logger_name = module.__name__ if module else '__main__'
+    current_stack = inspect.stack()
+    if len(current_stack) < 2:
+      logger_name = 'root'
+    else:
+      frame = current_stack[1]
+      module = inspect.getmodule(frame[0])
+      logger_name = module.__name__ if module else '__main__'
   else:
     logger_name = name
 
@@ -98,16 +115,16 @@ file_handlers = {}
 def make_safe_key(file_path: str) -> str:
   return hashlib.md5(file_path.encode()).hexdigest()
 
-def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encoding: str | None=None, owner=None):
-  log_path = get_log_path(filename)
+
+def ensure_exists_and_writable(log_path: str | os.PathLike[str], owner: str | None = None):
   log_parent = os.path.dirname(log_path)
   if not os.path.exists(log_parent):
     os.makedirs(log_parent)
-    if not os.access(log_parent, os.W_OK):
-      err_message = f"Write permission denied for directory: {log_parent}"
-      print(err_message)
-      raise PermissionError(err_message)
     print(f'Log directory created at {log_parent}')
+  if not os.access(log_parent, os.W_OK):
+    err_message = f"Write permission denied for directory: {log_parent}"
+    print(err_message)
+    raise PermissionError(err_message)
 
   if owner:
     shutil.chown(log_path, *owner)
@@ -118,13 +135,44 @@ def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encodin
     eprint(err_message)
     raise PermissionError(err_message)
 
+def owned_file_handler(filename: str | os.PathLike[str], mode: str= 'a', encoding: str | None=None, owner=None) -> logging.Handler:
+  # for k, v in logging.Logger.manager.loggerDict.items():
+  #   print('+ [%s] {%s} ' % (str.ljust(k, 20), str(v.__class__)[8:-2]))
+  #   if not isinstance(v, logging.PlaceHolder):
+  #     for h in v.handlers:
+  #       print('     +++', str(h.__class__)[8:-2])
+
+  log_path = get_log_path(filename)
+  ensure_exists_and_writable(log_path, owner)
+
   key = make_safe_key(log_path)
   if not key in file_handlers or file_handlers[key] is None:
     file_handlers[key] = logging.FileHandler(log_path, mode, encoding)
 
   return file_handlers[key]
 
-def load_logging_config_files() -> None:
+
+def get_all_file_handlers() -> List[logging.FileHandler]:
+  file_handlers: List[logging.FileHandler] = []
+  for logger_name in logging.Logger.manager.loggerDict:
+    logger = logging.getLogger(logger_name)
+    if isinstance(logger, logging.Logger):
+      for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+          file_handlers.append(handler)
+  return file_handlers
+
+def ensure_file_handler_permissions(owner: str | None = None) -> None:
+  file_handlers: List[logging.FileHandler] = get_all_file_handlers()
+  for handler in file_handlers:
+    if isinstance(handler, logging.FileHandler):
+      try:
+        ensure_exists_and_writable(handler.baseFilename, owner)
+        os.chmod(handler.baseFilename, 0o644)
+      except Exception as e:
+        eprint(exc_info=e, msg='Error setting file handler permissions')
+
+def load_logging_config_files(owner: str | None = None) -> None:
   logConfigPath = config_search('logging.yml')
 
   if logConfigPath is None:
@@ -145,19 +193,21 @@ def load_logging_config_files() -> None:
           debugLogConfig.close()
 
     logging.config.dictConfig(config)
+    ensure_file_handler_permissions()
+
 
 try:
   if __name__ == '__main__':
     faulthandler.enable()
   load_logging_config_files()
 except Exception as e:
-  eprint('Error loading logging configuration: {}'.format(e))
+  eprint(exc_info=e, msg='Error loading logging configuration')
   if e.__cause__ is not None and isinstance(e.__cause__, FileNotFoundError):
     eprint('FileNotFound: {}'.format(e.__cause__))
 except BaseException as be:
-  eprint('Error loading logging configuration: {}'.format(be))
+  eprint(exc_info=be, msg='Error loading logging configuration')
   if be.__cause__ is not None:
-    eprint('Cause: {}'.format(e.__cause__))
+    eprint('Cause: {}'.format(be.__cause__))
 
 if __name__ == '__main__':
   logging.getLogger().info("Test")
